@@ -3,16 +3,16 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider = "sqlite"
+  url      = "file:./dev.db"
 }
 
 model User {
   id        String   @id @default(uuid())
   email     String   @unique
-  password  String   // bcrypt hashed
+  password  String
   name      String?
-  role      String   @default("researcher") // researcher, admin
+  role      String   @default("researcher")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -28,35 +28,31 @@ model EODataset {
   collection  String?
   platform    String?
   instrument  String?
-  gsd         Float?   // Ground Sample Distance in meters
+  gsd         Float?
   cloudCover  Float?   @map("cloud_cover")
-  geometry    Json     // GeoJSON geometry
-  bbox        Json?    // Bounding box [west, south, east, north]
+  geometry    String
+  bbox        String?
   centroidLat Float?   @map("centroid_lat")
   centroidLng Float?   @map("centroid_lng")
-  startDate   DateTime? @map("start_date")
-  endDate     DateTime? @map("end_date")
-  assets      Json?    // Asset links (thumbnail, download, etc.)
+  startDate   String?  @map("start_date")
+  endDate     String?  @map("end_date")
+  assets      String?
   stacLink    String?  @map("stac_link")
   previewUrl  String?  @map("preview_url")
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
-
-  // Embedding stored separately (FAISS handles vector search)
   hasEmbedding Boolean @default(false) @map("has_embedding")
-  embeddingId  Int?    @map("embedding_id") // Index in FAISS
+  embeddingId  Int?    @map("embedding_id")
 
   @@index([provider])
   @@index([collection])
-  @@index([startDate, endDate])
-  @@index([centroidLat, centroidLng])
   @@map("eo_datasets")
 }
 
 model SearchLog {
   id          String   @id @default(uuid())
   query       String
-  filters     Json?
+  filters     String?
   resultCount Int      @map("result_count")
   latencyMs   Int      @map("latency_ms")
   userId      String?  @map("user_id")

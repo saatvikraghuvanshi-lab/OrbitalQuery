@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import MockInitializer from '@/components/MockInitializer';
 
 export const metadata: Metadata = {
   title: 'OrbitalQuery — Semantic EO Dataset Explorer',
@@ -10,6 +11,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className="dark">
       <body className="antialiased">
+        <MockInitializer />
         <div className="starfield" />
         <div className="relative z-10">
           {children}

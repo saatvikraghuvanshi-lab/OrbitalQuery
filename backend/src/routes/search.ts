@@ -9,8 +9,19 @@ const router = Router();
 const searchEngine = new SemanticSearchEngine();
 
 /**
+ * Parse JSON string fields from SQLite into objects
+ */
+function parseDatasetJson(dataset: any) {
+  return {
+    ...dataset,
+    geometry: dataset.geometry ? JSON.parse(dataset.geometry) : null,
+    bbox: dataset.bbox ? JSON.parse(dataset.bbox) : null,
+    assets: dataset.assets ? JSON.parse(dataset.assets) : null,
+  };
+}
+
+/**
  * POST /api/search
- * Semantic search with optional spatial + temporal filters
  */
 router.post('/', searchLimiter, sanitizeSearchQuery, optionalAuth, async (req: AuthRequest, res: Response) => {
   const startTime = Date.now();
@@ -18,7 +29,7 @@ router.post('/', searchLimiter, sanitizeSearchQuery, optionalAuth, async (req: A
   try {
     const {
       query,
-      bbox,           // [west, south, east, north]
+      bbox,
       startDate,
       endDate,
       provider,
@@ -32,69 +43,57 @@ router.post('/', searchLimiter, sanitizeSearchQuery, optionalAuth, async (req: A
       return;
     }
 
-    // Build Prisma where clause for non-semantic filters
+    // Build Prisma where clause
     const where: any = {};
 
-    if (provider) {
-      where.provider = provider;
-    }
+    if (provider) where.provider = provider;
+    if (collection) where.collection = collection;
 
-    if (collection) {
-      where.collection = collection;
-    }
-
-    if (startDate || endDate) {
-      where.AND = [];
-      if (startDate) {
-        where.AND.push({ endDate: { gte: new Date(startDate) } });
-      }
-      if (endDate) {
-        where.AND.push({ startDate: { lte: new Date(endDate) } });
-      }
-    }
-
-    // Spatial filter: datasets whose centroid falls within bbox
+    // Spatial filter
     if (bbox && Array.isArray(bbox) && bbox.length === 4) {
       const [west, south, east, north] = bbox;
       where.centroidLng = { gte: west, lte: east };
       where.centroidLat = { gte: south, lte: north };
     }
 
-    // Get candidate datasets from DB
+    // Date filters
+    if (startDate || endDate) {
+      where.AND = [];
+      if (startDate) where.AND.push({ endDate: { gte: startDate } });
+      if (endDate) where.AND.push({ startDate: { lte: endDate } });
+    }
+
     const candidates = await prisma.eODataset.findMany({
       where,
       orderBy: { createdAt: 'desc' },
-      take: 500, // Get enough candidates for semantic ranking
+      take: 500,
     });
 
-    // Semantic search over candidates
-    let results = await searchEngine.search(query, candidates, Math.min(limit, 100));
+    // Parse JSON fields from SQLite strings and score
+    const parsed = candidates.map(parseDatasetJson);
+    let results = await searchEngine.search(query, parsed, Math.min(limit, 100));
 
-    // Apply pagination after semantic ranking
+    // Results already have parsed geometry from the search engine
+    // No need to parse again
+
     const total = results.length;
     results = results.slice(offset, offset + limit);
 
     const latencyMs = Date.now() - startTime;
 
-    // Log the search
-    await prisma.searchLog.create({
+    // Log search
+    prisma.searchLog.create({
       data: {
         query,
-        filters: { bbox, startDate, endDate, provider, collection },
+        filters: JSON.stringify({ bbox, startDate, endDate, provider, collection }),
         resultCount: total,
         latencyMs,
         userId: req.user?.id || null,
-        ipAddress: req.ip || req.headers['x-forwarded-for'] as string || null,
+        ipAddress: (req.ip || null) as string,
       },
-    }).catch(console.error); // Don't fail on log errors
+    }).catch(() => {});
 
-    res.json({
-      results,
-      total,
-      limit,
-      offset,
-      latencyMs,
-    });
+    res.json({ results, total, limit, offset, latencyMs });
   } catch (error: any) {
     console.error('Search error:', error);
     res.status(500).json({ error: 'Search failed', message: error.message });
@@ -103,7 +102,6 @@ router.post('/', searchLimiter, sanitizeSearchQuery, optionalAuth, async (req: A
 
 /**
  * GET /api/search/providers
- * List distinct providers
  */
 router.get('/providers', async (_req: Request, res: Response) => {
   try {
@@ -120,7 +118,6 @@ router.get('/providers', async (_req: Request, res: Response) => {
 
 /**
  * GET /api/search/collections
- * List distinct collections
  */
 router.get('/collections', async (_req: Request, res: Response) => {
   try {

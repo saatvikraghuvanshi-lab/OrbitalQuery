@@ -1,0 +1,403 @@
+{
+  "info": {
+    "name": "OrbitalQuery API Tests",
+    "description": "Complete API test collection for OrbitalQuery backend",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3001"
+    },
+    {
+      "key": "authToken",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/health"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+              "pm.test('Response has status field', () => {",
+              "  const data = pm.response.json();",
+              "  pm.expect(data.status).to.eql('ok');",
+              "  pm.expect(data.service).to.include('orbital-query');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth - Register",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/auth/register",
+        "header": { "Content-Type": "application/json" },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"test@orbitalquery.dev\",\n  \"password\": \"TestPassword123!\",\n  \"name\": \"Test Researcher\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Registration succeeds', () => {",
+              "  pm.response.to.have.status(201);",
+              "  const data = pm.response.json();",
+              "  pm.expect(data.token).to.be.a('string');",
+              "  pm.expect(data.user.email).to.eql('test@orbitalquery.dev');",
+              "  pm.collectionVariables.set('authToken', data.token);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth - Login",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/auth/login",
+        "header": { "Content-Type": "application/json" },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"test@orbitalquery.dev\",\n  \"password\": \"TestPassword123!\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Login succeeds', () => {",
+              "  pm.response.to.have.status(200);",
+              "  const data = pm.response.json();",
+              "  pm.expect(data.token).to.be.a('string');",
+              "  pm.collectionVariables.set('authToken', data.token);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth - Get Profile",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/auth/me",
+        "header": { "Authorization": "Bearer {{authToken}}" }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Profile loads', () => {",
+              "  pm.response.to.have.status(200);",
+              "  const data = pm.response.json();",
+              "  pm.expect(data.user).to.have.property('id');",
+              "  pm.expect(data.user).to.have.property('email');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth - Unauthorized Access",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/auth/me",
+        "header": {}
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Returns 401 without token', () => {",
+              "  pm.response.to.have.status(401);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Search - Basic Query",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/search",
+        "header": { "Content-Type": "application/json" },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"query\": \"deforestation near Assam\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Search returns results', () => {",
+              "  pm.response.to.have.status(200);",
+              "  const data = pm.response.json();",
+              "  pm.expect(data.results).to.be.an('array');",
+              "  pm.expect(data.total).to.be.a('number');",
+              "  pm.expect(data.latencyMs).to.be.a('number');",
+              "});",
+              "pm.test('Results have required fields', () => {",
+              "  const data = pm.response.json();",
+              "  if (data.results.length > 0) {",
+              "    const first = data.results[0];",
+              "    pm.expect(first).to.have.property('title');",
+              "    pm.expect(first).to.have.property('provider');",
+              "    pm.expect(first).to.have.property('geometry');",
+              "  }",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Search - With Bounding Box",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/search",
+        "header": { "Content-Type": "application/json" },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"query\": \"urban expansion\",\n  \"bbox\": [75.5, 26.7, 76.2, 27.1]\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Spatial search returns results', () => {",
+              "  pm.response.to.have.status(200);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Search - With Date Range",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/search",
+        "header": { "Content-Type": "application/json" },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"query\": \"glacier\",\n  \"startDate\": \"2024-01-01\",\n  \"endDate\": \"2024-12-31\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Temporal search returns results', () => {",
+              "  pm.response.to.have.status(200);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Search - Full Filters",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/search",
+        "header": { "Content-Type": "application/json" },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"query\": \"flood monitoring river basin\",\n  \"bbox\": [91.0, 26.0, 92.5, 27.5],\n  \"startDate\": \"2024-01-01\",\n  \"endDate\": \"2024-12-31\",\n  \"provider\": \"Copernicus/ESA\",\n  \"limit\": 10\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Full filter search succeeds', () => {",
+              "  pm.response.to.have.status(200);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Search - Empty Query (should fail)",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/search",
+        "header": { "Content-Type": "application/json" },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"query\": \"\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Empty query returns 400', () => {",
+              "  pm.response.to.have.status(400);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Search - SQL Injection (should be blocked)",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/search",
+        "header": { "Content-Type": "application/json" },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"query\": \"'; DROP TABLE users; --\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('SQL injection is blocked', () => {",
+              "  pm.response.to.have.status(400);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Datasets - List",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/datasets"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Datasets list returns', () => {",
+              "  pm.response.to.have.status(200);",
+              "  const data = pm.response.json();",
+              "  pm.expect(data.datasets).to.be.an('array');",
+              "  pm.expect(data.total).to.be.a('number');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Datasets - Providers",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/search/providers"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Providers list returns', () => {",
+              "  pm.response.to.have.status(200);",
+              "  const data = pm.response.json();",
+              "  pm.expect(data).to.be.an('array');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Datasets - Collections",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/search/collections"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Collections list returns', () => {",
+              "  pm.response.to.have.status(200);",
+              "  const data = pm.response.json();",
+              "  pm.expect(data).to.be.an('array');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Ingest - Unauthorized (should fail)",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/ingest/sample",
+        "header": { "Content-Type": "application/json" }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Ingest requires auth', () => {",
+              "  pm.response.to.have.status(401);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Ingest - Non-admin (should fail)",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/ingest/sample",
+        "header": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer {{authToken}}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Ingest requires admin', () => {",
+              "  pm.response.to.have.status(403);",
+              "});"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

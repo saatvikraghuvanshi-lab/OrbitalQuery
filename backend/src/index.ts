@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import dotenv from 'dotenv';
+import path from 'path';
 import { PrismaClient } from '@prisma/client';
 import searchRouter from './routes/search';
 import datasetsRouter from './routes/datasets';
@@ -9,117 +9,91 @@ import ingestRouter from './routes/ingest';
 import authRouter from './routes/auth';
 import { apiLimiter } from './middleware/rate-limit';
 
-dotenv.config({ path: __dirname + '/../.env' });
+// Load .env from backend directory
+require('dotenv').config({ path: path.join(__dirname, '../.env'), override: true });
 
-export const prisma = new PrismaClient();
+const DB_PATH = path.join(__dirname, '../prisma/dev.db');
+
+export const prisma = new PrismaClient({
+  datasources: { db: { url: `file:${DB_PATH}` } },
+});
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:3000';
 
-// ─── Security Headers ────────────────────────────────────────────────
+// ─── Security ─────────────────────────────────────────────────────────
 app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'"],
-      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-      fontSrc: ["'self'", "https://fonts.gstatic.com"],
-      imgSrc: ["'self'", "data:", "https://*.tile.openstreetmap.org", "https://planetarycomputer.microsoft.com"],
-      connectSrc: ["'self'"],
-    },
-  },
+  contentSecurityPolicy: false,
   crossOriginEmbedderPolicy: false,
 }));
 
-// ─── CORS ────────────────────────────────────────────────────────────
 app.use(cors({
   origin: CORS_ORIGIN,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization'],
-  maxAge: 86400, // Preflight cache: 24 hours
 }));
 
-// ─── Body Parsing ────────────────────────────────────────────────────
 app.use(express.json({ limit: '5mb' }));
-
-// ─── Global Rate Limiting ────────────────────────────────────────────
 app.use('/api/', apiLimiter);
-
-// ─── Trust proxy (for rate limiting behind reverse proxies) ──────────
 app.set('trust proxy', 1);
-
-// ─── Security: Remove X-Powered-By ───────────────────────────────────
 app.disable('x-powered-by');
 
-// ─── Health Check (no rate limit) ────────────────────────────────────
+// ─── Health Check ─────────────────────────────────────────────────────
 app.get('/api/health', (_req, res) => {
   res.json({
     status: 'ok',
     service: 'orbital-query-backend',
     timestamp: new Date().toISOString(),
     version: '1.0.0',
-    security: {
-      rateLimiting: true,
-      helmet: true,
-      cors: true,
-    },
+    database: 'sqlite',
   });
 });
 
-// ─── API Routes ──────────────────────────────────────────────────────
+// ─── API Routes ───────────────────────────────────────────────────────
 app.use('/api/auth', authRouter);
 app.use('/api/search', searchRouter);
 app.use('/api/datasets', datasetsRouter);
 app.use('/api/ingest', ingestRouter);
 
-// ─── 404 Handler ─────────────────────────────────────────────────────
+// ─── 404 ──────────────────────────────────────────────────────────────
 app.use('/api/*', (_req, res) => {
   res.status(404).json({ error: 'API endpoint not found' });
 });
 
-// ─── Error Handler ───────────────────────────────────────────────────
+// ─── Error Handler ────────────────────────────────────────────────────
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  console.error('Unhandled error:', err);
-
-  // Don't leak error details in production
-  const isProduction = process.env.NODE_ENV === 'production';
-
+  console.error('Error:', err.message);
   res.status(err.status || 500).json({
-    error: isProduction ? 'Internal server error' : err.message,
-    ...(isProduction ? {} : { stack: err.stack }),
+    error: process.env.NODE_ENV === 'production' ? 'Internal server error' : err.message,
   });
 });
 
-// ─── Start Server ────────────────────────────────────────────────────
+// ─── Start ────────────────────────────────────────────────────────────
 async function main() {
   try {
     await prisma.$connect();
-    console.log('✅ Connected to PostgreSQL via Prisma');
+    console.log('✅ Connected to SQLite database');
   } catch (error: any) {
-    console.error('⚠️  Database connection failed:', error.message);
-    console.log('   Server will start but database operations will fail.');
-    console.log('   Make sure PostgreSQL is running and DATABASE_URL is correct.');
+    console.error('❌ Database error:', error.message);
+    process.exit(1);
   }
+
+  const datasetCount = await prisma.eODataset.count();
+  console.log(`   📊 ${datasetCount} datasets loaded`);
 
   app.listen(PORT, () => {
     console.log('');
     console.log('  ╔══════════════════════════════════════════════╗');
     console.log('  ║  🛰️  OrbitalQuery Backend                    ║');
     console.log(`  ║  🌐 http://localhost:${PORT}                     ║`);
-    console.log('  ║  📋 GET  /api/health                         ║');
-    console.log('  ║  🔐 POST /api/auth/login                     ║');
-    console.log('  ║  🔍 POST /api/search                         ║');
-    console.log('  ║  📊 GET  /api/datasets                       ║');
     console.log('  ╚══════════════════════════════════════════════╝');
-    console.log('');
-    console.log('  Security: Helmet ✓ | Rate Limiting ✓ | CORS ✓ | Sanitization ✓');
     console.log('');
   });
 }
 
 main().catch((e) => {
-  console.error('❌ Failed to start server:', e);
+  console.error('❌ Failed to start:', e);
   process.exit(1);
 });
