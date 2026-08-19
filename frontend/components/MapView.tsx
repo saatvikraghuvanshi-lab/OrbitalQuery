@@ -1,7 +1,37 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import { DatasetResult, BoundingBox } from '@/app/page';
+
+type MapProvider = 'carto-dark' | 'carto-light' | 'osm' | 'stamen-toner' | 'esri-world';
+
+const MAP_TILES: Record<MapProvider, { url: string; attribution: string; name: string }> = {
+  'carto-dark': {
+    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+    attribution: '&copy; <a href="https://carto.com/">CARTO</a> | &copy; <a href="https://osm.org/copyright">OSM</a>',
+    name: '🗺️ CARTO Dark',
+  },
+  'carto-light': {
+    url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+    attribution: '&copy; <a href="https://carto.com/">CARTO</a> | &copy; <a href="https://osm.org/copyright">OSM</a>',
+    name: '🗺️ CARTO Light',
+  },
+  'osm': {
+    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    attribution: '&copy; <a href="https://osm.org/copyright">OpenStreetMap</a>',
+    name: '🌍 OpenStreetMap',
+  },
+  'stamen-toner': {
+    url: 'https://stamen-tiles-{s}.a.ssl.fastly.net/toner/{z}/{x}/{y}.png',
+    attribution: '&copy; <a href="https://stamen.com">Stamen</a> | &copy; <a href="https://osm.org/copyright">OSM</a>',
+    name: '🌑 Stamen Toner',
+  },
+  'esri-world': {
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    attribution: '&copy; <a href="https://www.esri.com">Esri</a> | &copy; <a href="https://osm.org/copyright">OSM</a>',
+    name: '🛰️ Esri Satellite',
+  },
+};
 
 interface MapViewProps {
   results: DatasetResult[];
@@ -13,35 +43,59 @@ interface MapViewProps {
 
 export default function MapView({ results, selectedDataset, onSelectDataset, bbox, onBboxChange }: MapViewProps) {
   const mapRef = useRef<HTMLDivElement>(null);
-  const mapInstanceRef = useRef<any>(null);
-  const layersRef = useRef<any[]>([]);
-  const rectRef = useRef<any>(null);
+  const leafletMap = useRef<any>(null);
+  const tileLayer = useRef<any>([]);
+  const footprintLayers = useRef<any[]>([]);
+  const bboxRect = useRef<any>(null);
+  const [mapProvider, setMapProvider] = useState<MapProvider>('carto-dark');
   const [isDrawing, setIsDrawing] = useState(false);
   const drawStartRef = useRef<any>(null);
 
-  // Initialize map
+  // ─── Initialize map ONCE ────────────────────────────────────────────
   useEffect(() => {
-    if (!mapRef.current || mapInstanceRef.current) return;
+    const container = mapRef.current;
+    if (!container) return;
 
-    // Dynamic import of Leaflet (needs window)
+    // Check if already initialized (HMR / StrictMode guard)
+    if (leafletMap.current) return;
+
+    // Check if Leaflet already attached
+    if ((container as any)._leaflet_id) return;
+
+    let destroyed = false;
+
     import('leaflet').then((L) => {
-      const map = L.map(mapRef.current!, {
+      if (destroyed || !container) return;
+      if ((container as any)._leaflet_id) return;
+
+      const map = L.map(container, {
         center: [20, 78],
         zoom: 3,
-        zoomControl: true,
-        attributionControl: true,
+        zoomControl: false,
+        attributionControl: false,
         minZoom: 2,
         maxZoom: 18,
       });
 
-      // Dark map tiles
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; <a href="https://carto.com/">CARTO</a> | &copy; <a href="https://osm.org/copyright">OpenStreetMap</a>',
+      if (destroyed) { map.remove(); return; }
+
+      leafletMap.current = map;
+
+      // Add zoom control top-left
+      L.control.zoom({ position: 'topleft' }).addTo(map);
+
+      // Add attribution bottom-right
+      L.control.attribution({ position: 'bottomright', prefix: false }).addTo(map);
+
+      // Add initial tile layer
+      const tiles = L.tileLayer(MAP_TILES[mapProvider].url, {
+        attribution: MAP_TILES[mapProvider].attribution,
         subdomains: 'abcd',
         maxZoom: 20,
       }).addTo(map);
+      tileLayer.current = [tiles];
 
-      // Draw bounding box mode
+      // Drawing handlers
       map.on('mousedown', (e: any) => {
         if (!isDrawing) return;
         drawStartRef.current = e.latlng;
@@ -51,161 +105,137 @@ export default function MapView({ results, selectedDataset, onSelectDataset, bbo
         if (!isDrawing || !drawStartRef.current) return;
         const start = drawStartRef.current;
         const end = e.latlng;
-
-        const newBbox: BoundingBox = {
+        onBboxChange({
           north: Math.max(start.lat, end.lat),
           south: Math.min(start.lat, end.lat),
           east: Math.max(start.lng, end.lng),
           west: Math.min(start.lng, end.lng),
-        };
-
-        onBboxChange(newBbox);
+        });
         setIsDrawing(false);
         drawStartRef.current = null;
       });
 
-      mapInstanceRef.current = map;
-
-      // Fix Leaflet rendering on mount
-      setTimeout(() => map.invalidateSize(), 100);
+      setTimeout(() => { if (!destroyed) map.invalidateSize(); }, 300);
     });
 
     return () => {
-      if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove();
-        mapInstanceRef.current = null;
+      destroyed = true;
+      if (leafletMap.current) {
+        leafletMap.current.remove();
+        leafletMap.current = null;
       }
     };
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Draw bounding box on map
+  // ─── Switch tile layer ──────────────────────────────────────────────
   useEffect(() => {
-    const L = require('leaflet');
-    const map = mapInstanceRef.current;
+    const map = leafletMap.current;
     if (!map) return;
 
-    // Remove old rectangle
-    if (rectRef.current) {
-      map.removeLayer(rectRef.current);
-      rectRef.current = null;
-    }
+    import('leaflet').then((L) => {
+      // Remove old tiles
+      tileLayer.current.forEach((t: any) => { try { map.removeLayer(t); } catch {} });
 
-    if (bbox) {
-      rectRef.current = L.rectangle(
-        [[bbox.south, bbox.west], [bbox.north, bbox.east]],
-        {
-          color: '#4c6ef5',
-          weight: 2,
-          fillColor: '#4c6ef5',
-          fillOpacity: 0.1,
-          dashArray: '5, 5',
-        }
-      ).addTo(map);
-    }
+      // Add new tiles
+      const newTile = L.tileLayer(MAP_TILES[mapProvider].url, {
+        attribution: MAP_TILES[mapProvider].attribution,
+        subdomains: 'abcd',
+        maxZoom: 20,
+      }).addTo(map);
+      tileLayer.current = [newTile];
+    });
+  }, [mapProvider]);
+
+  // ─── Draw bounding box ──────────────────────────────────────────────
+  useEffect(() => {
+    const map = leafletMap.current;
+    if (!map) return;
+
+    import('leaflet').then((L) => {
+      if (bboxRect.current) {
+        try { map.removeLayer(bboxRect.current); } catch {}
+        bboxRect.current = null;
+      }
+      if (bbox) {
+        bboxRect.current = L.rectangle(
+          [[bbox.south, bbox.west], [bbox.north, bbox.east]],
+          { color: '#4c6ef5', weight: 2, fillColor: '#4c6ef5', fillOpacity: 0.1, dashArray: '5, 5' }
+        ).addTo(map);
+      }
+    });
   }, [bbox]);
 
-  // Draw dataset footprints
+  // ─── Draw dataset footprints ────────────────────────────────────────
   useEffect(() => {
-    const L = require('leaflet');
-    const map = mapInstanceRef.current;
+    const map = leafletMap.current;
     if (!map) return;
 
-    // Clear old layers
-    layersRef.current.forEach(layer => {
-      map.removeLayer(layer);
-    });
-    layersRef.current = [];
+    import('leaflet').then((L) => {
+      // Clear old
+      footprintLayers.current.forEach(l => { try { map.removeLayer(l); } catch {} });
+      footprintLayers.current = [];
 
-    // Add new footprint layers
-    results.forEach(dataset => {
-      if (!dataset.geometry) return;
-
-      try {
-        let layer;
-        const isSelected = selectedDataset?.id === dataset.id;
-
-        const style = {
-          color: isSelected ? '#a78bfa' : '#4c6ef5',
-          weight: isSelected ? 3 : 1.5,
-          fillColor: isSelected ? '#a78bfa' : '#4c6ef5',
-          fillOpacity: isSelected ? 0.25 : 0.1,
-          opacity: isSelected ? 0.9 : 0.6,
-        };
-
-        layer = L.geoJSON(dataset.geometry, { style }).addTo(map);
-
-        // Add popup
-        const popupContent = `
-          <div style="min-width: 220px; font-size: 13px;">
-            <div style="font-weight: 600; margin-bottom: 4px; color: #e2e8f0;">${dataset.title}</div>
-            <div style="color: #94a3b8; font-size: 11px; margin-bottom: 6px;">
-              ${dataset.provider} ${dataset.collection ? `• ${dataset.collection}` : ''}
+      results.forEach(dataset => {
+        if (!dataset.geometry) return;
+        try {
+          const sel = selectedDataset?.id === dataset.id;
+          const style = {
+            color: sel ? '#a78bfa' : '#4c6ef5',
+            weight: sel ? 3 : 1.5,
+            fillColor: sel ? '#a78bfa' : '#4c6ef5',
+            fillOpacity: sel ? 0.25 : 0.1,
+            opacity: sel ? 0.9 : 0.6,
+          };
+          const layer = L.geoJSON(dataset.geometry, { style }).addTo(map);
+          layer.bindPopup(`
+            <div style="min-width:220px;font-size:13px">
+              <div style="font-weight:600;margin-bottom:4px;color:#e2e8f0">${dataset.title}</div>
+              <div style="color:#94a3b8;font-size:11px;margin-bottom:6px">${dataset.provider}${dataset.collection ? ' • ' + dataset.collection : ''}</div>
+              ${dataset.gsd ? `<div style="color:#64748b;font-size:11px">Resolution: ${dataset.gsd}m</div>` : ''}
+              ${dataset.startDate ? `<div style="color:#64748b;font-size:11px">Date: ${new Date(dataset.startDate).toLocaleDateString()}</div>` : ''}
+              ${dataset.cloudCover != null ? `<div style="color:#64748b;font-size:11px">Cloud: ${dataset.cloudCover}%</div>` : ''}
             </div>
-            ${dataset.gsd ? `<div style="color: #64748b; font-size: 11px;">Resolution: ${dataset.gsd}m</div>` : ''}
-            ${dataset.startDate ? `<div style="color: #64748b; font-size: 11px;">Date: ${new Date(dataset.startDate).toLocaleDateString()}</div>` : ''}
-            ${dataset.cloudCover != null ? `<div style="color: #64748b; font-size: 11px;">Cloud Cover: ${dataset.cloudCover}%</div>` : ''}
-            <button onclick="document.dispatchEvent(new CustomEvent('selectDataset', { detail: '${dataset.id}' }))"
-              style="margin-top: 8px; padding: 4px 12px; background: #4c6ef5; color: white; border: none; border-radius: 6px; font-size: 11px; cursor: pointer;">
-              View Details
-            </button>
-          </div>
-        `;
+          `);
+          layer.on('click', () => onSelectDataset(dataset));
+          footprintLayers.current.push(layer);
+        } catch {}
+      });
 
-        layer.bindPopup(popupContent);
-        layer.on('click', () => {
-          onSelectDataset(dataset);
-        });
-
-        layersRef.current.push(layer);
-      } catch (e) {
-        // Invalid geometry, skip
+      if (results.length > 0) {
+        try {
+          const coords: [number, number][] = results
+            .filter(d => d.centroidLat && d.centroidLng)
+            .map(d => [d.centroidLat!, d.centroidLng!]);
+          if (coords.length > 0) map.fitBounds(coords, { padding: [50, 50], maxZoom: 6 });
+        } catch {}
       }
     });
-
-    // Fit bounds if there are results
-    if (results.length > 0) {
-      try {
-        const allCoords: [number, number][] = [];
-        results.forEach(d => {
-          if (d.centroidLat && d.centroidLng) {
-            allCoords.push([d.centroidLat, d.centroidLng]);
-          }
-        });
-        if (allCoords.length > 0) {
-          map.fitBounds(allCoords, { padding: [50, 50], maxZoom: 6 });
-        }
-      } catch (e) {}
-    }
   }, [results, selectedDataset]);
-
-  // Listen for select events from popups
-  useEffect(() => {
-    const handler = (e: CustomEvent) => {
-      const dataset = results.find(r => r.id === e.detail);
-      if (dataset) onSelectDataset(dataset);
-    };
-    document.addEventListener('selectDataset', handler as EventListener);
-    return () => document.removeEventListener('selectDataset', handler as EventListener);
-  }, [results]);
 
   return (
     <div className="relative">
-      {/* Map container */}
-      <div
-        ref={mapRef}
-        className="w-full h-[400px] sm:h-[500px] lg:h-[600px] rounded-2xl overflow-hidden glass"
-      />
+      <div ref={mapRef} className="w-full h-[400px] sm:h-[500px] lg:h-[600px] rounded-2xl overflow-hidden glass" />
 
-      {/* Drawing controls */}
+      {/* Map Provider Selector */}
+      <div className="absolute top-4 left-4 z-[1000]">
+        <select
+          value={mapProvider}
+          onChange={(e) => setMapProvider(e.target.value as MapProvider)}
+          className="glass rounded-xl px-3 py-2 text-xs text-slate-300 bg-transparent border border-slate-700/50 focus:border-blue-500/50 focus:outline-none cursor-pointer"
+        >
+          {Object.entries(MAP_TILES).map(([key, val]) => (
+            <option key={key} value={key} className="bg-slate-900 text-slate-300">{val.name}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* Drawing Controls */}
       <div className="absolute top-4 right-4 z-[1000] flex flex-col gap-2">
         <button
           onClick={() => setIsDrawing(!isDrawing)}
           className={`px-3 py-2 rounded-xl text-xs font-medium transition-all duration-200 shadow-lg ${
-            isDrawing
-              ? 'bg-blue-500 text-white shadow-blue-500/30'
-              : 'glass text-slate-300 hover:text-white'
+            isDrawing ? 'bg-blue-500 text-white shadow-blue-500/30' : 'glass text-slate-300 hover:text-white'
           }`}
-          title="Draw bounding box on map"
         >
           <div className="flex items-center gap-1.5">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -214,7 +244,6 @@ export default function MapView({ results, selectedDataset, onSelectDataset, bbo
             {isDrawing ? 'Drawing...' : 'Draw BBOX'}
           </div>
         </button>
-
         {bbox && (
           <button
             onClick={() => onBboxChange(null)}
@@ -225,13 +254,11 @@ export default function MapView({ results, selectedDataset, onSelectDataset, bbo
         )}
       </div>
 
-      {/* Result count overlay */}
       {results.length > 0 && (
         <div className="absolute bottom-4 left-4 z-[1000] glass-light rounded-xl px-3 py-1.5 text-xs text-slate-400">
           {results.length} datasets shown
         </div>
       )}
-
       {isDrawing && (
         <div className="absolute bottom-4 right-4 z-[1000] glass rounded-xl px-3 py-1.5 text-xs text-blue-400">
           Click and drag on the map to select an area
