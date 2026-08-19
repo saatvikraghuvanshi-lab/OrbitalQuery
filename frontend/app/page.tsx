@@ -176,7 +176,7 @@ export default function Home() {
 
         {/* Main Content: Map + Results */}
         <div className="max-w-[1600px] mx-auto mt-4">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
             {/* Map View */}
             <div className="lg:col-span-7 xl:col-span-8">
               <MapView

@@ -232,7 +232,7 @@ export default function MapView({ results, selectedDataset, onSelectDataset, bbo
       {/* Wrapper: position:relative is CRITICAL for Leaflet absolute positioning */}
       <div
         ref={wrapperRef}
-        className="map-wrapper w-full h-[400px] sm:h-[500px] lg:h-[600px]"
+        className="map-wrapper w-full aspect-[4/3] sm:aspect-[16/10] lg:aspect-video max-h-[700px]"
       />
 
       {/* Map Provider Selector */}

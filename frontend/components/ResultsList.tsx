@@ -43,7 +43,7 @@ function ScoreBar({ score }: { score: number }) {
 export default function ResultsList({ results, loading, selectedDataset, onSelectDataset }: ResultsListProps) {
   if (loading) {
     return (
-      <div className="glass rounded-2xl p-4 h-[400px] sm:h-[500px] lg:h-[600px] overflow-hidden">
+      <div className="glass rounded-2xl p-4 h-full min-h-[400px] max-h-[700px] overflow-hidden">
         <div className="space-y-3">
           {[1, 2, 3, 4, 5].map((i) => (
             <div key={i} className="shimmer rounded-xl h-28" />
@@ -55,7 +55,7 @@ export default function ResultsList({ results, loading, selectedDataset, onSelec
 
   if (results.length === 0) {
     return (
-      <div className="glass rounded-2xl p-6 h-[400px] sm:h-[500px] lg:h-[600px] flex flex-col items-center justify-center text-center">
+      <div className="glass rounded-2xl p-6 h-full min-h-[400px] max-h-[700px] flex flex-col items-center justify-center text-center">
         <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500/10 to-purple-500/10 flex items-center justify-center mb-4">
           <svg className="w-8 h-8 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
@@ -70,13 +70,13 @@ export default function ResultsList({ results, loading, selectedDataset, onSelec
   }
 
   return (
-    <div className="glass rounded-2xl overflow-hidden">
+    <div className="glass rounded-2xl overflow-hidden h-full min-h-[400px] max-h-[700px] flex flex-col">
       <div className="px-4 py-3 border-b border-slate-700/30">
         <span className="text-sm font-medium text-slate-300">
           {results.length} datasets found
         </span>
       </div>
-      <div className="h-[360px] sm:h-[470px] lg:h-[570px] overflow-y-auto">
+      <div className="flex-1 overflow-y-auto min-h-0">
         <div className="p-3 space-y-2">
           {results.map((dataset, idx) => (
             <div
