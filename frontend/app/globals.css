@@ -64,6 +64,34 @@ body {
 .leaflet-container {
   background: #0d1117 !important;
   border-radius: 12px;
+  width: 100% !important;
+  height: 100% !important;
+  position: relative !important;
+}
+
+/* Ensure tiles are not clipped */
+.leaflet-pane {
+  z-index: 1 !important;
+}
+
+.leaflet-tile-pane {
+  z-index: 1 !important;
+}
+
+.leaflet-overlay-pane {
+  z-index: 2 !important;
+}
+
+.leaflet-popup-pane {
+  z-index: 3 !important;
+}
+
+/* Remove backdrop-filter from map container to prevent tile clipping */
+.leaflet-container.glass,
+.leaflet-container[class*="glass"] {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  background: #0d1117 !important;
 }
 
 .leaflet-control-zoom a {

@@ -214,7 +214,7 @@ export default function MapView({ results, selectedDataset, onSelectDataset, bbo
 
   return (
     <div className="relative">
-      <div ref={mapRef} className="w-full h-[400px] sm:h-[500px] lg:h-[600px] rounded-2xl overflow-hidden glass" />
+      <div ref={mapRef} className="w-full h-[400px] sm:h-[500px] lg:h-[600px] rounded-2xl overflow-hidden border border-slate-700/50 bg-slate-900" />
 
       {/* Map Provider Selector */}
       <div className="absolute top-4 left-4 z-[1000]">
