@@ -1,0 +1,67 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String   // bcrypt hashed
+  name      String?
+  role      String   @default("researcher") // researcher, admin
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("users")
+}
+
+model EODataset {
+  id          String   @id @default(uuid())
+  stacId      String?  @unique @map("stac_id")
+  title       String
+  description String?
+  provider    String
+  collection  String?
+  platform    String?
+  instrument  String?
+  gsd         Float?   // Ground Sample Distance in meters
+  cloudCover  Float?   @map("cloud_cover")
+  geometry    Json     // GeoJSON geometry
+  bbox        Json?    // Bounding box [west, south, east, north]
+  centroidLat Float?   @map("centroid_lat")
+  centroidLng Float?   @map("centroid_lng")
+  startDate   DateTime? @map("start_date")
+  endDate     DateTime? @map("end_date")
+  assets      Json?    // Asset links (thumbnail, download, etc.)
+  stacLink    String?  @map("stac_link")
+  previewUrl  String?  @map("preview_url")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Embedding stored separately (FAISS handles vector search)
+  hasEmbedding Boolean @default(false) @map("has_embedding")
+  embeddingId  Int?    @map("embedding_id") // Index in FAISS
+
+  @@index([provider])
+  @@index([collection])
+  @@index([startDate, endDate])
+  @@index([centroidLat, centroidLng])
+  @@map("eo_datasets")
+}
+
+model SearchLog {
+  id          String   @id @default(uuid())
+  query       String
+  filters     Json?
+  resultCount Int      @map("result_count")
+  latencyMs   Int      @map("latency_ms")
+  userId      String?  @map("user_id")
+  ipAddress   String?  @map("ip_address")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("search_logs")
+}

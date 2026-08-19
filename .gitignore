@@ -1,0 +1,12 @@
+node_modules/
+.env
+dist/
+.next/
+out/
+*.db
+__pycache__/
+faiss_index/
+data/*.bin
+data/*.pkl
+*.pyc
+.vercel/

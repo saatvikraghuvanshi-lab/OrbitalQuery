@@ -1,0 +1,18 @@
+{
+  "name": "orbital-query",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Semantic EO Dataset Explorer - Query Earth Observation datasets with natural language",
+  "scripts": {
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev:backend": "cd backend && npm run dev",
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "build": "cd frontend && npm run build",
+    "ingest": "cd backend && npx ts-node src/scripts/ingest.ts",
+    "db:push": "cd backend && npx prisma db push",
+    "db:generate": "cd backend && npx prisma generate"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
