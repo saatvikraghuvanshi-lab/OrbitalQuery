@@ -1,32 +1,34 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { GoogleMap, useJsApiLoader } from '@react-google-maps/api';
 import { DatasetResult, BoundingBox } from '@/app/page';
 
-type MapStyle = 'dark' | 'light' | 'streets' | 'satellite' | 'terrain';
+type MapTypeId = 'roadmap' | 'satellite' | 'hybrid' | 'terrain' | 'dark';
 
-const MAP_STYLES: Record<MapStyle, { url: string; name: string }> = {
-  'dark': {
-    url: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
-    name: '🗺️ CARTO Dark',
-  },
-  'light': {
-    url: 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json',
-    name: '🗺️ CARTO Voyager',
-  },
-  'streets': {
-    url: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
-    name: '🌍 Streets',
-  },
-  'satellite': {
-    url: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
-    name: '🛰️ Positron',
-  },
-  'terrain': {
-    url: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
-    name: '🌑 Dark Matter',
-  },
+const MAP_TYPES: Record<MapTypeId, { name: string; googleType?: google.maps.MapTypeId }> = {
+  roadmap:  { name: '🗺️ Streets', googleType: google?.maps?.MapTypeId?.ROADMAP },
+  satellite: { name: '🛰️ Satellite', googleType: google?.maps?.MapTypeId?.SATELLITE },
+  hybrid:   { name: '🌍 Hybrid', googleType: google?.maps?.MapTypeId?.HYBRID },
+  terrain:  { name: '🏔️ Terrain', googleType: google?.maps?.MapTypeId?.TERRAIN },
+  dark:     { name: '🌑 Dark', },
 };
+
+const DARK_STYLE: google.maps.MapTypeStyle[] = [
+  { elementType: 'geometry', stylers: [{ color: '#0d1117' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: '#0d1117' }] },
+  { elementType: 'labels.text.fill', stylers: [{ color: '#8a919c' }] },
+  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#1a1f2e' }] },
+  { featureType: 'road', elementType: 'labels.text.fill', stylers: [{ color: '#5a6070' }] },
+  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0e1b2a' }] },
+  { featureType: 'administrative', elementType: 'geometry', stylers: [{ color: '#1a2030' }] },
+  { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#141a24' }] },
+  { featureType: 'poi', elementType: 'labels.text.fill', stylers: [{ color: '#6b7280' }] },
+  { featureType: 'transit', elementType: 'geometry', stylers: [{ color: '#141a24' }] },
+  { featureType: 'landscape', elementType: 'geometry', stylers: [{ color: '#0d1117' }] },
+  { featureType: 'administrative.country', elementType: 'labels.text.stroke', stylers: [{ color: '#2a3040' }] },
+  { featureType: 'administrative.country', elementType: 'labels.text.fill', stylers: [{ color: '#7a8594' }] },
+];
 
 interface MapViewProps {
   results: DatasetResult[];
@@ -36,331 +38,252 @@ interface MapViewProps {
   onBboxChange: (bbox: BoundingBox | null) => void;
 }
 
+const containerStyle = { width: '100%', height: '580px' };
+const defaultCenter = { lat: 20, lng: 78 };
+const defaultZoom = 3;
+
 export default function MapView({ results, selectedDataset, onSelectDataset, bbox, onBboxChange }: MapViewProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<any>(null);
-  const maplibreglRef = useRef<any>(null);
-  const [mapStyle, setMapStyle] = useState<MapStyle>('dark');
+  const { isLoaded, loadError } = useJsApiLoader({
+    googleMapsApiKey: process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '',
+  });
+
+  const mapRef = useRef<google.maps.Map | null>(null);
+  const [mapTypeId, setMapTypeId] = useState<MapTypeId>('dark');
   const [isDrawing, setIsDrawing] = useState(false);
-  const drawStartRef = useRef<any>(null);
-  const drawRectRef = useRef<string | null>(null);
+  const drawStartRef = useRef<google.maps.LatLng | null>(null);
+  const drawRectRef = useRef<google.maps.Rectangle | null>(null);
+  const footprintRefs = useRef<google.maps.Polygon[]>([]);
+  const selectedOutlineRef = useRef<google.maps.Polygon | null>(null);
 
-  // ─── Initialize MapLibre map ──────────────────────────────────
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
+  // ─── On map load ────────────────────────────────────────────
+  const onMapLoad = useCallback((map: google.maps.Map) => {
+    mapRef.current = map;
 
-    let destroyed = false;
-    let map: any = null;
+    // Drawing mousedown
+    map.addListener('mousedown', (e: google.maps.MapMouseEvent) => {
+      if (!isDrawing || !e.latLng) return;
+      drawStartRef.current = e.latLng;
+    });
 
-    const init = async () => {
-      const maplibregl = await import('maplibre-gl');
-      maplibreglRef.current = maplibregl;
+    // Drawing mousemove
+    map.addListener('mousemove', (e: google.maps.MapMouseEvent) => {
+      if (!isDrawing || !drawStartRef.current || !e.latLng) return;
+      if (drawRectRef.current) drawRectRef.current.setMap(null);
 
-      if (destroyed || !container) return;
+      const start = drawStartRef.current;
+      const ne = new google.maps.LatLng(
+        Math.max(start.lat(), e.latLng.lat()),
+        Math.max(start.lng(), e.latLng.lng())
+      );
+      const sw = new google.maps.LatLng(
+        Math.min(start.lat(), e.latLng.lat()),
+        Math.min(start.lng(), e.latLng.lng())
+      );
 
-      // Explicitly set dimensions before init
-      container.style.width = '100%';
-      container.style.height = '580px';
-      container.style.position = 'relative';
-
-      map = new maplibregl.Map({
-        container,
-        style: MAP_STYLES[mapStyle].url,
-        center: [78, 20],
-        zoom: 3,
-        attributionControl: {},
+      drawRectRef.current = new google.maps.Rectangle({
+        map,
+        bounds: { north: ne.lat(), south: sw.lat(), east: ne.lng(), west: sw.lng() },
+        fillColor: '#4c6ef5',
+        fillOpacity: 0.15,
+        strokeColor: '#4c6ef5',
+        strokeWeight: 2,
+        
+        editable: false,
+        draggable: false,
       });
+    });
 
-      if (destroyed) { map.remove(); return; }
-      mapRef.current = map;
+    // Drawing mouseup
+    map.addListener('mouseup', (e: google.maps.MapMouseEvent) => {
+      if (!isDrawing || !drawStartRef.current || !e.latLng) return;
 
-      // Force resize after creation
-      map.on('load', () => {
-        if (destroyed) return;
-        map.resize();
-
-        // Add GeoJSON source for dataset footprints
-        map.addSource('datasets', {
-          type: 'geojson',
-          data: { type: 'FeatureCollection', features: [] },
-        });
-
-        map.addLayer({
-          id: 'datasets-fill',
-          type: 'fill',
-          source: 'datasets',
-          paint: {
-            'fill-color': ['get', 'fillColor'],
-            'fill-opacity': ['get', 'fillOpacity'],
-          },
-        });
-
-        map.addLayer({
-          id: 'datasets-line',
-          type: 'line',
-          source: 'datasets',
-          paint: {
-            'line-color': ['get', 'strokeColor'],
-            'line-width': ['get', 'strokeWidth'],
-            'line-opacity': ['get', 'strokeOpacity'],
-          },
-        });
-
-        map.on('click', 'datasets-fill', (e: any) => {
-          if (isDrawing) return;
-          if (e.features && e.features.length > 0) {
-            const feature = e.features[0];
-            const datasetId = feature.properties?.id;
-            if (datasetId) {
-              const dataset = results.find(r => r.id === datasetId);
-              if (dataset) onSelectDataset(dataset);
-            }
-          }
-        });
-
-        map.on('mouseenter', 'datasets-fill', () => {
-          if (!isDrawing) map.getCanvas().style.cursor = 'pointer';
-        });
-        map.on('mouseleave', 'datasets-fill', () => {
-          if (!isDrawing) map.getCanvas().style.cursor = '';
-        });
-
-        updateFootprints();
-      });
-
-      // Drawing handlers
-      map.on('mousedown', (e: any) => {
-        if (!isDrawing) return;
-        e.preventDefault();
-        drawStartRef.current = [e.lngLat.lng, e.lngLat.lat];
-      });
-
-      map.on('mousemove', (e: any) => {
-        if (!isDrawing || !drawStartRef.current) return;
-        const start = drawStartRef.current;
-        const end = [e.lngLat.lng, e.lngLat.lat];
-
-        if (drawRectRef.current && map.getLayer(drawRectRef.current)) {
-          map.removeLayer(drawRectRef.current);
-          map.removeLayer(drawRectRef.current + '-line');
-          map.removeSource(drawRectRef.current);
+      if (drawRectRef.current) {
+        const bounds = drawRectRef.current.getBounds();
+        if (bounds) {
+          const ne = bounds.getNorthEast();
+          const sw = bounds.getSouthWest();
+          onBboxChange({
+            north: ne.lat(),
+            south: sw.lat(),
+            east: ne.lng(),
+            west: sw.lng(),
+          });
         }
-
-        const id = 'draw-rect-' + Date.now();
-        drawRectRef.current = id;
-
-        map.addSource(id, {
-          type: 'geojson',
-          data: {
-            type: 'Feature',
-            geometry: {
-              type: 'Polygon',
-              coordinates: [[
-                [start[0], start[1]],
-                [end[0], start[1]],
-                [end[0], end[1]],
-                [start[0], end[1]],
-                [start[0], start[1]],
-              ]],
-            },
-          },
-        });
-
-        map.addLayer({
-          id,
-          type: 'fill',
-          source: id,
-          paint: { 'fill-color': '#4c6ef5', 'fill-opacity': 0.15 },
-        });
-
-        map.addLayer({
-          id: id + '-line',
-          type: 'line',
-          source: id,
-          paint: { 'line-color': '#4c6ef5', 'line-width': 2, 'line-dasharray': [5, 5] },
-        });
-      });
-
-      map.on('mouseup', (e: any) => {
-        if (!isDrawing || !drawStartRef.current) return;
-        const start = drawStartRef.current;
-        const end = [e.lngLat.lng, e.lngLat.lat];
-
-        if (drawRectRef.current) {
-          try {
-            if (map.getLayer(drawRectRef.current)) map.removeLayer(drawRectRef.current);
-            if (map.getLayer(drawRectRef.current + '-line')) map.removeLayer(drawRectRef.current + '-line');
-            if (map.getSource(drawRectRef.current)) map.removeSource(drawRectRef.current);
-          } catch {}
-          drawRectRef.current = null;
-        }
-
-        const north = Math.max(start[1], end[1]);
-        const south = Math.min(start[1], end[1]);
-        const east = Math.max(start[0], end[0]);
-        const west = Math.min(start[0], end[0]);
-
-        if (Math.abs(north - south) > 0.001 && Math.abs(east - west) > 0.001) {
-          onBboxChange({ north, south, east, west });
-        }
-
-        setIsDrawing(false);
-        drawStartRef.current = null;
-      });
-    };
-
-    init();
-
-    return () => {
-      destroyed = true;
-      if (map) {
-        try { map.remove(); } catch {}
-        mapRef.current = null;
+        drawRectRef.current.setMap(null);
+        drawRectRef.current = null;
       }
-    };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ─── Switch style ─────────────────────────────────────────────
+      drawStartRef.current = null;
+      setIsDrawing(false);
+    });
+  }, [isDrawing, onBboxChange]);
+
+  // ─── Update map type ────────────────────────────────────────
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    map.setStyle(MAP_STYLES[mapStyle].url);
 
-    map.once('style.load', () => {
-      map.addSource('datasets', {
-        type: 'geojson',
-        data: { type: 'FeatureCollection', features: [] },
+    if (mapTypeId === 'dark') {
+      map.setOptions({ mapTypeId: 'roadmap', styles: DARK_STYLE });
+    } else {
+      map.setOptions({
+        mapTypeId: MAP_TYPES[mapTypeId].googleType,
+        styles: undefined,
       });
-
-      map.addLayer({
-        id: 'datasets-fill',
-        type: 'fill',
-        source: 'datasets',
-        paint: {
-          'fill-color': ['get', 'fillColor'],
-          'fill-opacity': ['get', 'fillOpacity'],
-        },
-      });
-
-      map.addLayer({
-        id: 'datasets-line',
-        type: 'line',
-        source: 'datasets',
-        paint: {
-          'line-color': ['get', 'strokeColor'],
-          'line-width': ['get', 'strokeWidth'],
-          'line-opacity': ['get', 'strokeOpacity'],
-        },
-      });
-
-      updateFootprints();
-    });
-  }, [mapStyle]);
-
-  // ─── Update footprints on map ─────────────────────────────────
-  const updateFootprints = useCallback(() => {
-    const map = mapRef.current;
-    if (!map || !map.isStyleLoaded()) return;
-
-    const features = results
-      .filter(d => d.geometry)
-      .map(dataset => {
-        const sel = selectedDataset?.id === dataset.id;
-        return {
-          type: 'Feature' as const,
-          id: dataset.id,
-          properties: {
-            id: dataset.id,
-            title: dataset.title,
-            fillColor: sel ? '#a78bfa' : '#4c6ef5',
-            fillOpacity: sel ? 0.3 : 0.15,
-            strokeColor: sel ? '#a78bfa' : '#4c6ef5',
-            strokeWidth: sel ? 3 : 1.5,
-            strokeOpacity: sel ? 0.9 : 0.6,
-          },
-          geometry: dataset.geometry,
-        };
-      });
-
-    try {
-      const source = map.getSource('datasets') as any;
-      if (source) {
-        source.setData({ type: 'FeatureCollection', features });
-      }
-    } catch {}
-
-    if (results.length > 0) {
-      try {
-        const coords = results
-          .filter(d => d.centroidLat && d.centroidLng)
-          .map(d => [d.centroidLng!, d.centroidLat!] as [number, number]);
-        if (coords.length > 0 && maplibreglRef.current) {
-          const bounds = coords.reduce(
-            (b, c) => b.extend(c),
-            new maplibreglRef.current.LngLatBounds(coords[0], coords[0])
-          );
-          map.fitBounds(bounds, { padding: { top: 50, bottom: 50, left: 50, right: 50 }, maxZoom: 6 });
-        }
-      } catch {}
     }
-  }, [results, selectedDataset]);
+  }, [mapTypeId]);
 
+  // ─── Update footprints ──────────────────────────────────────
   useEffect(() => {
-    updateFootprints();
-  }, [updateFootprints]);
+    const map = mapRef.current;
+    if (!map) return;
 
-  // ─── Zoom to selected dataset ─────────────────────────────────
+    // Clear old footprints
+    footprintRefs.current.forEach(p => p.setMap(null));
+    footprintRefs.current = [];
+
+    // Clear old draw rect
+    if (drawRectRef.current) {
+      drawRectRef.current.setMap(null);
+      drawRectRef.current = null;
+    }
+
+    // Draw new footprints
+    results.forEach(dataset => {
+      if (!dataset.geometry) return;
+
+      const paths = geometryToPaths(dataset.geometry);
+      if (!paths || paths.length === 0) return;
+
+      const isSelected = selectedDataset?.id === dataset.id;
+
+      const polygon = new google.maps.Polygon({
+        map,
+        paths,
+        fillColor: isSelected ? '#a78bfa' : '#4c6ef5',
+        fillOpacity: isSelected ? 0.3 : 0.15,
+        strokeColor: isSelected ? '#a78bfa' : '#4c6ef5',
+        strokeWeight: isSelected ? 3 : 1.5,
+        strokeOpacity: isSelected ? 0.9 : 0.6,
+        clickable: true,
+        zIndex: isSelected ? 100 : 1,
+      });
+
+      polygon.addListener('click', () => {
+        if (!isDrawing) onSelectDataset(dataset);
+      });
+
+      footprintRefs.current.push(polygon);
+    });
+
+    // Fit bounds to results
+    if (results.length > 0) {
+      const bounds = new google.maps.LatLngBounds();
+      let hasBounds = false;
+
+      results.forEach(dataset => {
+        if (dataset.bbox && Array.isArray(dataset.bbox) && dataset.bbox.length === 4) {
+          bounds.extend(new google.maps.LatLng(dataset.bbox[1], dataset.bbox[0]));
+          bounds.extend(new google.maps.LatLng(dataset.bbox[3], dataset.bbox[2]));
+          hasBounds = true;
+        } else if (dataset.centroidLat && dataset.centroidLng) {
+          bounds.extend(new google.maps.LatLng(dataset.centroidLat, dataset.centroidLng));
+          hasBounds = true;
+        }
+      });
+
+      if (hasBounds) {
+        map.fitBounds(bounds, 50);
+      }
+    }
+  }, [results, selectedDataset, onSelectDataset, isDrawing]);
+
+  // ─── Zoom to selected dataset ───────────────────────────────
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !selectedDataset) return;
 
-    try {
-      if (selectedDataset.bbox && Array.isArray(selectedDataset.bbox) && selectedDataset.bbox.length === 4) {
-        const [west, south, east, north] = selectedDataset.bbox;
-        map.fitBounds([[west, south], [east, north]], { padding: { top: 60, bottom: 60, left: 60, right: 60 }, maxZoom: 12 });
-      } else if (selectedDataset.geometry) {
-        const coords = extractCoords(selectedDataset.geometry);
-        if (coords.length > 0 && maplibreglRef.current) {
-          const bounds = coords.reduce((b, c) => b.extend(c), new maplibreglRef.current.LngLatBounds(coords[0], coords[0]));
-          map.fitBounds(bounds, { padding: { top: 60, bottom: 60, left: 60, right: 60 }, maxZoom: 12 });
-        }
-      } else if (selectedDataset.centroidLat && selectedDataset.centroidLng) {
-        map.flyTo({ center: [selectedDataset.centroidLng, selectedDataset.centroidLat], zoom: 8 });
-      }
-    } catch {}
+    // Clear previous selection highlight
+    if (selectedOutlineRef.current) {
+      selectedOutlineRef.current.setMap(null);
+      selectedOutlineRef.current = null;
+    }
+
+    if (selectedDataset.bbox && Array.isArray(selectedDataset.bbox) && selectedDataset.bbox.length === 4) {
+      const [west, south, east, north] = selectedDataset.bbox;
+      map.fitBounds(
+        { south, west, north, east },
+        { top: 60, right: 60, bottom: 60, left: 60 }
+      );
+    } else if (selectedDataset.centroidLat && selectedDataset.centroidLng) {
+      map.panTo({ lat: selectedDataset.centroidLat, lng: selectedDataset.centroidLng });
+      map.setZoom(8);
+    }
   }, [selectedDataset]);
 
-  // ─── Draw mode toggle ─────────────────────────────────────────
+  // ─── Draw cursor ────────────────────────────────────────────
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    map.getCanvas().style.cursor = isDrawing ? 'crosshair' : '';
+    const canvas = map.getDiv().querySelector('canvas');
+    if (canvas) canvas.style.cursor = isDrawing ? 'crosshair' : '';
   }, [isDrawing]);
 
   const toggleDrawing = useCallback(() => {
     setIsDrawing(prev => !prev);
   }, []);
 
+  // ─── Loading / Error states ─────────────────────────────────
+  if (loadError) {
+    return (
+      <div style={{ width: '100%', height: '580px', borderRadius: '16px', background: '#0d1117', border: '1px solid rgba(71, 85, 105, 0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', color: '#f87171', gap: '8px' }}>
+        <div style={{ fontSize: '32px' }}>⚠️</div>
+        <div>Failed to load Google Maps</div>
+        <div style={{ fontSize: '12px', color: '#64748b' }}>
+          Add your API key to <code>frontend/.env.local</code>
+        </div>
+        <div style={{ fontSize: '11px', color: '#475569', maxWidth: '400px', textAlign: 'center', marginTop: '8px' }}>
+          Get a free key at{' '}
+          <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener" style={{ color: '#60a5fa' }}>
+            Google Cloud Console
+          </a>
+          {' '}→ Enable &quot;Maps JavaScript API&quot; → Create API Key
+        </div>
+      </div>
+    );
+  }
+
+  if (!isLoaded) {
+    return (
+      <div style={{ width: '100%', height: '580px', borderRadius: '16px', background: '#0d1117', border: '1px solid rgba(71, 85, 105, 0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', color: '#64748b', gap: '8px' }}>
+        <div style={{ fontSize: '32px' }}>🗺️</div>
+        <div>Loading Google Maps...</div>
+      </div>
+    );
+  }
+
   return (
-    <div style={{
-      position: 'relative',
-      borderRadius: '16px',
-      border: '1px solid rgba(71, 85, 105, 0.3)',
-      width: '100%',
-      height: '580px',
-    }}>
-      <div
-        ref={containerRef}
-        className="maplibregl-map"
-        style={{ width: '100%', height: '580px' }}
+    <div style={{ position: 'relative', borderRadius: '16px', border: '1px solid rgba(71, 85, 105, 0.3)', width: '100%', height: '580px' }}>
+      <GoogleMap
+        mapContainerStyle={containerStyle}
+        center={defaultCenter}
+        zoom={defaultZoom}
+        onLoad={onMapLoad}
+        options={{
+          disableDefaultUI: true,
+          zoomControl: true,
+          mapTypeControl: false,
+          streetViewControl: false,
+          fullscreenControl: false,
+          gestureHandling: 'greedy',
+        }}
       />
 
       {/* Style selector */}
       <div style={{ position: 'absolute', top: '16px', left: '16px', zIndex: 10 }}>
         <select
-          value={mapStyle}
-          onChange={(e) => setMapStyle(e.target.value as MapStyle)}
+          value={mapTypeId}
+          onChange={(e) => setMapTypeId(e.target.value as MapTypeId)}
           style={{
             padding: '8px 12px',
             fontSize: '12px',
@@ -372,7 +295,7 @@ export default function MapView({ results, selectedDataset, onSelectDataset, bbo
             outline: 'none',
           }}
         >
-          {Object.entries(MAP_STYLES).map(([key, val]) => (
+          {Object.entries(MAP_TYPES).map(([key, val]) => (
             <option key={key} value={key} style={{ background: '#0f172a', color: '#cbd5e1' }}>{val.name}</option>
           ))}
         </select>
@@ -447,27 +370,36 @@ export default function MapView({ results, selectedDataset, onSelectDataset, bbo
   );
 }
 
-// ─── Helper: extract all coordinates from GeoJSON ──────────────
-function extractCoords(geojson: any): [number, number][] {
-  const coords: [number, number][] = [];
-  if (!geojson) return coords;
+// ─── Convert GeoJSON geometry to Google Maps paths ──────────────
+function geometryToPaths(geometry: any): google.maps.LatLngLiteral[][] | null {
+  if (!geometry) return null;
 
-  const extract = (c: any) => {
-    if (!c) return;
-    if (typeof c[0] === 'number') {
-      coords.push([c[0], c[1]]);
-    } else if (Array.isArray(c)) {
-      c.forEach(extract);
-    }
+  const toLatLngArray = (coords: number[][][]): google.maps.LatLngLiteral[][] => {
+    return coords.map(ring =>
+      ring.map(([lng, lat]) => ({ lat, lng }))
+    );
   };
 
-  if (geojson.type === 'Feature') {
-    extract(geojson.geometry?.coordinates);
-  } else if (geojson.type === 'FeatureCollection') {
-    geojson.features?.forEach((f: any) => extract(f.geometry?.coordinates));
-  } else {
-    extract(geojson.coordinates);
+  try {
+    if (geometry.type === 'Polygon') {
+      return toLatLngArray(geometry.coordinates);
+    } else if (geometry.type === 'MultiPolygon') {
+      return geometry.coordinates.flat().map((polygon: number[][]) =>
+        polygon.map(([lng, lat]: number[]) => ({ lat, lng }))
+      );
+    } else if (geometry.type === 'Feature') {
+      return geometryToPaths(geometry.geometry);
+    } else if (geometry.type === 'FeatureCollection') {
+      const allPaths: google.maps.LatLngLiteral[][] = [];
+      geometry.features?.forEach((f: any) => {
+        const p = geometryToPaths(f.geometry);
+        if (p) allPaths.push(...p);
+      });
+      return allPaths.length > 0 ? allPaths : null;
+    }
+  } catch {
+    return null;
   }
 
-  return coords;
+  return null;
 }
