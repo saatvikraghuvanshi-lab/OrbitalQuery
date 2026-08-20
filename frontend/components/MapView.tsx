@@ -231,8 +231,11 @@ export default function MapView({ results, selectedDataset, onSelectDataset, bbo
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    const canvas = map.getDiv().querySelector('canvas');
-    if (canvas) canvas.style.cursor = isDrawing ? 'crosshair' : '';
+    const div = map.getDiv?.();
+    if (div) {
+      const canvas = div.querySelector('canvas');
+      if (canvas) canvas.style.cursor = isDrawing ? 'crosshair' : '';
+    }
   }, [isDrawing]);
 
   const toggleDrawing = useCallback(() => {
