@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { DatasetResult, BoundingBox } from '@/app/page';
 
 type MapProvider = 'carto-dark' | 'carto-light' | 'osm' | 'stamen-toner' | 'esri-world';
@@ -45,194 +45,298 @@ interface MapViewProps {
 }
 
 export default function MapView({ results, selectedDataset, onSelectDataset, bbox, onBboxChange }: MapViewProps) {
-  const wrapperRef = useRef<HTMLDivElement>(null);
-  const leafletMap = useRef<any>(null);
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<any>(null);
   const tileLayerRef = useRef<any>(null);
-  const footprintLayers = useRef<any[]>([]);
-  const bboxRect = useRef<any>(null);
-  const [mapProvider, setMapProvider] = useState<MapProvider>('carto-dark');
-  const [isDrawing, setIsDrawing] = useState(false);
+  const footprintLayersRef = useRef<any[]>([]);
+  const bboxRectRef = useRef<any>(null);
+  const drawRectRef = useRef<any>(null);
   const drawStartRef = useRef<any>(null);
 
-  // ─── Initialize map ONCE ────────────────────────────────────────────
+  const [mapProvider, setMapProvider] = useState<MapProvider>('carto-dark');
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [mapHeight, setMapHeight] = useState<string>('600px');
+
+  // Calculate height on mount
   useEffect(() => {
-    const wrapper = wrapperRef.current;
-    if (!wrapper || leafletMap.current) return;
+    const updateHeight = () => {
+      const w = window.innerWidth;
+      if (w < 640) setMapHeight('500px');
+      else if (w < 1024) setMapHeight('500px');
+      else setMapHeight('620px');
+    };
+    updateHeight();
+    window.addEventListener('resize', updateHeight);
+    return () => window.removeEventListener('resize', updateHeight);
+  }, []);
+
+  // ─── Initialize map ─────────────────────────────────────────────────
+  useEffect(() => {
+    const container = mapContainerRef.current;
+    if (!container || mapRef.current) return;
 
     let destroyed = false;
+    let map: any = null;
 
-    import('leaflet').then((L) => {
-      if (destroyed || !wrapper) return;
+    const init = async () => {
+      const L = await import('leaflet');
+      if (destroyed || !container) return;
 
-      // Create the map div inside the wrapper
-      const mapDiv = document.createElement('div');
-      mapDiv.style.width = '100%';
-      mapDiv.style.height = '100%';
-      mapDiv.style.position = 'absolute';
-      mapDiv.style.top = '0';
-      mapDiv.style.left = '0';
-      mapDiv.style.right = '0';
-      mapDiv.style.bottom = '0';
-      wrapper.appendChild(mapDiv);
+      // Ensure container has dimensions
+      container.style.height = mapHeight;
+      container.style.width = '100%';
 
-      const map = L.map(mapDiv, {
+      map = L.map(container, {
         center: [20, 78],
         zoom: 3,
-        zoomControl: false,
-        attributionControl: false,
+        zoomControl: true,
+        attributionControl: true,
         minZoom: 2,
         maxZoom: 18,
+        doubleClickZoom: true,
+        scrollWheelZoom: true,
       });
 
       if (destroyed) { map.remove(); return; }
 
-      leafletMap.current = map;
+      mapRef.current = map;
 
-      L.control.zoom({ position: 'topleft' }).addTo(map);
-      L.control.attribution({ position: 'bottomright', prefix: false }).addTo(map);
-
-      const tileConfig = MAP_TILES[mapProvider];
-      const tiles = L.tileLayer(tileConfig.url, {
-        attribution: tileConfig.attribution,
-        subdomains: tileConfig.subdomains || '',
+      // Add tile layer
+      const tc = MAP_TILES[mapProvider];
+      const tiles = L.tileLayer(tc.url, {
+        attribution: tc.attribution,
+        subdomains: tc.subdomains || '',
         maxZoom: 20,
       }).addTo(map);
       tileLayerRef.current = tiles;
 
-      // Drawing handlers
-      map.on('mousedown', (e: any) => {
-        if (!isDrawing) return;
-        drawStartRef.current = e.latlng;
+      // Invalidate size multiple times for reliable rendering
+      const timers: number[] = [];
+      timers.push(window.setTimeout(() => { if (!destroyed && map) map.invalidateSize(); }, 200));
+      timers.push(window.setTimeout(() => { if (!destroyed && map) map.invalidateSize(); }, 500));
+      timers.push(window.setTimeout(() => { if (!destroyed && map) map.invalidateSize(); }, 1000));
+      timers.push(window.setTimeout(() => { if (!destroyed && map) map.invalidateSize(); }, 2000));
+
+      // ResizeObserver for bulletproof sizing
+      const ro = new ResizeObserver(() => {
+        if (!destroyed && map) map.invalidateSize();
       });
+      ro.observe(container);
 
-      map.on('mouseup', (e: any) => {
-        if (!isDrawing || !drawStartRef.current) return;
-        const start = drawStartRef.current;
-        const end = e.latlng;
-        onBboxChange({
-          north: Math.max(start.lat, end.lat),
-          south: Math.min(start.lat, end.lat),
-          east: Math.max(start.lng, end.lng),
-          west: Math.min(start.lng, end.lng),
-        });
-        setIsDrawing(false);
-        drawStartRef.current = null;
-      });
+      // Store cleanup refs
+      (map as any)._orbitalTimers = timers;
+      (map as any)._orbitalRO = ro;
+    };
 
-      // Critical: invalidateSize after render
-      const timers: NodeJS.Timeout[] = [];
-      timers.push(setTimeout(() => { if (!destroyed) map.invalidateSize(); }, 100));
-      timers.push(setTimeout(() => { if (!destroyed) map.invalidateSize(); }, 500));
-      timers.push(setTimeout(() => { if (!destroyed) map.invalidateSize(); }, 1500));
-
-      // Also invalidate on window resize
-      const onResize = () => { if (!destroyed && leafletMap.current) leafletMap.current.invalidateSize(); };
-      window.addEventListener('resize', onResize);
-
-      return () => {
-        timers.forEach(clearTimeout);
-        window.removeEventListener('resize', onResize);
-      };
-    });
+    init();
 
     return () => {
       destroyed = true;
-      if (leafletMap.current) {
-        leafletMap.current.remove();
-        leafletMap.current = null;
+      if (map) {
+        if ((map as any)._orbitalTimers) {
+          (map as any)._orbitalTimers.forEach((t: number) => window.clearTimeout(t));
+        }
+        if ((map as any)._orbitalRO) {
+          (map as any)._orbitalRO.disconnect();
+        }
+        map.remove();
+        mapRef.current = null;
       }
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [mapHeight]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ─── Update map height when it changes ──────────────────────────────
+  useEffect(() => {
+    if (mapContainerRef.current) {
+      mapContainerRef.current.style.height = mapHeight;
+      if (mapRef.current) {
+        setTimeout(() => mapRef.current.invalidateSize(), 100);
+      }
+    }
+  }, [mapHeight]);
+
+  // ─── Draw mode: disable drag when drawing ───────────────────────────
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    if (isDrawing) {
+      map.dragging.disable();
+      map.getContainer().style.cursor = 'crosshair';
+    } else {
+      map.dragging.enable();
+      map.getContainer().style.cursor = '';
+    }
+  }, [isDrawing]);
+
+  // ─── Drawing: mousedown + mousemove + mouseup ───────────────────────
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const L = require('leaflet');
+
+    const onMouseDown = (e: any) => {
+      if (!isDrawing) return;
+      e.originalEvent.preventDefault();
+      drawStartRef.current = e.latlng;
+
+      // Remove previous draw rect
+      if (drawRectRef.current) {
+        try { map.removeLayer(drawRectRef.current); } catch {}
+        drawRectRef.current = null;
+      }
+    };
+
+    const onMouseMove = (e: any) => {
+      if (!isDrawing || !drawStartRef.current) return;
+      const start = drawStartRef.current;
+      const end = e.latlng;
+
+      if (drawRectRef.current) {
+        try { map.removeLayer(drawRectRef.current); } catch {}
+      }
+
+      drawRectRef.current = L.rectangle(
+        [[start.lat, start.lng], [end.lat, end.lng]],
+        { color: '#4c6ef5', weight: 2, fillColor: '#4c6ef5', fillOpacity: 0.15, dashArray: '5, 5' }
+      ).addTo(map);
+    };
+
+    const onMouseUp = (e: any) => {
+      if (!isDrawing || !drawStartRef.current) return;
+      const start = drawStartRef.current;
+      const end = e.latlng;
+
+      // Remove temporary draw rect
+      if (drawRectRef.current) {
+        try { map.removeLayer(drawRectRef.current); } catch {}
+        drawRectRef.current = null;
+      }
+
+      const north = Math.max(start.lat, end.lat);
+      const south = Math.min(start.lat, end.lat);
+      const east = Math.max(start.lng, end.lng);
+      const west = Math.min(start.lng, end.lng);
+
+      // Only accept if the rectangle has meaningful size
+      if (Math.abs(north - south) > 0.001 && Math.abs(east - west) > 0.001) {
+        onBboxChange({ north, south, east, west });
+      }
+
+      setIsDrawing(false);
+      drawStartRef.current = null;
+    };
+
+    map.on('mousedown', onMouseDown);
+    map.on('mousemove', onMouseMove);
+    map.on('mouseup', onMouseUp);
+
+    return () => {
+      map.off('mousedown', onMouseDown);
+      map.off('mousemove', onMouseMove);
+      map.off('mouseup', onMouseUp);
+    };
+  }, [isDrawing, onBboxChange]);
 
   // ─── Switch tile layer ──────────────────────────────────────────────
   useEffect(() => {
-    const map = leafletMap.current;
+    const map = mapRef.current;
     if (!map) return;
 
-    import('leaflet').then((L) => {
-      if (tileLayerRef.current) {
-        try { map.removeLayer(tileLayerRef.current); } catch {}
-      }
-      const tileConfig = MAP_TILES[mapProvider];
-      const newTile = L.tileLayer(tileConfig.url, {
-        attribution: tileConfig.attribution,
-        subdomains: tileConfig.subdomains || '',
-        maxZoom: 20,
-      }).addTo(map);
-      tileLayerRef.current = newTile;
-      setTimeout(() => map.invalidateSize(), 200);
-    });
+    const L = require('leaflet');
+
+    if (tileLayerRef.current) {
+      try { map.removeLayer(tileLayerRef.current); } catch {}
+    }
+    const tc = MAP_TILES[mapProvider];
+    const newTile = L.tileLayer(tc.url, {
+      attribution: tc.attribution,
+      subdomains: tc.subdomains || '',
+      maxZoom: 20,
+    }).addTo(map);
+    tileLayerRef.current = newTile;
+    setTimeout(() => map.invalidateSize(), 300);
   }, [mapProvider]);
 
-  // ─── Draw bounding box ──────────────────────────────────────────────
+  // ─── Draw bbox rectangle from filter ────────────────────────────────
   useEffect(() => {
-    const map = leafletMap.current;
+    const map = mapRef.current;
     if (!map) return;
 
-    import('leaflet').then((L) => {
-      if (bboxRect.current) {
-        try { map.removeLayer(bboxRect.current); } catch {}
-        bboxRect.current = null;
-      }
-      if (bbox) {
-        bboxRect.current = L.rectangle(
-          [[bbox.south, bbox.west], [bbox.north, bbox.east]],
-          { color: '#4c6ef5', weight: 2, fillColor: '#4c6ef5', fillOpacity: 0.1, dashArray: '5, 5' }
-        ).addTo(map);
-      }
-    });
+    const L = require('leaflet');
+
+    if (bboxRectRef.current) {
+      try { map.removeLayer(bboxRectRef.current); } catch {}
+      bboxRectRef.current = null;
+    }
+    if (bbox) {
+      bboxRectRef.current = L.rectangle(
+        [[bbox.south, bbox.west], [bbox.north, bbox.east]],
+        { color: '#22c55e', weight: 2, fillColor: '#22c55e', fillOpacity: 0.1, dashArray: '5, 5' }
+      ).addTo(map);
+    }
   }, [bbox]);
 
   // ─── Draw dataset footprints ────────────────────────────────────────
   useEffect(() => {
-    const map = leafletMap.current;
+    const map = mapRef.current;
     if (!map) return;
 
-    import('leaflet').then((L) => {
-      footprintLayers.current.forEach(l => { try { map.removeLayer(l); } catch {} });
-      footprintLayers.current = [];
+    const L = require('leaflet');
 
-      results.forEach(dataset => {
-        if (!dataset.geometry) return;
-        try {
-          const sel = selectedDataset?.id === dataset.id;
-          const layer = L.geoJSON(dataset.geometry, {
-            color: sel ? '#a78bfa' : '#4c6ef5',
-            weight: sel ? 3 : 1.5,
-            fillColor: sel ? '#a78bfa' : '#4c6ef5',
-            fillOpacity: sel ? 0.25 : 0.1,
-            opacity: sel ? 0.9 : 0.6,
-          }).addTo(map);
-          layer.bindPopup(`
-            <div style="min-width:200px;font-size:13px">
-              <div style="font-weight:600;margin-bottom:4px;color:#e2e8f0">${dataset.title}</div>
-              <div style="color:#94a3b8;font-size:11px">${dataset.provider}${dataset.collection ? ' • ' + dataset.collection : ''}</div>
-              ${dataset.gsd ? `<div style="color:#64748b;font-size:11px">Resolution: ${dataset.gsd}m</div>` : ''}
-              ${dataset.startDate ? `<div style="color:#64748b;font-size:11px">Date: ${new Date(dataset.startDate).toLocaleDateString()}</div>` : ''}
-            </div>
-          `);
-          layer.on('click', () => onSelectDataset(dataset));
-          footprintLayers.current.push(layer);
-        } catch {}
-      });
+    // Clear existing footprints
+    footprintLayersRef.current.forEach(l => { try { map.removeLayer(l); } catch {} });
+    footprintLayersRef.current = [];
 
-      if (results.length > 0) {
-        try {
-          const coords = results
-            .filter(d => d.centroidLat && d.centroidLng)
-            .map(d => [d.centroidLat!, d.centroidLng!] as [number, number]);
-          if (coords.length > 0) map.fitBounds(coords, { padding: [50, 50], maxZoom: 6 });
-        } catch {}
-      }
+    results.forEach(dataset => {
+      if (!dataset.geometry) return;
+      try {
+        const sel = selectedDataset?.id === dataset.id;
+        const layer = L.geoJSON(dataset.geometry, {
+          color: sel ? '#a78bfa' : '#4c6ef5',
+          weight: sel ? 3 : 1.5,
+          fillColor: sel ? '#a78bfa' : '#4c6ef5',
+          fillOpacity: sel ? 0.25 : 0.1,
+          opacity: sel ? 0.9 : 0.6,
+        }).addTo(map);
+
+        layer.bindPopup(`
+          <div style="min-width:200px;font-size:13px">
+            <div style="font-weight:600;margin-bottom:4px;color:#e2e8f0">${dataset.title}</div>
+            <div style="color:#94a3b8;font-size:11px">${dataset.provider}${dataset.collection ? ' • ' + dataset.collection : ''}</div>
+            ${dataset.gsd ? `<div style="color:#64748b;font-size:11px">Resolution: ${dataset.gsd}m</div>` : ''}
+            ${dataset.startDate ? `<div style="color:#64748b;font-size:11px">Date: ${new Date(dataset.startDate).toLocaleDateString()}</div>` : ''}
+          </div>
+        `);
+
+        layer.on('click', () => onSelectDataset(dataset));
+        footprintLayersRef.current.push(layer);
+      } catch {}
     });
-  }, [results, selectedDataset]);
+
+    // Fit bounds to results
+    if (results.length > 0) {
+      try {
+        const coords = results
+          .filter(d => d.centroidLat && d.centroidLng)
+          .map(d => [d.centroidLat!, d.centroidLng!] as [number, number]);
+        if (coords.length > 0) map.fitBounds(coords, { padding: [50, 50], maxZoom: 6 });
+      } catch {}
+    }
+  }, [results, selectedDataset, onSelectDataset]);
+
+  const toggleDrawing = useCallback(() => {
+    setIsDrawing(prev => !prev);
+  }, []);
 
   return (
-    <div className="relative">
-      {/* Wrapper: position:relative is CRITICAL for Leaflet absolute positioning */}
+    <div className="relative rounded-2xl overflow-hidden" style={{ height: mapHeight }}>
+      {/* The actual map container — Leaflet attaches here directly */}
       <div
-        ref={wrapperRef}
-        className="map-wrapper w-full aspect-[4/3] sm:aspect-[16/10] lg:aspect-video max-h-[700px]"
+        ref={mapContainerRef}
+        style={{ height: mapHeight, width: '100%', background: '#0d1117' }}
+        className="rounded-2xl"
       />
 
       {/* Map Provider Selector */}
@@ -240,7 +344,11 @@ export default function MapView({ results, selectedDataset, onSelectDataset, bbo
         <select
           value={mapProvider}
           onChange={(e) => setMapProvider(e.target.value as MapProvider)}
-          className="glass rounded-xl px-3 py-2 text-xs text-slate-300 bg-slate-900/80 border border-slate-700/50 focus:border-blue-500/50 focus:outline-none cursor-pointer"
+          className="px-3 py-2 text-xs text-slate-300 rounded-xl cursor-pointer focus:outline-none"
+          style={{
+            background: 'rgba(15, 23, 42, 0.9)',
+            border: '1px solid rgba(71, 85, 105, 0.5)',
+          }}
         >
           {Object.entries(MAP_TILES).map(([key, val]) => (
             <option key={key} value={key} className="bg-slate-900 text-slate-300">{val.name}</option>
@@ -248,13 +356,16 @@ export default function MapView({ results, selectedDataset, onSelectDataset, bbo
         </select>
       </div>
 
-      {/* Drawing Controls */}
+      {/* Draw BBOX Button */}
       <div className="absolute top-4 right-4 z-[1000] flex flex-col gap-2">
         <button
-          onClick={() => setIsDrawing(!isDrawing)}
-          className={`px-3 py-2 rounded-xl text-xs font-medium transition-all duration-200 shadow-lg ${
-            isDrawing ? 'bg-blue-500 text-white shadow-blue-500/30' : 'glass text-slate-300 hover:text-white'
-          }`}
+          onClick={toggleDrawing}
+          className="px-3 py-2 rounded-xl text-xs font-medium transition-all duration-200 shadow-lg"
+          style={{
+            background: isDrawing ? '#4c6ef5' : 'rgba(15, 23, 42, 0.9)',
+            color: isDrawing ? 'white' : '#94a3b8',
+            border: isDrawing ? '1px solid #4c6ef5' : '1px solid rgba(71, 85, 105, 0.5)',
+          }}
         >
           <div className="flex items-center gap-1.5">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -266,20 +377,30 @@ export default function MapView({ results, selectedDataset, onSelectDataset, bbo
         {bbox && (
           <button
             onClick={() => onBboxChange(null)}
-            className="px-3 py-2 rounded-xl text-xs font-medium glass text-red-400 hover:text-red-300 transition-all duration-200 shadow-lg"
+            className="px-3 py-2 rounded-xl text-xs font-medium transition-all duration-200 shadow-lg"
+            style={{
+              background: 'rgba(15, 23, 42, 0.9)',
+              color: '#f87171',
+              border: '1px solid rgba(71, 85, 105, 0.5)',
+            }}
           >
             Clear BBOX
           </button>
         )}
       </div>
 
+      {/* Info badges */}
       {results.length > 0 && (
-        <div className="absolute bottom-4 left-4 z-[1000] glass-light rounded-xl px-3 py-1.5 text-xs text-slate-400">
+        <div className="absolute bottom-4 left-4 z-[1000] rounded-xl px-3 py-1.5 text-xs text-slate-400"
+          style={{ background: 'rgba(15, 23, 42, 0.85)', border: '1px solid rgba(71, 85, 105, 0.3)' }}
+        >
           {results.length} datasets shown
         </div>
       )}
       {isDrawing && (
-        <div className="absolute bottom-4 right-4 z-[1000] glass rounded-xl px-3 py-1.5 text-xs text-blue-400">
+        <div className="absolute bottom-4 right-4 z-[1000] rounded-xl px-3 py-1.5 text-xs text-blue-400"
+          style={{ background: 'rgba(15, 23, 42, 0.85)', border: '1px solid rgba(76, 110, 245, 0.3)' }}
+        >
           Click and drag on the map to select an area
         </div>
       )}
