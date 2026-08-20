@@ -40,6 +40,25 @@ app.use('/api/', apiLimiter);
 app.set('trust proxy', 1);
 app.disable('x-powered-by');
 
+// ─── Root Landing ─────────────────────────────────────────────────────
+app.get('/', (_req, res) => {
+  res.json({
+    name: 'OrbitalQuery Backend',
+    version: '1.0.0',
+    docs: {
+      health: 'GET /api/health',
+      search: 'POST /api/search',
+      providers: 'GET /api/search/providers',
+      collections: 'GET /api/search/collections',
+      datasets: 'GET /api/datasets',
+      register: 'POST /api/auth/register',
+      login: 'POST /api/auth/login',
+    },
+    frontend: 'http://localhost:3000',
+    github: 'https://github.com/saatvikraghuvanshi-lab/OrbitalQuery',
+  });
+});
+
 // ─── Health Check ─────────────────────────────────────────────────────
 app.get('/api/health', (_req, res) => {
   res.json({

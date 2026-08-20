@@ -53,10 +53,10 @@ export default function MapView({ results, selectedDataset, onSelectDataset, bbo
   const drawRectRef = useRef<any>(null);
   const drawStartRef = useRef<any>(null);
   const initGuardRef = useRef(false);
-  const cleanupRef = useRef<{ ro: ResizeObserver; handlers: Array<() => void> } | null>(null);
 
   const [mapProvider, setMapProvider] = useState<MapProvider>('carto-dark');
   const [isDrawing, setIsDrawing] = useState(false);
+  const [mapReady, setMapReady] = useState(false);
 
   // ─── Initialize map (runs ONCE, client-side only) ─────────────
   useEffect(() => {
@@ -107,13 +107,14 @@ export default function MapView({ results, selectedDataset, onSelectDataset, bbo
         maxZoom: 20,
       }).addTo(map);
 
-      // Force size recalculation after a delay
+      // Force size recalculation multiple times to catch all layout states
       const forceResize = () => {
         if (destroyed || !map) return;
-        map.invalidateSize();
+        try { map.invalidateSize({ animate: false }); } catch {}
       };
 
-      const timers = [100, 300, 600, 1000, 2000, 4000].map(ms => setTimeout(forceResize, ms));
+      // Aggressive resize calls at various delays
+      const timers = [50, 100, 200, 500, 1000, 2000, 3000].map(ms => setTimeout(forceResize, ms));
 
       // ResizeObserver for ongoing size changes
       const ro = new ResizeObserver(forceResize);
@@ -122,25 +123,26 @@ export default function MapView({ results, selectedDataset, onSelectDataset, bbo
       // Window resize
       window.addEventListener('resize', forceResize);
 
-      cleanupRef.current = {
-        ro,
-        handlers: [
-          () => window.removeEventListener('resize', forceResize),
-          ...timers.map(t => () => clearTimeout(t)),
-        ],
+      // Signal map is ready
+      setMapReady(true);
+
+      // Cleanup
+      return () => {
+        destroyed = true;
+        ro.disconnect();
+        window.removeEventListener('resize', forceResize);
+        timers.forEach(t => clearTimeout(t));
+        map.remove();
+        mapRef.current = null;
       };
     };
 
-    init();
+    let cleanupFn: (() => void) | undefined;
+    init().then(fn => { cleanupFn = fn; });
 
     return () => {
-      destroyed = true;
-      cleanupRef.current?.ro?.disconnect();
-      cleanupRef.current?.handlers.forEach(h => h());
-      mapRef.current?.remove();
-      mapRef.current = null;
       initGuardRef.current = false;
-      cleanupRef.current = null;
+      if (cleanupFn) cleanupFn();
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -149,7 +151,11 @@ export default function MapView({ results, selectedDataset, onSelectDataset, bbo
     const map = mapRef.current;
     if (!map) return;
 
-    const L = require('leaflet');
+    let L: any;
+    try {
+      L = require('leaflet');
+    } catch { return; }
+
     if (tileLayerRef.current) {
       try { map.removeLayer(tileLayerRef.current); } catch {}
     }
@@ -159,7 +165,11 @@ export default function MapView({ results, selectedDataset, onSelectDataset, bbo
       subdomains: tc.subdomains || '',
       maxZoom: 20,
     }).addTo(map);
-    setTimeout(() => map.invalidateSize(), 300);
+
+    // Invalidate size after tile switch
+    setTimeout(() => {
+      try { map.invalidateSize({ animate: false }); } catch {}
+    }, 200);
   }, [mapProvider]);
 
   // ─── Draw mode toggle ─────────────────────────────────────────
@@ -179,11 +189,14 @@ export default function MapView({ results, selectedDataset, onSelectDataset, bbo
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    const L = require('leaflet');
+
+    let L: any;
+    try { L = require('leaflet'); } catch { return; }
 
     const onMouseDown = (e: any) => {
       if (!isDrawing) return;
       e.originalEvent.preventDefault();
+      e.originalEvent.stopPropagation();
       drawStartRef.current = e.latlng;
       if (drawRectRef.current) {
         try { map.removeLayer(drawRectRef.current); } catch {}
@@ -238,7 +251,10 @@ export default function MapView({ results, selectedDataset, onSelectDataset, bbo
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    const L = require('leaflet');
+
+    let L: any;
+    try { L = require('leaflet'); } catch { return; }
+
     if (bboxRectRef.current) {
       try { map.removeLayer(bboxRectRef.current); } catch {}
       bboxRectRef.current = null;
@@ -256,7 +272,9 @@ export default function MapView({ results, selectedDataset, onSelectDataset, bbo
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
-    const L = require('leaflet');
+
+    let L: any;
+    try { L = require('leaflet'); } catch { return; }
 
     // Clear existing
     footprintLayersRef.current.forEach(l => { try { map.removeLayer(l); } catch {} });
@@ -288,7 +306,7 @@ export default function MapView({ results, selectedDataset, onSelectDataset, bbo
       } catch {}
     });
 
-    // Fit bounds
+    // Fit bounds to results
     if (results.length > 0) {
       try {
         const coords = results
@@ -299,7 +317,7 @@ export default function MapView({ results, selectedDataset, onSelectDataset, bbo
     }
   }, [results, selectedDataset, onSelectDataset]);
 
-  // ─── Zoom to selected ─────────────────────────────────────────
+  // ─── Zoom to selected dataset ─────────────────────────────────
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !selectedDataset) return;
@@ -313,8 +331,13 @@ export default function MapView({ results, selectedDataset, onSelectDataset, bbo
   }, []);
 
   return (
-    <div style={{ position: 'relative', borderRadius: '16px', overflow: 'hidden', border: '1px solid rgba(71, 85, 105, 0.3)' }}>
-      {/* Leaflet attaches directly to this div */}
+    <div style={{
+      position: 'relative',
+      borderRadius: '16px',
+      border: '1px solid rgba(71, 85, 105, 0.3)',
+      overflow: 'hidden',
+    }}>
+      {/* Map container — Leaflet attaches directly here */}
       <div
         ref={containerRef}
         style={{
