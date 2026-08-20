@@ -87,7 +87,18 @@ export default function MapView({ results, selectedDataset, onSelectDataset, bbo
       const container = containerRef.current;
       if (!container) return;
 
-      const map = L.map(container, {
+      // If Leaflet already initialized this container (StrictMode / HMR),
+      // clean up the old instance before creating a new one
+      if ((container as any)._leaflet_id) {
+        try {
+          container.innerHTML = '';
+          delete (container as any)._leaflet_id;
+        } catch {}
+      }
+
+      let map;
+      try {
+        map = L.map(container, {
         center: [20, 78],
         zoom: 3,
         zoomControl: true,
@@ -96,7 +107,21 @@ export default function MapView({ results, selectedDataset, onSelectDataset, bbo
         maxZoom: 18,
       });
 
-      if (destroyed) { map.remove(); return; }
+      } catch {
+        // Last resort: clear and retry once
+        container.innerHTML = '';
+        delete (container as any)._leaflet_id;
+        map = L.map(container, {
+          center: [20, 78],
+          zoom: 3,
+          zoomControl: true,
+          attributionControl: true,
+          minZoom: 2,
+          maxZoom: 18,
+        });
+      }
+
+      if (destroyed) { try { map.remove(); } catch {} return; }
       mapRef.current = map;
 
       // Add initial tile layer
