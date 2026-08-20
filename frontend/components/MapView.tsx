@@ -44,6 +44,33 @@ interface MapViewProps {
   onBboxChange: (bbox: BoundingBox | null) => void;
 }
 
+/**
+ * Helper: safely destroy any existing Leaflet map on a container.
+ * Reads Leaflet's internal _leaflet_id and walks the Leaflet instance
+ * tree to find and call map.remove(). Falls back to clearing innerHTML.
+ */
+function destroyExistingMap(container: HTMLElement): void {
+  // Leaflet stores a reference to the map on the container via _leaflet_id
+  // There's no public API to look up a map from a container id, but we
+  // can walk up Leaflet's internal store if it exists.
+  try {
+    // Leaflet 1.x stores maps in L.Map._instances (not public)
+    // Instead, try to find the map via the container's internal property
+    const leafletId = (container as any)._leaflet_id;
+    if (!leafletId) return;
+
+    // Clear all Leaflet-created children and reset the container
+    container.innerHTML = '';
+    delete (container as any)._leaflet_id;
+
+    // Also clear any event listeners Leaflet attached to the container
+    const cloned = container.cloneNode(false);
+    if (container.parentNode) {
+      container.parentNode.replaceChild(cloned, container);
+    }
+  } catch {}
+}
+
 export default function MapView({ results, selectedDataset, onSelectDataset, bbox, onBboxChange }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
@@ -52,122 +79,111 @@ export default function MapView({ results, selectedDataset, onSelectDataset, bbo
   const bboxRectRef = useRef<any>(null);
   const drawRectRef = useRef<any>(null);
   const drawStartRef = useRef<any>(null);
-  const initGuardRef = useRef(false);
+  const resizeTimerRefs = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const resizeObserverRef = useRef<ResizeObserver | null>(null);
 
   const [mapProvider, setMapProvider] = useState<MapProvider>('carto-dark');
   const [isDrawing, setIsDrawing] = useState(false);
-  const [mapReady, setMapReady] = useState(false);
 
-  // ─── Initialize map (runs ONCE, client-side only) ─────────────
+  // ─── Helper: safely remove map ──────────────────────────────────
+  const safeRemoveMap = useCallback(() => {
+    const map = mapRef.current;
+    if (map) {
+      try { map.remove(); } catch {}
+      mapRef.current = null;
+    }
+  }, []);
+
+  // ─── Initialize map (client-side only, synchronous after RAF) ──
   useEffect(() => {
-    if (initGuardRef.current) return;
-    if (!containerRef.current) return;
-    initGuardRef.current = true;
+    const container = containerRef.current;
+    if (!container) return;
 
-    let destroyed = false;
+    // Destroy any stale Leaflet instance from StrictMode / HMR
+    safeRemoveMap();
+    destroyExistingMap(container);
 
-    const init = async () => {
-      // Double RAF — ensures layout is fully computed
-      await new Promise<void>(r => {
-        requestAnimationFrame(() => requestAnimationFrame(() => r()));
-      });
-      if (destroyed) return;
+    let cancelled = false;
 
-      const L = (await import('leaflet')).default;
+    const init = () => {
+      // Double RAF to ensure DOM layout is fully computed
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (cancelled) return;
 
-      // Fix icon paths
-      delete (L.Icon.Default.prototype as any)._getIconUrl;
-      L.Icon.Default.mergeOptions({
-        iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
-        iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
-        shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
-      });
+          let L: any;
+          try { L = require('leaflet'); } catch { return; }
 
-      if (destroyed) return;
-      const container = containerRef.current;
-      if (!container) return;
+          // Fix Leaflet default icon paths (broken in webpack/next.js)
+          try {
+            delete (L.Icon.Default.prototype as any)._getIconUrl;
+            L.Icon.Default.mergeOptions({
+              iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
+              iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
+              shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
+            });
+          } catch {}
 
-      // If Leaflet already initialized this container (StrictMode / HMR),
-      // clean up the old instance before creating a new one
-      if ((container as any)._leaflet_id) {
-        try {
-          container.innerHTML = '';
-          delete (container as any)._leaflet_id;
-        } catch {}
-      }
+          if (cancelled) return;
 
-      let map;
-      try {
-        map = L.map(container, {
-        center: [20, 78],
-        zoom: 3,
-        zoomControl: true,
-        attributionControl: true,
-        minZoom: 2,
-        maxZoom: 18,
-      });
+          const map = L.map(container, {
+            center: [20, 78],
+            zoom: 3,
+            zoomControl: true,
+            attributionControl: true,
+            minZoom: 2,
+            maxZoom: 18,
+          });
 
-      } catch {
-        // Last resort: clear and retry once
-        container.innerHTML = '';
-        delete (container as any)._leaflet_id;
-        map = L.map(container, {
-          center: [20, 78],
-          zoom: 3,
-          zoomControl: true,
-          attributionControl: true,
-          minZoom: 2,
-          maxZoom: 18,
+          if (cancelled) { try { map.remove(); } catch {} return; }
+          mapRef.current = map;
+
+          // Add initial tile layer
+          const tc = MAP_TILES[mapProvider];
+          tileLayerRef.current = L.tileLayer(tc.url, {
+            attribution: tc.attribution,
+            subdomains: tc.subdomains || '',
+            maxZoom: 20,
+          }).addTo(map);
+
+          // Force invalidateSize at multiple intervals
+          const forceResize = () => {
+            try { map.invalidateSize({ animate: false }); } catch {}
+          };
+          resizeTimerRefs.current = [50, 100, 200, 500, 1000, 2000].map(
+            ms => setTimeout(forceResize, ms)
+          );
+
+          // ResizeObserver for ongoing layout changes
+          const ro = new ResizeObserver(forceResize);
+          ro.observe(container);
+          resizeObserverRef.current = ro;
+
+          window.addEventListener('resize', forceResize);
+
+          // Store cleanup refs
+          const cleanupFn = () => {
+            ro.disconnect();
+            window.removeEventListener('resize', forceResize);
+            resizeTimerRefs.current.forEach(t => clearTimeout(t));
+            resizeTimerRefs.current = [];
+            try { map.remove(); } catch {}
+            mapRef.current = null;
+          };
+          // Attach cleanup to a DOM property so the effect cleanup can call it
+          (container as any).__leafletCleanup = cleanupFn;
         });
-      }
-
-      if (destroyed) { try { map.remove(); } catch {} return; }
-      mapRef.current = map;
-
-      // Add initial tile layer
-      const tc = MAP_TILES[mapProvider];
-      tileLayerRef.current = L.tileLayer(tc.url, {
-        attribution: tc.attribution,
-        subdomains: tc.subdomains || '',
-        maxZoom: 20,
-      }).addTo(map);
-
-      // Force size recalculation multiple times to catch all layout states
-      const forceResize = () => {
-        if (destroyed || !map) return;
-        try { map.invalidateSize({ animate: false }); } catch {}
-      };
-
-      // Aggressive resize calls at various delays
-      const timers = [50, 100, 200, 500, 1000, 2000, 3000].map(ms => setTimeout(forceResize, ms));
-
-      // ResizeObserver for ongoing size changes
-      const ro = new ResizeObserver(forceResize);
-      ro.observe(container);
-
-      // Window resize
-      window.addEventListener('resize', forceResize);
-
-      // Signal map is ready
-      setMapReady(true);
-
-      // Cleanup
-      return () => {
-        destroyed = true;
-        ro.disconnect();
-        window.removeEventListener('resize', forceResize);
-        timers.forEach(t => clearTimeout(t));
-        map.remove();
-        mapRef.current = null;
-      };
+      });
     };
 
-    let cleanupFn: (() => void) | undefined;
-    init().then(fn => { cleanupFn = fn; });
+    init();
 
     return () => {
-      initGuardRef.current = false;
-      if (cleanupFn) cleanupFn();
+      cancelled = true;
+      resizeTimerRefs.current.forEach(t => clearTimeout(t));
+      resizeTimerRefs.current = [];
+      resizeObserverRef.current?.disconnect();
+      safeRemoveMap();
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -177,9 +193,7 @@ export default function MapView({ results, selectedDataset, onSelectDataset, bbo
     if (!map) return;
 
     let L: any;
-    try {
-      L = require('leaflet');
-    } catch { return; }
+    try { L = require('leaflet'); } catch { return; }
 
     if (tileLayerRef.current) {
       try { map.removeLayer(tileLayerRef.current); } catch {}
@@ -191,7 +205,6 @@ export default function MapView({ results, selectedDataset, onSelectDataset, bbo
       maxZoom: 20,
     }).addTo(map);
 
-    // Invalidate size after tile switch
     setTimeout(() => {
       try { map.invalidateSize({ animate: false }); } catch {}
     }, 200);
