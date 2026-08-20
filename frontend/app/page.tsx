@@ -388,12 +388,12 @@ export default function Home() {
         {results && (
           <div className="max-w-[1600px] mx-auto">
             <div
-              className="flex gap-4"
+              className="flex gap-4 items-stretch"
               style={{ height: '580px' }}
             >
               {/* Map View — always 580px tall */}
               {(activeView === 'split' || activeView === 'map') && (
-                <div className={`${activeView === 'split' ? 'flex-1 min-w-0' : 'w-full'}`}>
+                <div className={`${activeView === 'split' ? 'flex-1 min-w-0' : 'w-full'}`} style={{ height: '580px' }}>
                   <MapView
                     results={results?.results || []}
                     selectedDataset={selectedDataset}
@@ -411,7 +411,7 @@ export default function Home() {
 
               {/* Results List — always 580px tall */}
               {(activeView === 'split' || activeView === 'results') && (
-                <div className={`${activeView === 'split' ? 'w-full lg:w-[420px] flex-shrink-0' : 'w-full'}`}>
+                <div className={`${activeView === 'split' ? 'w-full lg:w-[420px] flex-shrink-0' : 'w-full'}`} style={{ height: '580px' }}>
                   <ResultsList
                     results={results?.results || []}
                     loading={loading}

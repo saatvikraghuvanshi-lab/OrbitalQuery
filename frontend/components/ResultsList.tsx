@@ -50,11 +50,10 @@ export default function ResultsList({
   results, loading, selectedDataset, onSelectDataset,
   onExportJSON, onExportCSV, onCompareToggle, comparingIds
 }: ResultsListProps) {
-  // Fixed height: fills the 580px parent container
+  // Fill the parent container's height
   const containerStyle = {
-    height: '580px',
+    height: '100%',
     minHeight: '580px',
-    maxHeight: '580px',
   };
 
   if (loading) {

@@ -15,42 +15,18 @@ body {
   min-height: 100vh;
 }
 
-/* ═══════════════════════════════════════════════════════════════════════
-   LEAFLET TILE FIX — The #1 root cause of "tiles in patches"
+/* ═══════════════════════════════════════════════════════════════════
+   LEAFLET — Minimal CSS overrides
    
-   Tailwind preflight sets *, ::before, ::after { box-sizing: border-box }
-   This causes Leaflet's tile positioning to miscalculate because
-   Leaflet internally assumes content-box on its container.
-   
-   We reset ONLY the leaflet container and its children to content-box,
-   and ensure no overflow/clip issues.
-   ═══════════════════════════════════════════════════════════════════════ */
+   Only override the container itself to content-box.
+   Do NOT override children — Leaflet's own CSS handles them.
+   ═══════════════════════════════════════════════════════════════════ */
 
-/* Reset box-sizing for everything inside the map container */
-.leaflet-container,
-.leaflet-container *,
-.leaflet-container *::before,
-.leaflet-container *::after {
-  box-sizing: content-box !important;
-}
-
-/* Ensure the container fills its parent completely */
 .leaflet-container {
-  width: 100% !important;
-  height: 100% !important;
-}
-
-/* Tile pane — this is where the actual tile images render */
-.leaflet-pane.leaflet-tile-pane {
-  z-index: 1;
-}
-
-.leaflet-tile {
-  /* Force tiles to use content-box sizing */
   box-sizing: content-box !important;
 }
 
-/* Control and popup styling only — never override dimensions */
+/* Control and popup styling only */
 .leaflet-control-zoom a {
   background: rgba(15, 23, 42, 0.9) !important;
   color: #94a3b8 !important;

@@ -44,32 +44,7 @@ interface MapViewProps {
   onBboxChange: (bbox: BoundingBox | null) => void;
 }
 
-/**
- * Helper: safely destroy any existing Leaflet map on a container.
- * Reads Leaflet's internal _leaflet_id and walks the Leaflet instance
- * tree to find and call map.remove(). Falls back to clearing innerHTML.
- */
-function destroyExistingMap(container: HTMLElement): void {
-  // Leaflet stores a reference to the map on the container via _leaflet_id
-  // There's no public API to look up a map from a container id, but we
-  // can walk up Leaflet's internal store if it exists.
-  try {
-    // Leaflet 1.x stores maps in L.Map._instances (not public)
-    // Instead, try to find the map via the container's internal property
-    const leafletId = (container as any)._leaflet_id;
-    if (!leafletId) return;
-
-    // Clear all Leaflet-created children and reset the container
-    container.innerHTML = '';
-    delete (container as any)._leaflet_id;
-
-    // Also clear any event listeners Leaflet attached to the container
-    const cloned = container.cloneNode(false);
-    if (container.parentNode) {
-      container.parentNode.replaceChild(cloned, container);
-    }
-  } catch {}
-}
+const MAP_HEIGHT = 580;
 
 export default function MapView({ results, selectedDataset, onSelectDataset, bbox, onBboxChange }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -80,12 +55,10 @@ export default function MapView({ results, selectedDataset, onSelectDataset, bbo
   const drawRectRef = useRef<any>(null);
   const drawStartRef = useRef<any>(null);
   const resizeTimerRefs = useRef<ReturnType<typeof setTimeout>[]>([]);
-  const resizeObserverRef = useRef<ResizeObserver | null>(null);
 
   const [mapProvider, setMapProvider] = useState<MapProvider>('carto-dark');
   const [isDrawing, setIsDrawing] = useState(false);
 
-  // ─── Helper: safely remove map ──────────────────────────────────
   const safeRemoveMap = useCallback(() => {
     const map = mapRef.current;
     if (map) {
@@ -94,19 +67,19 @@ export default function MapView({ results, selectedDataset, onSelectDataset, bbo
     }
   }, []);
 
-  // ─── Initialize map (client-side only, synchronous after RAF) ──
+  // ─── Initialize map ──────────────────────────────────────────
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
-    // Destroy any stale Leaflet instance from StrictMode / HMR
     safeRemoveMap();
-    destroyExistingMap(container);
+    // Clean any stale Leaflet state
+    try { container.innerHTML = ''; } catch {}
+    delete (container as any)._leaflet_id;
 
     let cancelled = false;
 
     const init = () => {
-      // Double RAF to ensure DOM layout is fully computed
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           if (cancelled) return;
@@ -114,7 +87,7 @@ export default function MapView({ results, selectedDataset, onSelectDataset, bbo
           let L: any;
           try { L = require('leaflet'); } catch { return; }
 
-          // Fix Leaflet default icon paths (broken in webpack/next.js)
+          // Fix Leaflet default icon paths
           try {
             delete (L.Icon.Default.prototype as any)._getIconUrl;
             L.Icon.Default.mergeOptions({
@@ -125,6 +98,10 @@ export default function MapView({ results, selectedDataset, onSelectDataset, bbo
           } catch {}
 
           if (cancelled) return;
+
+          // KEY FIX: Ensure container has explicit pixel dimensions before Leaflet reads them
+          container.style.height = MAP_HEIGHT + 'px';
+          container.style.width = '100%';
 
           const map = L.map(container, {
             center: [20, 78],
@@ -138,7 +115,7 @@ export default function MapView({ results, selectedDataset, onSelectDataset, bbo
           if (cancelled) { try { map.remove(); } catch {} return; }
           mapRef.current = map;
 
-          // Add initial tile layer
+          // Add tile layer
           const tc = MAP_TILES[mapProvider];
           tileLayerRef.current = L.tileLayer(tc.url, {
             attribution: tc.attribution,
@@ -148,41 +125,33 @@ export default function MapView({ results, selectedDataset, onSelectDataset, bbo
 
           // Force invalidateSize at multiple intervals
           const forceResize = () => {
+            if (cancelled) return;
             try { map.invalidateSize({ animate: false }); } catch {}
           };
-          resizeTimerRefs.current = [50, 100, 200, 500, 1000, 2000].map(
+          resizeTimerRefs.current = [50, 100, 250, 500, 1000, 2000, 3000].map(
             ms => setTimeout(forceResize, ms)
           );
 
-          // ResizeObserver for ongoing layout changes
-          const ro = new ResizeObserver(forceResize);
-          ro.observe(container);
-          resizeObserverRef.current = ro;
-
           window.addEventListener('resize', forceResize);
 
-          // Store cleanup refs
-          const cleanupFn = () => {
-            ro.disconnect();
-            window.removeEventListener('resize', forceResize);
+          return () => {
             resizeTimerRefs.current.forEach(t => clearTimeout(t));
             resizeTimerRefs.current = [];
+            window.removeEventListener('resize', forceResize);
             try { map.remove(); } catch {}
             mapRef.current = null;
           };
-          // Attach cleanup to a DOM property so the effect cleanup can call it
-          (container as any).__leafletCleanup = cleanupFn;
         });
       });
     };
 
+    let cleanupFn: (() => void) | undefined;
     init();
 
     return () => {
       cancelled = true;
       resizeTimerRefs.current.forEach(t => clearTimeout(t));
       resizeTimerRefs.current = [];
-      resizeObserverRef.current?.disconnect();
       safeRemoveMap();
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -314,7 +283,6 @@ export default function MapView({ results, selectedDataset, onSelectDataset, bbo
     let L: any;
     try { L = require('leaflet'); } catch { return; }
 
-    // Clear existing
     footprintLayersRef.current.forEach(l => { try { map.removeLayer(l); } catch {} });
     footprintLayersRef.current = [];
 
@@ -344,7 +312,6 @@ export default function MapView({ results, selectedDataset, onSelectDataset, bbo
       } catch {}
     });
 
-    // Fit bounds to results
     if (results.length > 0) {
       try {
         const coords = results
@@ -355,7 +322,7 @@ export default function MapView({ results, selectedDataset, onSelectDataset, bbo
     }
   }, [results, selectedDataset, onSelectDataset]);
 
-  // ─── Zoom to selected dataset (fitBounds on geometry/bbox) ────
+  // ─── Zoom to selected dataset ─────────────────────────────────
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !selectedDataset) return;
@@ -364,20 +331,16 @@ export default function MapView({ results, selectedDataset, onSelectDataset, bbo
     try { L = require('leaflet'); } catch { return; }
 
     try {
-      // Try to fit to the full geometry bbox first
       if (selectedDataset.bbox && Array.isArray(selectedDataset.bbox) && selectedDataset.bbox.length === 4) {
-        // bbox format: [west, south, east, north]
         const [west, south, east, north] = selectedDataset.bbox;
         map.fitBounds([[south, west], [north, east]], { padding: [60, 60], maxZoom: 12, animate: true });
       } else if (selectedDataset.geometry) {
-        // Fit to the GeoJSON geometry bounds
         const geoLayer = L.geoJSON(selectedDataset.geometry);
         const bounds = geoLayer.getBounds();
         if (bounds.isValid()) {
           map.fitBounds(bounds, { padding: [60, 60], maxZoom: 12, animate: true });
         }
       } else if (selectedDataset.centroidLat && selectedDataset.centroidLng) {
-        // Fallback: zoom to centroid
         map.setView([selectedDataset.centroidLat, selectedDataset.centroidLng], 8, { animate: true });
       }
     } catch {}
@@ -394,16 +357,14 @@ export default function MapView({ results, selectedDataset, onSelectDataset, bbo
       border: '1px solid rgba(71, 85, 105, 0.3)',
       overflow: 'hidden',
       width: '100%',
-      height: '100%',
-      minHeight: '580px',
+      height: MAP_HEIGHT + 'px',
     }}>
-      {/* Map container — Leaflet attaches directly here */}
+      {/* Map container — explicit pixel height, Leaflet attaches here */}
       <div
         ref={containerRef}
         style={{
           width: '100%',
-          height: '100%',
-          minHeight: '580px',
+          height: MAP_HEIGHT + 'px',
           position: 'relative',
           background: '#0d1117',
         }}
