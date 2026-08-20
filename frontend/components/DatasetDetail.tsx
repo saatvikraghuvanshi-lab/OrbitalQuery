@@ -42,9 +42,9 @@ export default function DatasetDetail({ dataset, onClose, onExportJSON, onExport
   // Preview: use the STAC-provided previewUrl if available, otherwise construct one
   const pcPreviewUrl = dataset.previewUrl || null;
 
-  // Hub: correct collection page (no # fragment — that caused 404s)
+  // Hub: correct collection page (PC moved to /dataset-catalog/ path)
   const pcHubUrl = dataset.collection
-    ? `https://planetarycomputer.microsoft.com/datasets/${dataset.collection}`
+    ? `https://planetarycomputer.microsoft.com/dataset-catalog/${dataset.collection}`
     : null;
 
   // STAC API: use the correct canonical endpoint (ignore broken ../ links from STAC)

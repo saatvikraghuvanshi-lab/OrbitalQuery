@@ -6,12 +6,12 @@ import { DatasetResult, BoundingBox } from '@/app/page';
 
 type MapTypeId = 'roadmap' | 'satellite' | 'hybrid' | 'terrain' | 'dark';
 
-const MAP_TYPES: Record<MapTypeId, { name: string; googleType?: google.maps.MapTypeId }> = {
-  roadmap:  { name: '🗺️ Streets', googleType: google?.maps?.MapTypeId?.ROADMAP },
-  satellite: { name: '🛰️ Satellite', googleType: google?.maps?.MapTypeId?.SATELLITE },
-  hybrid:   { name: '🌍 Hybrid', googleType: google?.maps?.MapTypeId?.HYBRID },
-  terrain:  { name: '🏔️ Terrain', googleType: google?.maps?.MapTypeId?.TERRAIN },
-  dark:     { name: '🌑 Dark', },
+const MAP_TYPES: Record<MapTypeId, { name: string }> = {
+  roadmap:  { name: '🗺️ Streets' },
+  satellite: { name: '🛰️ Satellite' },
+  hybrid:   { name: '🌍 Hybrid' },
+  terrain:  { name: '🏔️ Terrain' },
+  dark:     { name: '🌑 Dark' },
 };
 
 const DARK_STYLE: google.maps.MapTypeStyle[] = [
@@ -124,10 +124,16 @@ export default function MapView({ results, selectedDataset, onSelectDataset, bbo
     if (!map) return;
 
     if (mapTypeId === 'dark') {
-      map.setOptions({ mapTypeId: 'roadmap', styles: DARK_STYLE });
+      map.setOptions({ mapTypeId: google.maps.MapTypeId.ROADMAP, styles: DARK_STYLE });
     } else {
+      const typeMap: Record<string, google.maps.MapTypeId> = {
+        roadmap: google.maps.MapTypeId.ROADMAP,
+        satellite: google.maps.MapTypeId.SATELLITE,
+        hybrid: google.maps.MapTypeId.HYBRID,
+        terrain: google.maps.MapTypeId.TERRAIN,
+      };
       map.setOptions({
-        mapTypeId: MAP_TYPES[mapTypeId].googleType,
+        mapTypeId: typeMap[mapTypeId] || google.maps.MapTypeId.ROADMAP,
         styles: undefined,
       });
     }
