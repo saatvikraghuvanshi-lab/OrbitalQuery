@@ -23,6 +23,7 @@ A platform that enables researchers and decision-makers to **semantically query 
 |---------|-----|-------------|
 | **Frontend (UI)** | http://localhost:3000 | Main application — search bar, map, results |
 | **Backend (API)** | http://localhost:3001 | REST API — search, auth, datasets |
+| **Backend API Docs** | http://localhost:3001/ | API documentation landing page |
 | **Full Stack** | http://localhost:3000 | Frontend proxies API calls to backend |
 
 ### GitHub Repository
@@ -99,10 +100,14 @@ cd frontend && npm run dev
 - **Frontend**: http://localhost:3000
 - **Backend API**: http://localhost:3001/api/health
 
-### 3. Load Sample Data (16 datasets included)
+### 3. Load Real Data (216+ datasets from live STAC APIs)
 
 ```bash
-cd backend && npm run ingest:sample
+# Ingest 216 real datasets from Planetary Computer (Sentinel-2, Landsat, Sentinel-1, NAIP)
+cd backend && npx ts-node src/scripts/ingest-real.ts --all --limit 50
+
+# Or load sample data (16 curated datasets)
+cd backend && npx ts-node src/scripts/ingest-sample.ts
 ```
 
 ### 4. Try It Out
@@ -219,29 +224,54 @@ curl -X GET http://localhost:3001/api/auth/me \
 
 ## 🌍 Data Sources
 
+### Live Datasets (ingested from Planetary Computer STAC API)
+
+| Collection | Resolution | Provider | Coverage |
+|-----------|-----------|----------|----------|
+| sentinel-2-l2a | 10m multispectral | Copernicus/ESA | Global, 5-day revisit |
+| landsat-c2-l2 | 30m multispectral | USGS/NASA | Global, 16-day revisit |
+| sentinel-1-grd | 10m SAR | Copernicus/ESA | Global, 6-day revisit |
+| naip | 0.6m aerial | USDA | USA only |
+
+### Additional Sources Available
+
 | Source | Resolution | Provider |
 |--------|-----------|----------|
-| Sentinel-2 L2A | 10m | Copernicus/ESA |
-| Landsat-8/9 | 30m | USGS/NASA |
 | MODIS Terra/Aqua | 1km | NASA |
 | VIIRS DNB | 500m | NASA |
-| Sentinel-1 SAR | 10m | Copernicus/ESA |
+| Sentinel-3 SLSTR | 1km | Copernicus/ESA |
 
-### Trusted APIs (Free, No Keys Required)
+### ✅ Trusted Data Sources (Used in OrbitalQuery)
+
+All dataset metadata is ingested exclusively from these verified, trusted sources:
+
+| Source | API | Auth Required | Status |
+|--------|-----|---------------|--------|
+| **Microsoft Planetary Computer** | STAC API v1 | ❌ No key needed | ✅ Active — primary source |
+| **AWS Earth Search** | STAC API | ❌ No key needed | ✅ Available |
+| **NASA Earthdata** | CMR STAC | ❌ (optional token) | ✅ Available |
+| **Copernicus Open Access Hub** | OData API | ❌ (free registration) | ✅ Available |
+| **ISRO Bhuvan** | WMS/WFS | ❌ | ✅ Available |
+
+### STAC API References
+- **STAC Specification** — https://stacspec.org
 - **Planetary Computer STAC** — https://planetarycomputer.microsoft.com/api/stac/v1
-- **earth-search** — https://earth-search.aws.element84.com/v1
+- **Planetary Computer Collections** — https://planetarycomputer.microsoft.com/catalog
+- **earth-search (AWS)** — https://earth-search.aws.element84.com/v1
+- **STAC Browser** — https://radiantearth.github.io/stac-browser/
 
-### References
-- **STAC Spec** — https://stacspec.org
-- **NASA Earthdata** — https://search.earthdata.nasa.gov
-- **Copernicus Hub** — https://scihub.copernicus.eu
-- **ISRO Bhuvan** — https://bhuvan.nrsc.gov.in
+### Platform References
+- **NASA Earthdata Search** — https://search.earthdata.nasa.gov
+- **Copernicus Open Access Hub** — https://scihub.copernicus.eu
+- **ISRO Bhuvan Portal** — https://bhuvan.nrsc.gov.in
+- **USGS EarthExplorer** — https://earthexplorer.usgs.gov
 
-### GitHub Repos
-- **sat-search** — https://github.com/sat-utils/sat-search
-- **planetary-computer-apis** — https://github.com/planetarycomputer/planetary-computer-apis
-- **stac-fastapi** — https://github.com/stac-utils/stac-fastapi
-- **weaviate-examples** — https://github.com/weaviate/weaviate-examples
+### GitHub Repositories Referenced
+- **sat-search** — https://github.com/sat-utils/sat-search (STAC search utility)
+- **planetary-computer-apis** — https://github.com/planetarycomputer/planetary-computer-apis (PC Python client)
+- **stac-fastapi** — https://github.com/stac-utils/stac-fastapi (STAC API server)
+- **weaviate-examples** — https://github.com/weaviate/weaviate-examples (vector DB examples)
+- **stac-rs** — https://github.com/stac-rs/stac-rs (Rust STAC implementation)
 
 ---
 
@@ -284,7 +314,7 @@ OrbitalQuery/
 │   │   ├── middleware/            # Auth, rate-limit, sanitize
 │   │   ├── routes/                # search, datasets, auth, ingest
 │   │   ├── services/              # search-engine, ingestion, embeddings
-│   │   └── scripts/               # ingest-sample.ts
+│   │   └── scripts/               # ingest-sample.ts, ingest-real.ts
 │   └── stress-test/               # k6 + Postman tests
 ├── frontend/
 │   ├── app/page.tsx               # Main search + map page

@@ -8,7 +8,7 @@ const router = Router();
 
 /**
  * POST /api/ingest/planetary-computer
- * Trigger data ingestion from Planetary Computer STAC API (admin only)
+ * Trigger real data ingestion from Planetary Computer STAC API (admin only)
  */
 router.post('/planetary-computer', requireAuth, requireAdmin, ingestLimiter, async (req: AuthRequest, res: Response) => {
   try {
@@ -25,8 +25,26 @@ router.post('/planetary-computer', requireAuth, requireAdmin, ingestLimiter, asy
 });
 
 /**
+ * POST /api/ingest/real
+ * Quick ingestion endpoint for development — no auth required
+ * Fetches real STAC data from Planetary Computer
+ */
+router.post('/real', ingestLimiter, async (req: Request, res: Response) => {
+  try {
+    const { collections, maxItems = 50 } = req.body;
+    const result = await ingestFromPlanetaryComputer({
+      collections: collections || ['sentinel-2-l2a', 'landsat-c2-l2'],
+      maxItems,
+    });
+    res.json({ message: 'Real data ingestion complete', ...result });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
  * POST /api/ingest/embeddings
- * Build FAISS index from stored datasets (admin only)
+ * Build search index from stored datasets (admin only)
  */
 router.post('/embeddings', requireAuth, requireAdmin, ingestLimiter, async (req: AuthRequest, res: Response) => {
   try {
@@ -43,7 +61,6 @@ router.post('/embeddings', requireAuth, requireAdmin, ingestLimiter, async (req:
  */
 router.post('/sample', requireAuth, requireAdmin, async (req: AuthRequest, res: Response) => {
   try {
-    // Dynamically import the sample ingestion script
     const { execSync } = require('child_process');
     const output = execSync('npx ts-node src/scripts/ingest-sample.ts', {
       cwd: __dirname + '/../../',
