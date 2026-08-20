@@ -38,18 +38,25 @@ export default function DatasetDetail({ dataset, onClose, onExportJSON, onExport
   const [imgError, setImgError] = useState(false);
   const badge = getProviderBadge(dataset.provider);
 
-  // Build Planetary Computer preview URL from STAC ID
-  const pcPreviewUrl = dataset.previewUrl || (dataset.stacId
-    ? `https://planetarycomputer.microsoft.com/api/data/v1/item/preview?collection=${dataset.collection}&item=${dataset.stacId}`
-    : null);
+  // Build correct Planetary Computer URLs
+  // Preview: use the STAC-provided previewUrl if available, otherwise construct one
+  const pcPreviewUrl = dataset.previewUrl || null;
 
-  const pcHubUrl = dataset.stacId && dataset.collection
-    ? `https://planetarycomputer.microsoft.com/datasets/${dataset.collection}#${dataset.stacId}`
+  // Hub: correct collection page (no # fragment — that caused 404s)
+  const pcHubUrl = dataset.collection
+    ? `https://planetarycomputer.microsoft.com/datasets/${dataset.collection}`
     : null;
 
+  // STAC API: use the correct canonical endpoint (ignore broken ../ links from STAC)
   const stacApiUrl = dataset.stacId && dataset.collection
     ? `https://planetarycomputer.microsoft.com/api/stac/v1/collections/${dataset.collection}/items/${dataset.stacId}`
     : null;
+
+  // Raw STAC link from data (fix the ../ paths)
+  const rawStacLink = dataset.stacLink
+    ? dataset.stacLink.replace(/\/\.\.\//g, '/').replace(/\/api\/stac\/v1\//, 'https://planetarycomputer.microsoft.com/api/stac/v1/')
+    : null;
+  const stacLink = stacApiUrl || rawStacLink;
 
   return (
     <div className="glass rounded-2xl overflow-hidden border border-blue-500/20">
@@ -277,9 +284,9 @@ export default function DatasetDetail({ dataset, onClose, onExportJSON, onExport
               </a>
             )}
 
-            {dataset.stacLink && dataset.stacLink !== stacApiUrl && (
+            {stacLink && stacLink !== stacApiUrl && (
               <a
-                href={dataset.stacLink}
+                href={stacLink}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-3 p-3 rounded-xl bg-slate-800/30 hover:bg-slate-800/50 border border-slate-700/30 transition-colors group"
