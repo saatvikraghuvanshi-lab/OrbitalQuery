@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, Suspense } from 'react';
+import { useState, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import SearchBar from '@/components/SearchBar';
 import FilterPanel from '@/components/FilterPanel';
@@ -14,7 +14,7 @@ const MapView = dynamic(() => import('@/components/MapView'), {
   loading: () => (
     <div style={{
       width: '100%',
-      height: '620px',
+      height: '560px',
       borderRadius: '16px',
       background: '#0d1117',
       border: '1px solid rgba(71, 85, 105, 0.3)',
@@ -162,10 +162,21 @@ export default function Home() {
   const [showFilters, setShowFilters] = useState(false);
   const [comparingIds, setComparingIds] = useState<Set<string>>(new Set());
   const [toast, setToast] = useState<string | null>(null);
+  const [activeView, setActiveView] = useState<'split' | 'map' | 'results'>('split');
 
   const showToast = useCallback((msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(null), 3000);
+  }, []);
+
+  // ─── Full Reset ───────────────────────────────────────────────
+  const handleReset = useCallback(() => {
+    setResults(null);
+    setSelectedDataset(null);
+    setFilters({ query: '', bbox: null, startDate: '', endDate: '', provider: '', collection: '' });
+    setComparingIds(new Set());
+    setShowFilters(false);
+    setActiveView('split');
   }, []);
 
   const handleSearch = useCallback(async (query: string, overrideFilters?: Partial<SearchFilters>) => {
@@ -238,21 +249,13 @@ export default function Home() {
     });
   }, [showToast]);
 
-  const handleExportAllJSON = useCallback(() => {
-    if (!results?.results.length) return;
-    const json = JSON.stringify(results.results, null, 2);
-    const ts = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-');
-    downloadFile(json, `orbitalquery-${filters.query.replace(/\s+/g, '-')}-${ts}.json`, 'application/json');
-    showToast(`📥 Exported ${results.results.length} datasets as JSON`);
-  }, [results, filters.query, showToast]);
-
   return (
     <div className="min-h-screen flex flex-col">
       <Header />
 
       <main className="flex-1 px-4 sm:px-6 lg:px-8 pb-8">
         {/* Hero Search Section */}
-        <div className="max-w-4xl mx-auto text-center pt-6 pb-8">
+        <div className="max-w-4xl mx-auto text-center pt-6 pb-6">
           <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold mb-3">
             <span className="bg-gradient-to-r from-blue-400 via-purple-400 to-cyan-400 bg-clip-text text-transparent glow-text">
               Explore Earth Observation Data
@@ -270,7 +273,7 @@ export default function Home() {
             showFilters={showFilters}
           />
 
-          {/* Quick demo queries */}
+          {/* Quick demo queries — only show when no results */}
           {!results && !loading && (
             <div className="mt-5 flex flex-wrap justify-center gap-2">
               {DEMO_QUERIES.map((q) => (
@@ -297,18 +300,57 @@ export default function Home() {
           />
         )}
 
-        {/* Stats Bar */}
+        {/* ─── Results Toolbar ─────────────────────────────────── */}
         {results && (
-          <StatsBar
-            total={results.total}
-            latencyMs={results.latencyMs}
-            query={filters.query}
-          />
+          <div className="max-w-[1600px] mx-auto mb-3">
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              {/* Left: stats + reset */}
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleReset}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium
+                    bg-slate-800/50 text-slate-400 border border-slate-700/50
+                    hover:text-white hover:border-blue-500/50 hover:bg-blue-500/5 transition-all"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
+                  </svg>
+                  New Search
+                </button>
+                <StatsBar
+                  total={results.total}
+                  latencyMs={results.latencyMs}
+                  query={filters.query}
+                />
+              </div>
+
+              {/* Right: view mode tabs */}
+              <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-800/50 border border-slate-700/30">
+                {[
+                  { key: 'split' as const, label: 'Split', icon: '⊞' },
+                  { key: 'map' as const, label: 'Map', icon: '🗺️' },
+                  { key: 'results' as const, label: 'Results', icon: '📋' },
+                ].map(mode => (
+                  <button
+                    key={mode.key}
+                    onClick={() => setActiveView(mode.key)}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
+                      activeView === mode.key
+                        ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
+                        : 'text-slate-500 hover:text-slate-300 border border-transparent'
+                    }`}
+                  >
+                    {mode.icon} {mode.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
         )}
 
         {/* Compare mode banner */}
         {comparingIds.size > 0 && (
-          <div className="max-w-[1600px] mx-auto mt-2">
+          <div className="max-w-[1600px] mx-auto mb-3">
             <div className="flex items-center justify-between px-4 py-2 rounded-xl bg-purple-500/10 border border-purple-500/20">
               <div className="flex items-center gap-2">
                 <span className="text-xs text-purple-400 font-medium">
@@ -342,40 +384,49 @@ export default function Home() {
           </div>
         )}
 
-        {/* Main Content: Map + Results */}
-        <div className="max-w-[1600px] mx-auto mt-4">
-          <div className="flex flex-col lg:flex-row gap-4">
-            {/* Map View — takes up remaining space */}
-            <div className="flex-1 min-w-0">
-              <MapView
-                results={results?.results || []}
-                selectedDataset={selectedDataset}
-                onSelectDataset={setSelectedDataset}
-                bbox={filters.bbox}
-                onBboxChange={(bbox) => {
-                  setFilters((f) => ({ ...f, bbox }));
-                  if (filters.query) {
-                    handleSearch(filters.query, { bbox });
-                  }
-                }}
-              />
-            </div>
+        {/* ─── Main Content: Map + Results (fixed height) ──────── */}
+        {results && (
+          <div className="max-w-[1600px] mx-auto">
+            <div
+              className="flex gap-4"
+              style={{ height: '580px' }}
+            >
+              {/* Map View — always 580px tall */}
+              {(activeView === 'split' || activeView === 'map') && (
+                <div className={`${activeView === 'split' ? 'flex-1 min-w-0' : 'w-full'}`}>
+                  <MapView
+                    results={results?.results || []}
+                    selectedDataset={selectedDataset}
+                    onSelectDataset={setSelectedDataset}
+                    bbox={filters.bbox}
+                    onBboxChange={(bbox) => {
+                      setFilters((f) => ({ ...f, bbox }));
+                      if (filters.query) {
+                        handleSearch(filters.query, { bbox });
+                      }
+                    }}
+                  />
+                </div>
+              )}
 
-            {/* Results List — fixed width sidebar */}
-            <div className="w-full lg:w-[420px] flex-shrink-0">
-              <ResultsList
-                results={results?.results || []}
-                loading={loading}
-                selectedDataset={selectedDataset}
-                onSelectDataset={setSelectedDataset}
-                onExportJSON={handleExportJSON}
-                onExportCSV={handleExportCSV}
-                onCompareToggle={handleCompareToggle}
-                comparingIds={comparingIds}
-              />
+              {/* Results List — always 580px tall */}
+              {(activeView === 'split' || activeView === 'results') && (
+                <div className={`${activeView === 'split' ? 'w-full lg:w-[420px] flex-shrink-0' : 'w-full'}`}>
+                  <ResultsList
+                    results={results?.results || []}
+                    loading={loading}
+                    selectedDataset={selectedDataset}
+                    onSelectDataset={setSelectedDataset}
+                    onExportJSON={handleExportJSON}
+                    onExportCSV={handleExportCSV}
+                    onCompareToggle={handleCompareToggle}
+                    comparingIds={comparingIds}
+                  />
+                </div>
+              )}
             </div>
           </div>
-        </div>
+        )}
       </main>
 
       {/* Toast notification */}

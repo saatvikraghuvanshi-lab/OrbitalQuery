@@ -50,9 +50,16 @@ export default function ResultsList({
   results, loading, selectedDataset, onSelectDataset,
   onExportJSON, onExportCSV, onCompareToggle, comparingIds
 }: ResultsListProps) {
+  // Fixed height: fills the 580px parent container
+  const containerStyle = {
+    height: '580px',
+    minHeight: '580px',
+    maxHeight: '580px',
+  };
+
   if (loading) {
     return (
-      <div className="glass rounded-2xl p-4 h-full min-h-[400px] max-h-[700px] overflow-hidden">
+      <div className="glass rounded-2xl p-4 overflow-hidden" style={containerStyle}>
         <div className="space-y-3">
           {[1, 2, 3, 4, 5].map((i) => (
             <div key={i} className="shimmer rounded-xl h-28" />
@@ -64,7 +71,7 @@ export default function ResultsList({
 
   if (results.length === 0) {
     return (
-      <div className="glass rounded-2xl p-6 h-full min-h-[400px] max-h-[700px] flex flex-col items-center justify-center text-center">
+      <div className="glass rounded-2xl p-6 flex flex-col items-center justify-center text-center" style={containerStyle}>
         <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500/10 to-purple-500/10 flex items-center justify-center mb-4">
           <svg className="w-8 h-8 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
@@ -78,18 +85,19 @@ export default function ResultsList({
     );
   }
 
-  // If a dataset is selected, show the detail panel instead of the list
+  // If a dataset is selected, show the detail panel
   if (selectedDataset) {
     const inResults = results.find(r => r.id === selectedDataset.id);
     const dataset = inResults || selectedDataset;
 
     return (
-      <div className="h-full min-h-[400px] max-h-[700px] flex flex-col">
-        {/* Back button */}
-        <div className="mb-2">
+      <div className="glass rounded-2xl overflow-hidden flex flex-col" style={containerStyle}>
+        {/* Back button — prominent */}
+        <div className="px-4 py-2.5 border-b border-slate-700/30">
           <button
             onClick={() => onSelectDataset(null)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] text-slate-400 hover:text-slate-300 hover:bg-slate-800/50 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium text-slate-400
+              hover:text-white hover:bg-blue-500/10 hover:border-blue-500/30 border border-transparent transition-all"
           >
             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
@@ -98,7 +106,7 @@ export default function ResultsList({
           </button>
         </div>
 
-        {/* Detail panel */}
+        {/* Detail panel — scrollable within fixed height */}
         <div className="flex-1 overflow-y-auto min-h-0">
           <DatasetDetail
             dataset={dataset}
@@ -112,7 +120,7 @@ export default function ResultsList({
 
         {/* Quick nav: prev/next */}
         {results.length > 1 && (
-          <div className="mt-2 flex gap-2">
+          <div className="px-4 py-2.5 border-t border-slate-700/30 flex gap-2">
             {(() => {
               const idx = results.findIndex(r => r.id === dataset.id);
               const prev = idx > 0 ? results[idx - 1] : null;
@@ -143,7 +151,7 @@ export default function ResultsList({
   }
 
   return (
-    <div className="glass rounded-2xl overflow-hidden h-full min-h-[400px] max-h-[700px] flex flex-col">
+    <div className="glass rounded-2xl overflow-hidden flex flex-col" style={containerStyle}>
       <div className="px-4 py-3 border-b border-slate-700/30 flex items-center justify-between">
         <span className="text-sm font-medium text-slate-300">
           {results.length} datasets found
@@ -151,7 +159,6 @@ export default function ResultsList({
         {onExportJSON && results.length > 0 && (
           <button
             onClick={() => {
-              // Export all results
               const json = JSON.stringify(results, null, 2);
               const blob = new Blob([json], { type: 'application/json' });
               const url = URL.createObjectURL(blob);

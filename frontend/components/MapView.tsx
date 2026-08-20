@@ -355,13 +355,32 @@ export default function MapView({ results, selectedDataset, onSelectDataset, bbo
     }
   }, [results, selectedDataset, onSelectDataset]);
 
-  // ─── Zoom to selected dataset ─────────────────────────────────
+  // ─── Zoom to selected dataset (fitBounds on geometry/bbox) ────
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !selectedDataset) return;
-    if (selectedDataset.centroidLat && selectedDataset.centroidLng) {
-      map.setView([selectedDataset.centroidLat, selectedDataset.centroidLng], 8, { animate: true });
-    }
+
+    let L: any;
+    try { L = require('leaflet'); } catch { return; }
+
+    try {
+      // Try to fit to the full geometry bbox first
+      if (selectedDataset.bbox && Array.isArray(selectedDataset.bbox) && selectedDataset.bbox.length === 4) {
+        // bbox format: [west, south, east, north]
+        const [west, south, east, north] = selectedDataset.bbox;
+        map.fitBounds([[south, west], [north, east]], { padding: [60, 60], maxZoom: 12, animate: true });
+      } else if (selectedDataset.geometry) {
+        // Fit to the GeoJSON geometry bounds
+        const geoLayer = L.geoJSON(selectedDataset.geometry);
+        const bounds = geoLayer.getBounds();
+        if (bounds.isValid()) {
+          map.fitBounds(bounds, { padding: [60, 60], maxZoom: 12, animate: true });
+        }
+      } else if (selectedDataset.centroidLat && selectedDataset.centroidLng) {
+        // Fallback: zoom to centroid
+        map.setView([selectedDataset.centroidLat, selectedDataset.centroidLng], 8, { animate: true });
+      }
+    } catch {}
   }, [selectedDataset]);
 
   const toggleDrawing = useCallback(() => {
@@ -374,13 +393,17 @@ export default function MapView({ results, selectedDataset, onSelectDataset, bbo
       borderRadius: '16px',
       border: '1px solid rgba(71, 85, 105, 0.3)',
       overflow: 'hidden',
+      width: '100%',
+      height: '100%',
+      minHeight: '580px',
     }}>
       {/* Map container — Leaflet attaches directly here */}
       <div
         ref={containerRef}
         style={{
           width: '100%',
-          height: '620px',
+          height: '100%',
+          minHeight: '580px',
           position: 'relative',
           background: '#0d1117',
         }}
