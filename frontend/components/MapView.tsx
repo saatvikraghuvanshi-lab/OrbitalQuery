@@ -15,7 +15,7 @@ const MAP_STYLES: Record<MapStyle, { url: string; name: string }> = {
     name: '🗺️ CARTO Voyager',
   },
   'streets': {
-    url: 'https://demotiles.maplibre.org/style.json',
+    url: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
     name: '🌍 Streets',
   },
   'satellite': {
@@ -36,8 +36,6 @@ interface MapViewProps {
   onBboxChange: (bbox: BoundingBox | null) => void;
 }
 
-const MAP_HEIGHT = 580;
-
 export default function MapView({ results, selectedDataset, onSelectDataset, bbox, onBboxChange }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
@@ -52,15 +50,19 @@ export default function MapView({ results, selectedDataset, onSelectDataset, bbo
     const container = containerRef.current;
     if (!container) return;
 
-    let cancelled = false;
+    let destroyed = false;
     let map: any = null;
 
     const init = async () => {
       const maplibregl = await import('maplibre-gl');
       maplibreglRef.current = maplibregl;
-      // CSS is imported via globals.css
 
-      if (cancelled || !container) return;
+      if (destroyed || !container) return;
+
+      // Explicitly set dimensions before init
+      container.style.width = '100%';
+      container.style.height = '580px';
+      container.style.position = 'relative';
 
       map = new maplibregl.Map({
         container,
@@ -70,11 +72,13 @@ export default function MapView({ results, selectedDataset, onSelectDataset, bbo
         attributionControl: {},
       });
 
-      if (cancelled) { map.remove(); return; }
+      if (destroyed) { map.remove(); return; }
       mapRef.current = map;
 
+      // Force resize after creation
       map.on('load', () => {
-        if (cancelled) return;
+        if (destroyed) return;
+        map.resize();
 
         // Add GeoJSON source for dataset footprints
         map.addSource('datasets', {
@@ -82,7 +86,6 @@ export default function MapView({ results, selectedDataset, onSelectDataset, bbo
           data: { type: 'FeatureCollection', features: [] },
         });
 
-        // Fill layer for footprints
         map.addLayer({
           id: 'datasets-fill',
           type: 'fill',
@@ -93,7 +96,6 @@ export default function MapView({ results, selectedDataset, onSelectDataset, bbo
           },
         });
 
-        // Line layer for footprint borders
         map.addLayer({
           id: 'datasets-line',
           type: 'line',
@@ -105,7 +107,6 @@ export default function MapView({ results, selectedDataset, onSelectDataset, bbo
           },
         });
 
-        // Add click handler for footprints
         map.on('click', 'datasets-fill', (e: any) => {
           if (isDrawing) return;
           if (e.features && e.features.length > 0) {
@@ -118,7 +119,6 @@ export default function MapView({ results, selectedDataset, onSelectDataset, bbo
           }
         });
 
-        // Cursor change on hover
         map.on('mouseenter', 'datasets-fill', () => {
           if (!isDrawing) map.getCanvas().style.cursor = 'pointer';
         });
@@ -143,6 +143,7 @@ export default function MapView({ results, selectedDataset, onSelectDataset, bbo
 
         if (drawRectRef.current && map.getLayer(drawRectRef.current)) {
           map.removeLayer(drawRectRef.current);
+          map.removeLayer(drawRectRef.current + '-line');
           map.removeSource(drawRectRef.current);
         }
 
@@ -186,7 +187,6 @@ export default function MapView({ results, selectedDataset, onSelectDataset, bbo
         const start = drawStartRef.current;
         const end = [e.lngLat.lng, e.lngLat.lat];
 
-        // Clean up draw rectangle
         if (drawRectRef.current) {
           try {
             if (map.getLayer(drawRectRef.current)) map.removeLayer(drawRectRef.current);
@@ -213,7 +213,7 @@ export default function MapView({ results, selectedDataset, onSelectDataset, bbo
     init();
 
     return () => {
-      cancelled = true;
+      destroyed = true;
       if (map) {
         try { map.remove(); } catch {}
         mapRef.current = null;
@@ -228,7 +228,6 @@ export default function MapView({ results, selectedDataset, onSelectDataset, bbo
     map.setStyle(MAP_STYLES[mapStyle].url);
 
     map.once('style.load', () => {
-      // Re-add layers after style change
       map.addSource('datasets', {
         type: 'geojson',
         data: { type: 'FeatureCollection', features: [] },
@@ -291,13 +290,12 @@ export default function MapView({ results, selectedDataset, onSelectDataset, bbo
       }
     } catch {}
 
-    // Fit bounds to results
     if (results.length > 0) {
       try {
         const coords = results
           .filter(d => d.centroidLat && d.centroidLng)
           .map(d => [d.centroidLng!, d.centroidLat!] as [number, number]);
-        if (coords.length > 0) {
+        if (coords.length > 0 && maplibreglRef.current) {
           const bounds = coords.reduce(
             (b, c) => b.extend(c),
             new maplibreglRef.current.LngLatBounds(coords[0], coords[0])
@@ -322,7 +320,6 @@ export default function MapView({ results, selectedDataset, onSelectDataset, bbo
         const [west, south, east, north] = selectedDataset.bbox;
         map.fitBounds([[west, south], [east, north]], { padding: { top: 60, bottom: 60, left: 60, right: 60 }, maxZoom: 12 });
       } else if (selectedDataset.geometry) {
-        // Calculate bounds from GeoJSON
         const coords = extractCoords(selectedDataset.geometry);
         if (coords.length > 0 && maplibreglRef.current) {
           const bounds = coords.reduce((b, c) => b.extend(c), new maplibreglRef.current.LngLatBounds(coords[0], coords[0]));
@@ -350,13 +347,13 @@ export default function MapView({ results, selectedDataset, onSelectDataset, bbo
       position: 'relative',
       borderRadius: '16px',
       border: '1px solid rgba(71, 85, 105, 0.3)',
-      overflow: 'hidden',
       width: '100%',
-      height: MAP_HEIGHT + 'px',
+      height: '580px',
     }}>
       <div
         ref={containerRef}
-        style={{ width: '100%', height: MAP_HEIGHT + 'px' }}
+        className="maplibregl-map"
+        style={{ width: '100%', height: '580px' }}
       />
 
       {/* Style selector */}
