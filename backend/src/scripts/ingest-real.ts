@@ -1,5 +1,5 @@
 /**
- * Ingest REAL datasets from Planetary Computer STAC API.
+ * Ingest REAL datasets from AWS Earth Search STAC API.
  * 
  * Collections fetched:
  *   - sentinel-2-l2a (Copernicus/ESA) — 10m multispectral
@@ -19,9 +19,10 @@ const prisma = new PrismaClient({
   datasources: { db: { url: `file:${path.join(__dirname, '../../prisma/dev.db')}` } },
 });
 
-const PC_STAC_API = 'https://planetarycomputer.microsoft.com/api/stac/v1';
+// AWS Earth Search STAC API (free, no API key needed)
+const STAC_API = 'https://earth-search.aws.element84.com/v1';
 
-// Collections to fetch from Planetary Computer
+// Collections to fetch from AWS Earth Search
 const COLLECTIONS = [
   {
     id: 'sentinel-2-l2a',
@@ -78,7 +79,7 @@ async function searchSTAC(
   if (bbox) body.bbox = bbox;
   if (datetime) body.datetime = datetime;
 
-  const res = await fetch(`${PC_STAC_API}/search`, {
+  const res = await fetch(`${STAC_API}/search`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -132,14 +133,24 @@ function getPreviewUrl(item: any): string | null {
 }
 
 function getSTACLink(item: any): string {
-  // Planetary Computer signed item link
   if (item.links?.self?.href) {
     return item.links.self.href;
   }
   if (item.links?.item?.href) {
     return item.links.item.href;
   }
-  return `${PC_STAC_API}/../collections/${item.collection}/items/${item.id}`;
+  return `${STAC_API}/collections/${item.collection}/items/${item.id}`;
+}
+
+// Build link to AWS Open Data page for the collection
+function getAWSDataLink(collectionId: string): string {
+  const awsLinks: Record<string, string> = {
+    'sentinel-2-l2a': 'https://sentinel-2-l2a.s3.amazonaws.com',
+    'landsat-c2-l2': 'https://landsat-c2-l2.s3.amazonaws.com',
+    'sentinel-1-grd': 'https://sentinel-1-grd.s3.amazonaws.com',
+    'naip': 'https://naip.s3.amazonaws.com',
+  };
+  return awsLinks[collectionId] || `https://s3.amazonaws.com/${collectionId}`;
 }
 
 async function ingestCollection(
@@ -220,7 +231,7 @@ async function main() {
 
   console.log('🛰️  OrbitalQuery — Real Data Ingestion');
   console.log('━'.repeat(55));
-  console.log(`📡 Source: Planetary Computer STAC API`);
+  console.log(`📡 Source: AWS Earth Search STAC API`);
   console.log(`📦 Collections: ${collectionsToFetch.map(c => c.id).join(', ')}`);
   console.log(`🔢 Max per collection: ${maxPerCollection}`);
   console.log();

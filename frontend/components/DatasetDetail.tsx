@@ -38,25 +38,24 @@ export default function DatasetDetail({ dataset, onClose, onExportJSON, onExport
   const [imgError, setImgError] = useState(false);
   const badge = getProviderBadge(dataset.provider);
 
-  // Build correct Planetary Computer URLs
-  // Preview: use the STAC-provided previewUrl if available, otherwise construct one
-  const pcPreviewUrl = dataset.previewUrl || null;
-
-  // Hub: correct collection page (PC moved to /dataset-catalog/ path)
-  const pcHubUrl = dataset.collection
-    ? `https://planetarycomputer.microsoft.com/dataset-catalog/${dataset.collection}`
+  // Build AWS Earth Search links (free, no API key needed)
+  const awsCollectionUrl = dataset.collection
+    ? `https://earth-search.aws.element84.com/v1/collections/${dataset.collection}`
     : null;
 
-  // STAC API: use the correct canonical endpoint (ignore broken ../ links from STAC)
+  // STAC API link to the item
   const stacApiUrl = dataset.stacId && dataset.collection
-    ? `https://planetarycomputer.microsoft.com/api/stac/v1/collections/${dataset.collection}/items/${dataset.stacId}`
+    ? `https://earth-search.aws.element84.com/v1/collections/${dataset.collection}/items/${dataset.stacId}`
     : null;
 
-  // Raw STAC link from data (fix the ../ paths)
-  const rawStacLink = dataset.stacLink
-    ? dataset.stacLink.replace(/\/\.\.\//g, '/').replace(/\/api\/stac\/v1\//, 'https://planetarycomputer.microsoft.com/api/stac/v1/')
-    : null;
-  const stacLink = stacApiUrl || rawStacLink;
+  // AWS Open Data S3 bucket links
+  const awsS3Links: Record<string, string> = {
+    'sentinel-2-l2a': 'https://sentinel-2-l2a.s3.amazonaws.com',
+    'landsat-c2-l2': 'https://landsat-c2-l2.s3.amazonaws.com',
+    'sentinel-1-grd': 'https://sentinel-1-grd.s3.amazonaws.com',
+    'naip': 'https://naip.s3.amazonaws.com',
+  };
+  const awsS3Url = dataset.collection ? awsS3Links[dataset.collection] || null : null;
 
   return (
     <div className="glass rounded-2xl overflow-hidden border border-blue-500/20">
@@ -169,10 +168,10 @@ export default function DatasetDetail({ dataset, onClose, onExportJSON, onExport
 
         {activeTab === 'preview' && (
           <div className="space-y-3">
-            {pcPreviewUrl && !imgError ? (
+            {dataset.previewUrl && !imgError ? (
               <div className="rounded-xl overflow-hidden border border-slate-700/30">
                 <img
-                  src={pcPreviewUrl}
+                  src={dataset.previewUrl}
                   alt={dataset.title}
                   className="w-full h-auto"
                   onError={() => setImgError(true)}
@@ -185,14 +184,14 @@ export default function DatasetDetail({ dataset, onClose, onExportJSON, onExport
                   <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.41a2.25 2.25 0 013.182 0l2.909 2.91M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" />
                 </svg>
                 <p className="text-xs text-slate-500">Preview not available for this dataset</p>
-                {pcHubUrl && (
+                {awsCollectionUrl && (
                   <a
-                    href={pcHubUrl}
+                    href={awsCollectionUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-block mt-3 px-3 py-1.5 text-[11px] bg-blue-600/20 text-blue-400 rounded-lg border border-blue-500/20 hover:bg-blue-600/30 transition-colors"
                   >
-                    View on Planetary Computer →
+                    View on AWS Earth Search →
                   </a>
                 )}
               </div>
@@ -231,25 +230,25 @@ export default function DatasetDetail({ dataset, onClose, onExportJSON, onExport
 
         {activeTab === 'download' && (
           <div className="space-y-2">
-            {/* Download links */}
-            {pcHubUrl && (
+            {/* AWS Earth Search Collection Link */}
+            {awsCollectionUrl && (
               <a
-                href={pcHubUrl}
+                href={awsCollectionUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-3 p-3 rounded-xl bg-slate-800/30 hover:bg-slate-800/50 border border-slate-700/30 transition-colors group"
               >
-                <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center shrink-0">
-                  <svg className="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <div className="w-8 h-8 rounded-lg bg-orange-500/10 flex items-center justify-center shrink-0">
+                  <svg className="w-4 h-4 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
                   </svg>
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-[11px] font-medium text-slate-300 group-hover:text-white transition-colors">
-                    Open in Planetary Computer
+                    AWS Earth Search
                   </div>
                   <div className="text-[10px] text-slate-600 truncate">
-                    Browse, visualize, and download full-resolution imagery
+                    Browse and download from AWS Open Data
                   </div>
                 </div>
                 <svg className="w-4 h-4 text-slate-600 group-hover:text-slate-400 transition-colors shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -258,6 +257,7 @@ export default function DatasetDetail({ dataset, onClose, onExportJSON, onExport
               </a>
             )}
 
+            {/* STAC API Raw JSON */}
             {stacApiUrl && (
               <a
                 href={stacApiUrl}
@@ -284,9 +284,10 @@ export default function DatasetDetail({ dataset, onClose, onExportJSON, onExport
               </a>
             )}
 
-            {stacLink && stacLink !== stacApiUrl && (
+            {/* AWS S3 Direct Access */}
+            {awsS3Url && (
               <a
-                href={stacLink}
+                href={awsS3Url}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-3 p-3 rounded-xl bg-slate-800/30 hover:bg-slate-800/50 border border-slate-700/30 transition-colors group"
@@ -298,10 +299,10 @@ export default function DatasetDetail({ dataset, onClose, onExportJSON, onExport
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-[11px] font-medium text-slate-300 group-hover:text-white transition-colors">
-                    STAC Item Link
+                    AWS S3 Bucket
                   </div>
                   <div className="text-[10px] text-slate-600 truncate">
-                    Direct link to dataset metadata
+                    Direct access to raw data on S3
                   </div>
                 </div>
                 <svg className="w-4 h-4 text-slate-600 group-hover:text-slate-400 transition-colors shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

@@ -103,7 +103,7 @@ cd frontend && npm run dev
 ### 3. Load Real Data (216+ datasets from live STAC APIs)
 
 ```bash
-# Ingest 216 real datasets from Planetary Computer (Sentinel-2, Landsat, Sentinel-1, NAIP)
+# Ingest 216 real datasets from AWS Earth Search (Sentinel-2, Landsat, Sentinel-1, NAIP)
 cd backend && npx ts-node src/scripts/ingest-real.ts --all --limit 50
 
 # Or load sample data (16 curated datasets)
@@ -224,7 +224,7 @@ curl -X GET http://localhost:3001/api/auth/me \
 
 ## 🌍 Data Sources
 
-### Live Datasets (ingested from Planetary Computer STAC API)
+### Live Datasets (ingested from AWS Earth Search STAC API)
 
 | Collection | Resolution | Provider | Coverage |
 |-----------|-----------|----------|----------|
@@ -247,17 +247,15 @@ All dataset metadata is ingested exclusively from these verified, trusted source
 
 | Source | API | Auth Required | Status |
 |--------|-----|---------------|--------|
-| **Microsoft Planetary Computer** | STAC API v1 | ❌ No key needed | ✅ Active — primary source |
-| **AWS Earth Search** | STAC API | ❌ No key needed | ✅ Available |
+| **AWS Earth Search** | STAC API v1 | ❌ No key needed | ✅ Active — primary source |
 | **NASA Earthdata** | CMR STAC | ❌ (optional token) | ✅ Available |
 | **Copernicus Open Access Hub** | OData API | ❌ (free registration) | ✅ Available |
 | **ISRO Bhuvan** | WMS/WFS | ❌ | ✅ Available |
 
 ### STAC API References
 - **STAC Specification** — https://stacspec.org
-- **Planetary Computer STAC** — https://planetarycomputer.microsoft.com/api/stac/v1
-- **Planetary Computer Collections** — https://planetarycomputer.microsoft.com/catalog
-- **earth-search (AWS)** — https://earth-search.aws.element84.com/v1
+- **AWS Earth Search STAC** — https://earth-search.aws.element84.com/v1
+- **AWS Earth Search Collections** — https://earth-search.aws.element84.com/v1/collections
 - **STAC Browser** — https://radiantearth.github.io/stac-browser/
 
 ### Platform References
@@ -268,7 +266,6 @@ All dataset metadata is ingested exclusively from these verified, trusted source
 
 ### GitHub Repositories Referenced
 - **sat-search** — https://github.com/sat-utils/sat-search (STAC search utility)
-- **planetary-computer-apis** — https://github.com/planetarycomputer/planetary-computer-apis (PC Python client)
 - **stac-fastapi** — https://github.com/stac-utils/stac-fastapi (STAC API server)
 - **weaviate-examples** — https://github.com/weaviate/weaviate-examples (vector DB examples)
 - **stac-rs** — https://github.com/stac-rs/stac-rs (Rust STAC implementation)
