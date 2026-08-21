@@ -38,24 +38,45 @@ export default function DatasetDetail({ dataset, onClose, onExportJSON, onExport
   const [imgError, setImgError] = useState(false);
   const badge = getProviderBadge(dataset.provider);
 
-  // Build AWS Earth Search links (free, no API key needed)
-  const awsCollectionUrl = dataset.collection
-    ? `https://earth-search.aws.element84.com/v1/collections/${dataset.collection}`
-    : null;
+  // Build user-friendly links based on dataset provider/collection
+  // Primary link: go to the best UI for browsing this dataset
+  const dataPortalLinks: Record<string, { url: string; label: string; desc: string }> = {
+    'sentinel-2-l2a': {
+      url: 'https://browser.dataspace.copernicus.eu/',
+      label: 'Copernicus Browser',
+      desc: 'Browse, visualize & download Sentinel-2 imagery'
+    },
+    'landsat-c2-l2': {
+      url: 'https://earthexplorer.usgs.gov/',
+      label: 'USGS EarthExplorer',
+      desc: 'Browse & download Landsat Collection 2 data'
+    },
+    'sentinel-1-grd': {
+      url: 'https://browser.dataspace.copernicus.eu/',
+      label: 'Copernicus Browser',
+      desc: 'Browse & download Sentinel-1 SAR data'
+    },
+    'naip': {
+      url: 'https://nassgeodata.gmu.edu/CropScape/',
+      label: 'USDA CropScape',
+      desc: 'Browse NAIP aerial imagery'
+    },
+  };
+  const primaryLink = dataset.collection ? dataPortalLinks[dataset.collection] || null : null;
 
-  // STAC API link to the item
+  // AWS Open Data Registry page (always works)
+  const awsRegistryLinks: Record<string, string> = {
+    'sentinel-2-l2a': 'https://registry.opendata.aws/sentinel-2/',
+    'landsat-c2-l2': 'https://registry.opendata.aws/landsat/',
+    'sentinel-1-grd': 'https://registry.opendata.aws/sentinel-1/',
+    'naip': 'https://registry.opendata.aws/naip/',
+  };
+  const awsRegistryUrl = dataset.collection ? awsRegistryLinks[dataset.collection] || 'https://registry.opendata.aws/' : null;
+
+  // STAC API link to the item (for developers)
   const stacApiUrl = dataset.stacId && dataset.collection
     ? `https://earth-search.aws.element84.com/v1/collections/${dataset.collection}/items/${dataset.stacId}`
     : null;
-
-  // AWS Open Data S3 bucket links
-  const awsS3Links: Record<string, string> = {
-    'sentinel-2-l2a': 'https://sentinel-2-l2a.s3.amazonaws.com',
-    'landsat-c2-l2': 'https://landsat-c2-l2.s3.amazonaws.com',
-    'sentinel-1-grd': 'https://sentinel-1-grd.s3.amazonaws.com',
-    'naip': 'https://naip.s3.amazonaws.com',
-  };
-  const awsS3Url = dataset.collection ? awsS3Links[dataset.collection] || null : null;
 
   return (
     <div className="glass rounded-2xl overflow-hidden border border-blue-500/20">
@@ -184,14 +205,14 @@ export default function DatasetDetail({ dataset, onClose, onExportJSON, onExport
                   <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.41a2.25 2.25 0 013.182 0l2.909 2.91M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" />
                 </svg>
                 <p className="text-xs text-slate-500">Preview not available for this dataset</p>
-                {awsCollectionUrl && (
+                {primaryLink && (
                   <a
-                    href={awsCollectionUrl}
+                    href={primaryLink.url}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-block mt-3 px-3 py-1.5 text-[11px] bg-blue-600/20 text-blue-400 rounded-lg border border-blue-500/20 hover:bg-blue-600/30 transition-colors"
                   >
-                    View on AWS Earth Search →
+                    View on {primaryLink.label} →
                   </a>
                 )}
               </div>
@@ -230,25 +251,52 @@ export default function DatasetDetail({ dataset, onClose, onExportJSON, onExport
 
         {activeTab === 'download' && (
           <div className="space-y-2">
-            {/* AWS Earth Search Collection Link */}
-            {awsCollectionUrl && (
+            {/* Primary Data Portal Link */}
+            {primaryLink && (
               <a
-                href={awsCollectionUrl}
+                href={primaryLink.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 p-3 rounded-xl bg-slate-800/30 hover:bg-slate-800/50 border border-slate-700/30 transition-colors group"
+              >
+                <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center shrink-0">
+                  <svg className="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+                  </svg>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[11px] font-medium text-slate-300 group-hover:text-white transition-colors">
+                    {primaryLink.label}
+                  </div>
+                  <div className="text-[10px] text-slate-600 truncate">
+                    {primaryLink.desc}
+                  </div>
+                </div>
+                <svg className="w-4 h-4 text-slate-600 group-hover:text-slate-400 transition-colors shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                </svg>
+              </a>
+            )}
+
+            {/* AWS Open Data Registry */}
+            {awsRegistryUrl && (
+              <a
+                href={awsRegistryUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-3 p-3 rounded-xl bg-slate-800/30 hover:bg-slate-800/50 border border-slate-700/30 transition-colors group"
               >
                 <div className="w-8 h-8 rounded-lg bg-orange-500/10 flex items-center justify-center shrink-0">
                   <svg className="w-4 h-4 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 0v3.75m-16.5-3.75v3.75m16.5 0v3.75C20.25 16.153 16.556 18 12 18s-8.25-1.847-8.25-4.125v-3.75m16.5 0c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125" />
                   </svg>
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-[11px] font-medium text-slate-300 group-hover:text-white transition-colors">
-                    AWS Earth Search
+                    AWS Open Data
                   </div>
                   <div className="text-[10px] text-slate-600 truncate">
-                    Browse and download from AWS Open Data
+                    Free access via AWS Open Data Registry
                   </div>
                 </div>
                 <svg className="w-4 h-4 text-slate-600 group-hover:text-slate-400 transition-colors shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -272,37 +320,10 @@ export default function DatasetDetail({ dataset, onClose, onExportJSON, onExport
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-[11px] font-medium text-slate-300 group-hover:text-white transition-colors">
-                    STAC API Raw JSON
+                    STAC API (Raw JSON)
                   </div>
                   <div className="text-[10px] text-slate-600 truncate">
-                    Machine-readable metadata endpoint
-                  </div>
-                </div>
-                <svg className="w-4 h-4 text-slate-600 group-hover:text-slate-400 transition-colors shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-                </svg>
-              </a>
-            )}
-
-            {/* AWS S3 Direct Access */}
-            {awsS3Url && (
-              <a
-                href={awsS3Url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-3 p-3 rounded-xl bg-slate-800/30 hover:bg-slate-800/50 border border-slate-700/30 transition-colors group"
-              >
-                <div className="w-8 h-8 rounded-lg bg-green-500/10 flex items-center justify-center shrink-0">
-                  <svg className="w-4 h-4 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m9.86-2.813a4.5 4.5 0 00-1.242-7.244l-4.5-4.5a4.5 4.5 0 00-6.364 6.364L4.34 8.374" />
-                  </svg>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-[11px] font-medium text-slate-300 group-hover:text-white transition-colors">
-                    AWS S3 Bucket
-                  </div>
-                  <div className="text-[10px] text-slate-600 truncate">
-                    Direct access to raw data on S3
+                    Machine-readable metadata for developers
                   </div>
                 </div>
                 <svg className="w-4 h-4 text-slate-600 group-hover:text-slate-400 transition-colors shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
