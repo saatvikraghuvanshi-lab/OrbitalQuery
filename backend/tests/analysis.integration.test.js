@@ -233,6 +233,64 @@ async function run() {
     assertEqual(data.code, 'INVALID_DATE_RANGE');
   });
 
+  // ── Preprocess ────────────────────────────────────────────
+
+  console.log('\nPOST /api/analysis/preprocess');
+
+  await test('returns preprocessing report for valid request', async () => {
+    const { status, data } = await post('/api/analysis/preprocess', {
+      bbox: [75.7, 26.8, 75.9, 27.0],
+      start_date: '2024-03-01',
+      end_date: '2024-03-31',
+      collection: 'sentinel-2-l2a',
+      max_cloud_cover: 30,
+      max_scenes: 5,
+      bands: ['B04', 'B03', 'B02'],
+      target_crs: 'EPSG:32643',
+      target_resolution: 10,
+    });
+    assertEqual(status, 200, `Expected 200, got ${status}: ${JSON.stringify(data)}`);
+    assertDefined(data.status);
+    assertDefined(data.targetCrs);
+    assert(typeof data.scenesTotal === 'number');
+    assert(typeof data.scenesSuitable === 'number');
+    assert(typeof data.scenesUnsuitable === 'number');
+    assert(Array.isArray(data.scenes));
+    assert(data.scenes.length > 0);
+    assertDefined(data.comparability);
+    assert(typeof data.comparability.comparable === 'boolean');
+    assert(Array.isArray(data.warnings));
+    // Check scene structure
+    const scene = data.scenes[0];
+    assertDefined(scene.itemId);
+    assertDefined(scene.acquisitionDate);
+    assert(typeof scene.cloudCover === 'number');
+    assertDefined(scene.crs);
+    assert(typeof scene.resolutionMeters === 'number');
+    assert(typeof scene.spatialCoveragePct === 'number');
+    assert(typeof scene.suitable === 'boolean');
+    assert(Array.isArray(scene.preprocessingSteps));
+    assert(scene.preprocessingSteps.length > 0);
+    assert(Array.isArray(scene.rejectionReasons));
+  });
+
+  await test('returns 400 for missing bbox', async () => {
+    const { status, data } = await post('/api/analysis/preprocess', {
+      start_date: '2024-03-01', end_date: '2024-03-31',
+    });
+    assertEqual(status, 400);
+    assertEqual(data.code, 'INVALID_BBOX');
+  });
+
+  await test('returns 400 for inverted date range', async () => {
+    const { status, data } = await post('/api/analysis/preprocess', {
+      bbox: [75.7, 26.8, 75.9, 27.0],
+      start_date: '2024-06-01', end_date: '2024-01-01',
+    });
+    assertEqual(status, 400);
+    assertEqual(data.code, 'INVALID_DATE_RANGE');
+  });
+
   // ── Health ─────────────────────────────────────────────────
 
   console.log('\nGET /api/analysis/health');

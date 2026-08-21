@@ -293,6 +293,84 @@ class TimeseriesResponse(BaseModel):
     rejection_reasons: list[dict[str, str]]
 
 
+# ── Preprocessing ───────────────────────────────────────────────
+
+DEFAULT_TARGET_CRS = "EPSG:4326"
+DEFAULT_TARGET_RESOLUTION = 10.0
+MAX_TEMPORAL_GAP_DAYS = 30
+MIN_COVERAGE_PCT = 50.0
+
+
+class PreprocessRequest(BaseModel):
+    """Request body for scene preprocessing."""
+
+    bbox: list[float] = Field(
+        ...,
+        min_length=4,
+        max_length=4,
+        description="[west, south, east, north] in WGS-84",
+    )
+    start_date: date
+    end_date: date
+    collection: str = DEFAULT_COLLECTION
+    max_cloud_cover: int = Field(DEFAULT_MAX_CLOUD_COVER, ge=0, le=100)
+    max_scenes: int = Field(20, ge=1, le=50)
+    bands: list[str] = Field(
+        default=["B04", "B03", "B02"],
+        min_length=1,
+        max_length=20,
+    )
+    target_crs: str = Field(DEFAULT_TARGET_CRS)
+    target_resolution: float = Field(DEFAULT_TARGET_RESOLUTION, gt=0)
+    max_temporal_gap_days: int = Field(MAX_TEMPORAL_GAP_DAYS, ge=1)
+    min_coverage_pct: float = Field(MIN_COVERAGE_PCT, ge=0, le=100)
+
+    @field_validator("bbox")
+    @classmethod
+    def validate_bbox(cls, v: list[float]) -> list[float]:
+        if v[0] >= v[2]:
+            raise ValueError("west must be less than east")
+        if v[1] >= v[3]:
+            raise ValueError("south must be less than north")
+        return v
+
+
+class ScenePreprocessInfo(BaseModel):
+    """Preprocessing info for a single scene."""
+
+    item_id: str
+    collection: str
+    acquisition_date: str
+    cloud_cover: Optional[float]
+    crs: str
+    resolution_meters: float
+    bbox: list[float]
+    spatial_coverage_pct: float
+    bands_processed: list[str]
+    nodata_count: int
+    total_pixels: int
+    preprocessing_steps: list[dict[str, str]]
+    warnings: list[str]
+    suitable: bool
+    rejection_reasons: list[str]
+
+
+class PreprocessResponse(BaseModel):
+    """Response for scene preprocessing."""
+
+    status: str
+    aoi_bbox: list[float]
+    target_crs: str
+    target_resolution: float
+    scenes_total: int
+    scenes_suitable: int
+    scenes_unsuitable: int
+    scenes: list[ScenePreprocessInfo]
+    comparability: dict[str, Any]
+    temporal_window: Optional[dict[str, Any]]
+    warnings: list[str]
+
+
 # ── Errors ───────────────────────────────────────────────────────
 
 class ErrorResponse(BaseModel):
