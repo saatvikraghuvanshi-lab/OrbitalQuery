@@ -210,6 +210,89 @@ class HealthResponse(BaseModel):
     packages: dict[str, str]
 
 
+# ── Timeseries ──────────────────────────────────────────────────
+
+DEFAULT_BANDS = ["B04", "B03", "B02"]
+MAX_SCENES_DEFAULT = 20
+
+
+class TimeseriesRequest(BaseModel):
+    """Request body for temporal datacube construction."""
+
+    bbox: list[float] = Field(
+        ...,
+        min_length=4,
+        max_length=4,
+        description="[west, south, east, north] in WGS-84",
+        examples=[[75.7, 26.8, 75.9, 27.0]],
+    )
+    start_date: date
+    end_date: date
+    collection: str = DEFAULT_COLLECTION
+    max_cloud_cover: int = Field(DEFAULT_MAX_CLOUD_COVER, ge=0, le=100)
+    max_scenes: int = Field(
+        MAX_SCENES_DEFAULT,
+        ge=1,
+        le=50,
+        description="Maximum number of scenes to include in the cube",
+    )
+    bands: list[str] = Field(
+        default=DEFAULT_BANDS,
+        min_length=1,
+        max_length=20,
+        description="Bands to include (e.g. ['B04', 'B08', 'B11'])",
+    )
+    target_crs: Optional[str] = Field(
+        None,
+        description="Target CRS (e.g. 'EPSG:32643'). Auto-detected if omitted.",
+    )
+    target_resolution: Optional[float] = Field(
+        None,
+        gt=0,
+        description="Target resolution in meters. Auto-detected if omitted.",
+    )
+
+    @field_validator("bbox")
+    @classmethod
+    def validate_bbox(cls, v: list[float]) -> list[float]:
+        if v[0] >= v[2]:
+            raise ValueError("west must be less than east")
+        if v[1] >= v[3]:
+            raise ValueError("south must be less than north")
+        if v[0] < -180 or v[2] > 180:
+            raise ValueError("longitude must be in [-180, 180]")
+        if v[1] < -90 or v[3] > 90:
+            raise ValueError("latitude must be in [-90, 90]")
+        area = (v[2] - v[0]) * (v[3] - v[1])
+        if area > MAX_AREA_DEGREES_SQ:
+            raise ValueError(f"AOI area ({area:.1f} deg²) exceeds max")
+        return v
+
+
+class TimeseriesResponse(BaseModel):
+    """Response for temporal datacube construction."""
+
+    status: str
+    analysis_id: str
+    collection: str
+    aoi_bbox: list[float]
+    date_range: list[str]
+    bands: list[str]
+    crs: str
+    resolution_meters: Optional[float]
+    cube_shape: list[int]
+    cube_dims: dict[str, int]
+    scenes_discovered: int
+    scenes_rejected: int
+    scenes_selected: int
+    selected_scenes: list[dict[str, Any]]
+    acquisition_dates: list[str]
+    cloud_covers: list[float]
+    processing_steps: list[dict[str, str]]
+    diagnostics: dict[str, Any]
+    rejection_reasons: list[dict[str, str]]
+
+
 # ── Errors ───────────────────────────────────────────────────────
 
 class ErrorResponse(BaseModel):

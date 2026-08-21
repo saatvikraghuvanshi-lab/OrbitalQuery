@@ -15,7 +15,7 @@ const PYTHON_SERVICE_URL =
   process.env.PYTHON_SERVICE_URL || 'http://localhost:8000';
 
 const PYTHON_SERVICE_TIMEOUT_MS = parseInt(
-  process.env.PYTHON_SERVICE_TIMEOUT_MS || '30000',
+  process.env.PYTHON_SERVICE_TIMEOUT_MS || '120000',
   10,
 );
 

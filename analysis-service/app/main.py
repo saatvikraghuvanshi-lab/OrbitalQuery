@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import HOST, PORT, STAC_API_URL
-from app.routes import analysis, health, stac
+from app.routes import analysis, health, stac, timeseries
 
 # ── Logging ──────────────────────────────────────────────────────
 
@@ -48,6 +48,7 @@ app.add_middleware(
 app.include_router(health.router)
 app.include_router(stac.router)
 app.include_router(analysis.router)
+app.include_router(timeseries.router)
 
 
 @app.get("/", tags=["root"])
@@ -62,6 +63,7 @@ async def root():
             "health": "GET /health",
             "stac_search": "POST /stac/search",
             "analysis_preview": "POST /analysis/preview",
+            "timeseries": "POST /analysis/timeseries",
         },
     }
 

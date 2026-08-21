@@ -323,6 +323,157 @@ router.post('/preview', optionalAuth, async (req: AuthRequest, res: Response) =>
   });
 });
 
+// ── POST /api/analysis/timeseries ──────────────────────────────────
+
+/**
+ * Build a temporal datacube via the Python analysis service.
+ *
+ * Request body:
+ *   bbox:              [west, south, east, north]
+ *   start_date:        "YYYY-MM-DD" (required)
+ *   end_date:          "YYYY-MM-DD" (required)
+ *   collection:        "sentinel-2-l2a"
+ *   max_cloud_cover:   0-100
+ *   max_scenes:        1-50 (default 20)
+ *   bands:             ["B04", "B03", "B02"]
+ *   target_crs:        "EPSG:32643" (optional)
+ *   target_resolution: meters (optional)
+ */
+router.post('/timeseries', optionalAuth, async (req: AuthRequest, res: Response) => {
+  const {
+    bbox,
+    start_date,
+    end_date,
+    collection,
+    max_cloud_cover,
+    max_scenes,
+    bands,
+    target_crs,
+    target_resolution,
+  } = req.body;
+
+  // ── Validate bbox ────────────────────────────────────────────
+  if (!bbox || !isValidBbox(bbox)) {
+    res.status(400).json({
+      error: 'Valid bbox is required',
+      code: 'INVALID_BBOX',
+      detail: 'Format: [west, south, east, north] in WGS-84',
+    });
+    return;
+  }
+
+  // ── Validate dates ───────────────────────────────────────────
+  if (!start_date || !end_date) {
+    res.status(400).json({
+      error: 'Both start_date and end_date are required',
+      code: 'MISSING_DATE',
+      detail: 'Provide start_date and end_date in YYYY-MM-DD format',
+    });
+    return;
+  }
+  if (!isValidDateStr(start_date) || !isValidDateStr(end_date)) {
+    res.status(400).json({
+      error: 'Invalid date format',
+      code: 'INVALID_DATE',
+      detail: 'Use ISO 8601 format: YYYY-MM-DD',
+    });
+    return;
+  }
+  if (new Date(start_date) > new Date(end_date)) {
+    res.status(400).json({
+      error: 'start_date must be before end_date',
+      code: 'INVALID_DATE_RANGE',
+    });
+    return;
+  }
+
+  // ── Validate collection ──────────────────────────────────────
+  if (collection && !isValidCollection(collection)) {
+    res.status(400).json({
+      error: 'Invalid collection',
+      code: 'INVALID_COLLECTION',
+      detail: `Allowed: ${ALLOWED_COLLECTIONS.join(', ')}`,
+    });
+    return;
+  }
+
+  // ── Validate bands ───────────────────────────────────────────
+  if (bands && !Array.isArray(bands)) {
+    res.status(400).json({
+      error: 'bands must be an array',
+      code: 'INVALID_BANDS',
+    });
+    return;
+  }
+
+  // ── Validate max_scenes ──────────────────────────────────────
+  const scenes = max_scenes ? Math.min(Math.max(parseInt(max_scenes) || 20, 1), 50) : 20;
+
+  // ── Forward to Python service ────────────────────────────────
+  const pythonBody: Record<string, any> = {
+    bbox,
+    start_date,
+    end_date,
+    collection: collection || 'sentinel-2-l2a',
+    max_cloud_cover: max_cloud_cover ?? 30,
+    max_scenes: scenes,
+    bands: bands || ['B04', 'B03', 'B02'],
+  };
+
+  if (target_crs) pythonBody.target_crs = target_crs;
+  if (target_resolution) pythonBody.target_resolution = target_resolution;
+
+  const result = await callPythonService(
+    'POST',
+    '/analysis/timeseries',
+    pythonBody,
+    'timeseries',
+  );
+
+  if (!result.ok) {
+    res.status(result.status || 502).json({
+      error: result.error,
+      code: result.code,
+      requestId: result.requestId,
+    });
+    return;
+  }
+
+  // ── Return clean response ────────────────────────────────────
+  const data = result.data;
+  res.json({
+    requestId: result.requestId,
+    status: data?.status || 'ok',
+    analysisId: data?.analysis_id,
+    collection: data?.collection,
+    aoiBbox: data?.aoi_bbox,
+    dateRange: data?.date_range,
+    bands: data?.bands,
+    crs: data?.crs,
+    resolutionMeters: data?.resolution_meters,
+    cubeShape: data?.cube_shape,
+    cubeDims: data?.cube_dims,
+    scenesDiscovered: data?.scenes_discovered,
+    scenesRejected: data?.scenes_rejected,
+    scenesSelected: data?.scenes_selected,
+    selectedScenes: (data?.selected_scenes || []).map((s: any) => ({
+      itemId: s.item_id,
+      datetime: s.datetime,
+      cloudCover: s.cloud_cover,
+      bbox: s.bbox,
+      coveragePct: s.coverage_pct,
+      score: s.score,
+      assetsCount: s.assets_count,
+    })),
+    acquisitionDates: data?.acquisition_dates,
+    cloudCovers: data?.cloud_covers,
+    processingSteps: data?.processing_steps,
+    diagnostics: data?.diagnostics,
+    rejectionReasons: data?.rejection_reasons,
+    latencyMs: result.upstreamLatencyMs,
+  });
+});
+
 // ── GET /api/analysis/health ───────────────────────────────────────
 
 /**

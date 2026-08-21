@@ -10,11 +10,12 @@ const NODE_URL = 'http://localhost:3001';
 let passed = 0;
 let failed = 0;
 
-async function post(path, body) {
+async function post(path, body, timeoutMs = 120000) {
   const res = await fetch(`${NODE_URL}${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   const data = await res.json();
   return { status: res.status, data, headers: res.headers };
@@ -172,6 +173,58 @@ async function run() {
 
   await test('returns 400 for inverted date range', async () => {
     const { status, data } = await post('/api/analysis/preview', {
+      bbox: [75.7, 26.8, 75.9, 27.0],
+      start_date: '2024-06-01',
+      end_date: '2024-01-01',
+    });
+    assertEqual(status, 400);
+    assertEqual(data.code, 'INVALID_DATE_RANGE');
+  });
+
+  // ── Timeseries ────────────────────────────────────────────
+
+  console.log('\nPOST /api/analysis/timeseries');
+
+  await test('returns datacube metadata for valid request', async () => {
+    const { status, data } = await post('/api/analysis/timeseries', {
+      bbox: [75.7, 26.8, 75.9, 27.0],
+      start_date: '2024-03-01',
+      end_date: '2024-03-31',
+      collection: 'sentinel-2-l2a',
+      max_cloud_cover: 30,
+      max_scenes: 5,
+      bands: ['B04', 'B03', 'B02'],
+    });
+    assertEqual(status, 200, `Expected 200, got ${status}: ${JSON.stringify(data)}`);
+    assertDefined(data.analysisId);
+    assertEqual(data.status, 'ok');
+    assert(data.scenesDiscovered > 0, 'should discover scenes');
+    assert(data.scenesSelected > 0, 'should select scenes');
+    assert(data.scenesSelected <= 5, 'should respect max_scenes');
+    assert(Array.isArray(data.cubeShape), 'cubeShape should be array');
+    assertEqual(data.cubeShape.length, 4, 'cube should be 4D (time, band, y, x)');
+    assert(Array.isArray(data.acquisitionDates), 'acquisitionDates should be array');
+    assert(Array.isArray(data.processingSteps), 'processingSteps should be array');
+    assert(data.processingSteps.length >= 5, 'should have at least 5 processing steps');
+    assertDefined(data.diagnostics);
+    assert(Array.isArray(data.selectedScenes));
+    assert(data.selectedScenes.length > 0);
+    assertDefined(data.selectedScenes[0].itemId);
+    assertDefined(data.selectedScenes[0].cloudCover);
+    assert(typeof data.selectedScenes[0].score === 'number');
+  });
+
+  await test('returns 400 for missing bbox', async () => {
+    const { status, data } = await post('/api/analysis/timeseries', {
+      start_date: '2024-03-01',
+      end_date: '2024-03-31',
+    });
+    assertEqual(status, 400);
+    assertEqual(data.code, 'INVALID_BBOX');
+  });
+
+  await test('returns 400 for inverted date range', async () => {
+    const { status, data } = await post('/api/analysis/timeseries', {
       bbox: [75.7, 26.8, 75.9, 27.0],
       start_date: '2024-06-01',
       end_date: '2024-01-01',
