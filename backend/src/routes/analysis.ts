@@ -601,6 +601,66 @@ router.post('/preprocess', optionalAuth, async (req: AuthRequest, res: Response)
   });
 });
 
+// ── GET /api/analysis/indices ──────────────────────────────────────
+
+/**
+ * List all available spectral indices and supported sensors.
+ */
+router.get('/indices', async (_req: Request, res: Response) => {
+  const result = await callPythonService('GET', '/analysis/indices', undefined, 'indices');
+  if (!result.ok) {
+    res.status(result.status || 502).json({ error: result.error, code: result.code, requestId: result.requestId });
+    return;
+  }
+  res.json({
+    requestId: result.requestId,
+    status: 'ok',
+    indices: result.data?.indices || [],
+    supportedSensors: result.data?.supported_sensors || [],
+  });
+});
+
+// ── POST /api/analysis/index ───────────────────────────────────────
+
+/**
+ * Validate and prepare a spectral index computation.
+ *
+ * Request body:
+ *   index_name: "NDVI" | "NDWI" | "NDBI" | "NBR" | "NDSI"
+ *   sensor:     "sentinel-2-l2a" | "landsat-c2-l2"
+ */
+router.post('/index', optionalAuth, async (req: AuthRequest, res: Response) => {
+  const { index_name, sensor } = req.body;
+
+  if (!index_name || typeof index_name !== 'string') {
+    res.status(400).json({ error: 'index_name is required', code: 'MISSING_INDEX' });
+    return;
+  }
+  if (!sensor || typeof sensor !== 'string') {
+    res.status(400).json({ error: 'sensor is required', code: 'MISSING_SENSOR' });
+    return;
+  }
+
+  const result = await callPythonService('POST', '/analysis/index', { index_name, sensor }, 'index');
+  if (!result.ok) {
+    res.status(result.status || 502).json({ error: result.error, code: result.code, requestId: result.requestId });
+    return;
+  }
+  const data = result.data;
+  res.json({
+    requestId: result.requestId,
+    status: data?.status || 'ok',
+    indexName: data?.index_name,
+    formula: data?.formula,
+    description: data?.description,
+    sensor: data?.sensor,
+    bandsUsed: data?.bands_used,
+    supportedSensors: data?.supported_sensors,
+    validation: data?.validation,
+    message: data?.message,
+  });
+});
+
 // ── GET /api/analysis/health ───────────────────────────────────────
 
 /**

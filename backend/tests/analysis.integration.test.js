@@ -233,6 +233,71 @@ async function run() {
     assertEqual(data.code, 'INVALID_DATE_RANGE');
   });
 
+  // ── Spectral Indices ──────────────────────────────────────
+
+  console.log('\nGET /api/analysis/indices');
+
+  await test('returns all available indices', async () => {
+    const res = await fetch(`${NODE_URL}/api/analysis/indices`);
+    const data = await res.json();
+    assertEqual(res.status, 200);
+    assertEqual(data.status, 'ok');
+    assert(Array.isArray(data.indices));
+    assertEqual(data.indices.length, 5);
+    const names = data.indices.map(i => i.short_name).sort();
+    assert(names.includes('NDVI'));
+    assert(names.includes('NDWI'));
+    assert(names.includes('NDBI'));
+    assert(names.includes('NBR'));
+    assert(names.includes('NDSI'));
+    assertEqual(names.length, 5);
+    assert(Array.isArray(data.supportedSensors));
+    assert(data.supportedSensors.includes('sentinel-2-l2a'));
+  });
+
+  console.log('\nPOST /api/analysis/index');
+
+  await test('validates NDVI for Sentinel-2', async () => {
+    const { status, data } = await post('/api/analysis/index', {
+      index_name: 'NDVI',
+      sensor: 'sentinel-2-l2a',
+    });
+    assertEqual(status, 200);
+    assertEqual(data.status, 'ok');
+    assert(data.formula.includes('NIR'));
+    assert(data.formula.includes('RED'));
+    assertDefined(data.bandsUsed);
+    assert(Array.isArray(data.validation));
+    assertEqual(data.validation.length, 0);
+    assert(data.supportedSensors.includes('sentinel-2-l2a'));
+  });
+
+  await test('validates NDVI for Landsat', async () => {
+    const { status, data } = await post('/api/analysis/index', {
+      index_name: 'NDVI',
+      sensor: 'landsat-c2-l2',
+    });
+    assertEqual(status, 200);
+    assertEqual(data.status, 'ok');
+    assertDefined(data.bandsUsed);
+  });
+
+  await test('returns 400 for missing index_name', async () => {
+    const { status, data } = await post('/api/analysis/index', {
+      sensor: 'sentinel-2-l2a',
+    });
+    assertEqual(status, 400);
+    assertEqual(data.code, 'MISSING_INDEX');
+  });
+
+  await test('returns 400 for missing sensor', async () => {
+    const { status, data } = await post('/api/analysis/index', {
+      index_name: 'NDVI',
+    });
+    assertEqual(status, 400);
+    assertEqual(data.code, 'MISSING_SENSOR');
+  });
+
   // ── Preprocess ────────────────────────────────────────────
 
   console.log('\nPOST /api/analysis/preprocess');
