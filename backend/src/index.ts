@@ -7,7 +7,9 @@ import searchRouter from './routes/search';
 import datasetsRouter from './routes/datasets';
 import ingestRouter from './routes/ingest';
 import authRouter from './routes/auth';
+import analysisRouter from './routes/analysis';
 import { apiLimiter } from './middleware/rate-limit';
+import { requestIdMiddleware } from './middleware/request-id';
 
 // Load .env from backend directory
 require('dotenv').config({ path: path.join(__dirname, '../.env'), override: true });
@@ -51,6 +53,9 @@ app.get('/', (_req, res) => {
       providers: 'GET /api/search/providers',
       collections: 'GET /api/search/collections',
       datasets: 'GET /api/datasets',
+      analysisSearch: 'POST /api/analysis/search-scenes',
+      analysisPreview: 'POST /api/analysis/preview',
+      analysisHealth: 'GET /api/analysis/health',
       register: 'POST /api/auth/register',
       login: 'POST /api/auth/login',
     },
@@ -70,11 +75,15 @@ app.get('/api/health', (_req, res) => {
   });
 });
 
+// ─── Request ID (applied to all routes) ───────────────────────────────
+app.use(requestIdMiddleware);
+
 // ─── API Routes ───────────────────────────────────────────────────────
 app.use('/api/auth', authRouter);
 app.use('/api/search', searchRouter);
 app.use('/api/datasets', datasetsRouter);
 app.use('/api/ingest', ingestRouter);
+app.use('/api/analysis', analysisRouter);
 
 // ─── 404 ──────────────────────────────────────────────────────────────
 app.use('/api/*', (_req, res) => {
