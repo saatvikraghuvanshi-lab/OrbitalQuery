@@ -996,4 +996,45 @@ router.post('/flood/assess', optionalAuth, async (req: AuthRequest, res: Respons
   });
 });
 
+// ── POST /api/analysis/explain ───────────────────────────────────
+
+/**
+ * Generate a structured explanation from analysis results.
+ *
+ * In 'deterministic' mode: fact-based explanation without LLM.
+ * In 'n8n' mode: prepares payload for n8n webhook.
+ *
+ * Request body: full analysis result (from flood/assess, timeseries, etc.)
+ *   mode: "deterministic" | "n8n"
+ */
+router.post('/explain', optionalAuth, async (req: AuthRequest, res: Response) => {
+  const { mode, ...analysisResult } = req.body;
+
+  if (!analysisResult.analysis_id) {
+    res.status(400).json({ error: 'analysis_id is required', code: 'MISSING_ANALYSIS_ID' });
+    return;
+  }
+  if (!analysisResult.query) {
+    res.status(400).json({ error: 'query is required', code: 'MISSING_QUERY' });
+    return;
+  }
+
+  const pythonBody: Record<string, any> = {
+    ...analysisResult,
+    mode: mode || 'deterministic',
+  };
+
+  const result = await callPythonService('POST', '/analysis/explain', pythonBody, 'explain');
+  if (!result.ok) {
+    res.status(result.status || 502).json({ error: result.error, code: result.code, requestId: result.requestId });
+    return;
+  }
+
+  res.json({
+    requestId: result.requestId,
+    ...result.data,
+    latencyMs: result.upstreamLatencyMs,
+  });
+});
+
 export default router;

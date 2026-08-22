@@ -651,6 +651,49 @@ async function run() {
     assertEqual(data.code, 'MISSING_QUERY');
   });
 
+  // ── Explanation Pipeline ──────────────────────────────────
+
+  console.log('\nPOST /api/analysis/explain');
+
+  await test('generates deterministic explanation', async () => {
+    const { status, data } = await post('/api/analysis/explain', {
+      analysis_id: 'flood-test-001',
+      query: 'Assess flood impact in Jaipur August 2024',
+      aoi_bbox: [75.7, 26.8, 75.9, 27.0],
+      event_date: '2024-08-15',
+      selected_scenes: [
+        { item_id: 'S1A_001', sensor: 'sentinel-1-grd', role: 'pre_event', datetime: '2024-08-01T04:30:00Z' },
+        { item_id: 'S1A_002', sensor: 'sentinel-1-grd', role: 'post_event', datetime: '2024-08-17T04:30:00Z' },
+      ],
+      method: 'sar_backscatter_threshold',
+      statistics: { pre_event_vv: { mean: -12.5 }, post_event_vv: { mean: -15.8 }, vv_diff_mean: 3.3, flood_pixel_count: 25000, total_pixel_count: 4000000 },
+      change_map_summary: { flood_extent_pct: 0.625, flood_area_sq_meters: 2500000, num_flood_regions: 3, largest_region_sq_meters: 1800000 },
+      confidence: 'high',
+      limitations: ['VH not used'],
+      evidence: {},
+    });
+    assertEqual(status, 200, `Expected 200: ${JSON.stringify(data)}`);
+    assert(data.analysis_id === 'flood-test-001');
+    assert(typeof data.summary === 'string');
+    assert(data.summary.length > 10);
+    assert(Array.isArray(data.key_findings));
+    assert(data.key_findings.length > 0);
+    assert(typeof data.affected_area === 'object');
+    assert(typeof data.confidence_statement === 'string');
+    assert(Array.isArray(data.limitations));
+    assert(data.limitations.length > 0);
+    assert(Array.isArray(data.evidence_references));
+    assert(data.validated === true);
+  });
+
+  await test('returns 400 for missing analysis_id', async () => {
+    const { status, data } = await post('/api/analysis/explain', {
+      query: 'test query',
+    });
+    assertEqual(status, 400);
+    assertEqual(data.code, 'MISSING_ANALYSIS_ID');
+  });
+
   // ── Summary ────────────────────────────────────────────────
 
   console.log('\n═══════════════════════════════════════════════════');
