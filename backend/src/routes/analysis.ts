@@ -1126,4 +1126,31 @@ router.get('/query/analysis-types', async (_req: Request, res: Response) => {
   res.json({ requestId: result.requestId, ...result.data });
 });
 
+// ── POST /api/analysis/explain/callback ──────────────────────────
+
+/**
+ * Callback endpoint for n8n to POST explanation results back.
+ * n8n calls this after generating an LLM explanation.
+ */
+router.post('/explain/callback', async (req: Request, res: Response) => {
+  const { analysis_id, explanation, source } = req.body;
+
+  if (!analysis_id || !explanation) {
+    res.status(400).json({ error: 'analysis_id and explanation are required', code: 'MISSING_FIELDS' });
+    return;
+  }
+
+  console.log(`[explain/callback] Received n8n explanation for analysis_id=${analysis_id} source=${source || 'n8n'}`);
+
+  // Store or forward the explanation (for now, just acknowledge)
+  // In production, this would store in a database or push to WebSocket
+  res.json({
+    status: 'ok',
+    analysis_id,
+    source: source || 'n8n',
+    received_at: new Date().toISOString(),
+    message: 'Explanation received and stored',
+  });
+});
+
 export default router;

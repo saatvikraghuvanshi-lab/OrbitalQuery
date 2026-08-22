@@ -82,22 +82,51 @@ async def explain_analysis(request: ExplanationRequest):
     }
 
     if request.mode == "n8n":
-        # Return the prepared payload for n8n forwarding
-        payload = prepare_for_n8n(analysis_result)
-        return ExplanationResponse(
-            analysis_id=request.analysis_id,
-            summary="[n8n mode — forward payload to n8n webhook /explain]",
-            key_findings=[],
-            affected_area=request.change_map_summary,
-            spatial_findings={},
-            confidence_statement="Explanation pending n8n processing",
-            limitations=["n8n webhook not connected — use deterministic mode or set up n8n"],
-            evidence_references=[],
-            generated_at="",
-            source="n8n_pending",
-            validated=False,
-            validation_error="n8n integration not active",
-        )
+        # Forward to n8n webhook for LLM explanation
+        import os
+        import httpx
+
+        n8n_webhook_url = os.environ.get("N8N_WEBHOOK_URL")
+        if not n8n_webhook_url:
+            logger.warning("N8N_WEBHOOK_URL not set — falling back to deterministic mode")
+        else:
+            payload = prepare_for_n8n(analysis_result)
+            try:
+                async with httpx.AsyncClient(timeout=60.0) as client:
+                    resp = await client.post(
+                        n8n_webhook_url,
+                        json=payload,
+                        headers={"Content-Type": "application/json"},
+                    )
+                    if resp.status_code == 200:
+                        n8n_result = resp.json()
+                        # Validate the n8n response
+                        is_valid, error_msg = validate_explanation(
+                            n8n_result.get("explanation", n8n_result),
+                            analysis_result,
+                        )
+                        explanation_data = n8n_result.get("explanation", n8n_result)
+                        return ExplanationResponse(
+                            analysis_id=request.analysis_id,
+                            summary=explanation_data.get("summary", ""),
+                            key_findings=explanation_data.get("key_findings", []),
+                            affected_area=explanation_data.get("affected_area", {}),
+                            spatial_findings=explanation_data.get("spatial_findings", {}),
+                            confidence_statement=explanation_data.get("confidence_statement", ""),
+                            limitations=explanation_data.get("limitations", []),
+                            evidence_references=explanation_data.get("evidence_references", []),
+                            generated_at=n8n_result.get("generated_at", ""),
+                            source="n8n",
+                            validated=is_valid,
+                            validation_error=error_msg,
+                        )
+                    else:
+                        logger.error("n8n webhook returned %d: %s", resp.status_code, resp.text[:200])
+            except Exception as e:
+                logger.error("n8n webhook call failed: %s", e)
+
+        # Fallback to deterministic if n8n fails
+        logger.info("Falling back to deterministic explanation")
 
     # Deterministic mode
     try:

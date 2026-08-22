@@ -11,7 +11,7 @@
         }
       },
       "id": "webhook-1",
-      "name": "Webhook",
+      "name": "OrbitalQuery Result Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
       "position": [200, 300],
@@ -43,6 +43,15 @@
                 "type": "object",
                 "operation": "exists"
               }
+            },
+            {
+              "id": "validate-query",
+              "leftValue": "={{ $json.body.query }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists"
+              }
             }
           ],
           "combinator": "and"
@@ -56,10 +65,10 @@
     },
     {
       "parameters": {
-        "jsCode": "// ── Build evidence context for LLM ──────────────────────────\n// Extract ONLY verified facts from the analysis result.\n// The LLM receives pre-computed data — it does NOT compute anything.\n\nconst input = $input.first().json.body;\n\nconst evidenceContext = {\n  // What the user asked\n  user_question: input.query || 'No query provided',\n  \n  // Analysis plan\n  analysis_type: input.analysis_plan?.analysis_type || input.method || 'unknown',\n  aoi: input.aoi_bbox || [],\n  event_date: input.event_date || null,\n  \n  // Computed statistics (already calculated by Python engine)\n  statistics: input.statistics || {},\n  change_map_summary: input.change_map_summary || {},\n  \n  // Scenes used as evidence\n  selected_scenes: (input.selected_scenes || []).map(s => ({\n    id: s.item_id || s.id,\n    sensor: s.sensor || 'unknown',\n    role: s.role || 'unknown',\n    datetime: s.datetime || 'unknown',\n  })),\n  \n  // Processing metadata\n  method: input.method || 'unknown',\n  confidence: input.confidence || 'unknown',\n  limitations: input.limitations || [],\n  processing_steps: input.processing_steps || [],\n  \n  // Evidence/provenance\n  evidence: input.evidence || {},\n  analysis_id: input.analysis_id || 'unknown',\n};\n\nreturn [{ json: evidenceContext }];"
+        "jsCode": "// ── Validate & Prepare Context ──────────────────────────────\n// Extract ONLY verified facts from the analysis result.\n// The LLM receives pre-computed data — it does NOT compute anything.\n\nconst input = $input.first().json.body;\n\nconst evidenceContext = {\n  user_question: input.query || 'No query provided',\n  analysis_type: input.analysis_plan?.analysis_type || input.method || 'unknown',\n  aoi: input.aoi_bbox || [],\n  event_date: input.event_date || null,\n  statistics: input.statistics || {},\n  change_map_summary: input.change_map_summary || {},\n  selected_scenes: (input.selected_scenes || []).map(s => ({\n    id: s.item_id || s.id,\n    sensor: s.sensor || 'unknown',\n    role: s.role || 'unknown',\n    datetime: s.datetime || 'unknown',\n  })),\n  method: input.method || 'unknown',\n  confidence: input.confidence || 'unknown',\n  limitations: input.limitations || [],\n  processing_steps: input.processing_steps || [],\n  evidence: input.evidence || {},\n  analysis_id: input.analysis_id || 'unknown',\n};\n\nreturn [{ json: evidenceContext }];"
       },
       "id": "build-context-1",
-      "name": "Build Evidence Context",
+      "name": "Validate & Prepare Context",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [640, 200]
@@ -69,19 +78,16 @@
         "text": "=You are an Earth Observation analyst explaining satellite analysis results to a user.\n\nCRITICAL RULES:\n- NEVER invent measurements, dates, or dataset names.\n- NEVER claim certainty beyond the supplied confidence level.\n- NEVER fabricate satellite imagery or sensor data.\n- ALWAYS distinguish computed findings from your interpretation.\n- ALWAYS mention the supplied limitations.\n- ALWAYS cite evidence IDs provided in the context.\n- Use ONLY the statistics, evidence, and processing steps provided.\n\n## Analysis Result to Explain\n\n**User Question:** {{ $json.user_question }}\n\n**Analysis Type:** {{ $json.analysis_type }}\n**Method:** {{ $json.method }}\n**Confidence:** {{ $json.confidence }}\n\n**Computed Statistics:**\n{{ JSON.stringify($json.statistics, null, 2) }}\n\n**Change Map Summary:**\n{{ JSON.stringify($json.change_map_summary, null, 2) }}\n\n**Selected Scenes:**\n{{ JSON.stringify($json.selected_scenes, null, 2) }}\n\n**Processing Steps:**\n{{ $json.processing_steps.map(s => s.step + ': ' + s.detail).join('\\n') }}\n\n**Limitations:**\n{{ $json.limitations.join('\\n') || 'None specified' }}\n\n**Evidence:**\n{{ JSON.stringify($json.evidence, null, 2) }}\n\n## Your Task\n\nGenerate a structured JSON response with:\n1. **summary**: 2-3 sentence overview of findings\n2. **key_findings**: Array of factual findings (each with `finding`, `evidence_id`, `confidence`)\n3. **affected_area**: Area statistics from the computed data\n4. **spatial_findings**: Where changes were detected (from statistics)\n5. **confidence_statement**: Honest assessment using the supplied confidence level\n6. **limitations**: The supplied limitations, explained in plain language\n7. **evidence_references**: List of scene IDs and what they show\n\nReturn ONLY valid JSON. No markdown fences.",
         "options": {}
       },
-      "id": "llm-explain-1",
-      "name": "LLM Explanation",
+      "id": "intelli-synth-1",
+      "name": "Intelligence Synthesizer",
       "type": "n8n-nodes-base.openAi",
-      "typeVersion": 1,
-      "position": [860, 200],
-      "parameters": {
-        "model": "gpt-4o-mini",
-        "messages": {
-          "values": [
-            {
-              "content": "=You are an Earth Observation analyst explaining satellite analysis results to a user.\n\nCRITICAL RULES:\n- NEVER invent measurements, dates, or dataset names.\n- NEVER claim certainty beyond the supplied confidence level.\n- NEVER fabricate satellite imagery or sensor data.\n- ALWAYS distinguish computed findings from your interpretation.\n- ALWAYS mention the supplied limitations.\n- ALWAYS cite evidence IDs provided in the context.\n- Use ONLY the statistics, evidence, and processing steps provided.\n\n## Analysis Result to Explain\n\n**User Question:** {{ $json.user_question }}\n\n**Analysis Type:** {{ $json.analysis_type }}\n**Method:** {{ $json.method }}\n**Confidence:** {{ $json.confidence }}\n\n**Computed Statistics:**\n{{ JSON.stringify($json.statistics, null, 2) }}\n\n**Change Map Summary:**\n{{ JSON.stringify($json.change_map_summary, null, 2) }}\n\n**Selected Scenes:**\n{{ JSON.stringify($json.selected_scenes, null, 2) }}\n\n**Processing Steps:**\n{{ $json.processing_steps.map(s => s.step + ': ' + s.detail).join('\\n') }}\n\n**Limitations:**\n{{ $json.limitations.join('\\n') || 'None specified' }}\n\n**Evidence:**\n{{ JSON.stringify($json.evidence, null, 2) }}\n\n## Your Task\n\nGenerate a structured JSON response with:\n1. **summary**: 2-3 sentence overview of findings\n2. **key_findings**: Array of factual findings (each with finding, evidence_id, confidence)\n3. **affected_area**: Area statistics from the computed data\n4. **spatial_findings**: Where changes were detected (from statistics)\n5. **confidence_statement**: Honest assessment using the supplied confidence level\n6. **limitations**: The supplied limitations, explained in plain language\n7. **evidence_references**: List of scene IDs and what they show\n\nReturn ONLY valid JSON. No markdown fences."
-            }
-          ]
+      "typeVersion": 1.4,
+      "position": [900, 200],
+      "typeVersion2": 1.4,
+      "credentials": {
+        "openAiApi": {
+          "id": "OPENAI_CREDENTIAL_ID",
+          "name": "OpenAI API"
         }
       },
       "parameters2": {
@@ -94,13 +100,13 @@
     },
     {
       "parameters": {
-        "jsCode": "// ── Validate LLM output ─────────────────────────────────────\n// Ensure the LLM returned valid JSON with required fields.\n// If invalid, route to human review.\n\nconst llmOutput = $input.first().json;\nconst evidenceContext = $('Build Evidence Context').first().json;\n\nlet explanation;\ntry {\n  // Try to parse the LLM output as JSON\n  const content = llmOutput.choices?.[0]?.message?.content || llmOutput.text || JSON.stringify(llmOutput);\n  explanation = typeof content === 'string' ? JSON.parse(content) : content;\n} catch (e) {\n  // LLM returned invalid JSON — route to human review\n  return [{\n    json: {\n      valid: false,\n      reason: 'LLM returned invalid JSON: ' + e.message,\n      raw_output: llmOutput,\n      needs_human_review: true,\n    }\n  }];\n}\n\n// Validate required fields\nconst requiredFields = ['summary', 'key_findings', 'confidence_statement', 'limitations'];\nconst missing = requiredFields.filter(f => !explanation[f]);\n\nif (missing.length > 0) {\n  return [{\n    json: {\n      valid: false,\n      reason: 'Missing required fields: ' + missing.join(', '),\n      raw_output: explanation,\n      needs_human_review: true,\n    }\n  }];\n}\n\n// Validate that key_findings is an array\nif (!Array.isArray(explanation.key_findings)) {\n  return [{\n    json: {\n      valid: false,\n      reason: 'key_findings must be an array',\n      raw_output: explanation,\n      needs_human_review: true,\n    }\n  }];\n}\n\n// Validate that no measurements exceed what was computed\n// (basic sanity check)\nif (explanation.affected_area) {\n  const computedArea = evidenceContext.change_map_summary?.flood_area_sq_meters;\n  if (computedArea && explanation.affected_area.area_sq_meters) {\n    const claimed = explanation.affected_area.area_sq_meters;\n    if (claimed > computedArea * 2) {\n      return [{\n        json: {\n          valid: false,\n          reason: 'Claimed area (' + claimed + ') exceeds computed area (' + computedArea + ') by more than 2x',\n          raw_output: explanation,\n          needs_human_review: true,\n        }\n      }];\n    }\n  }\n}\n\n// Validation passed\nreturn [{\n  json: {\n    valid: true,\n    explanation: explanation,\n    needs_human_review: false,\n  }\n}];"
+        "jsCode": "// ── Validate LLM output ─────────────────────────────────────\n// Ensure the LLM returned valid JSON with required fields.\n\nconst llmOutput = $input.first().json;\nconst evidenceContext = $('Validate & Prepare Context').first().json;\n\nlet explanation;\ntry {\n  const content = llmOutput.choices?.[0]?.message?.content || llmOutput.text || JSON.stringify(llmOutput);\n  explanation = typeof content === 'string' ? JSON.parse(content) : content;\n} catch (e) {\n  return [{\n    json: {\n      valid: false,\n      reason: 'LLM returned invalid JSON: ' + e.message,\n      raw_output: llmOutput,\n      needs_human_review: true,\n    }\n  }];\n}\n\nconst requiredFields = ['summary', 'key_findings', 'confidence_statement', 'limitations'];\nconst missing = requiredFields.filter(f => !explanation[f]);\n\nif (missing.length > 0) {\n  return [{\n    json: {\n      valid: false,\n      reason: 'Missing required fields: ' + missing.join(', '),\n      raw_output: explanation,\n      needs_human_review: true,\n    }\n  }];\n}\n\nif (!Array.isArray(explanation.key_findings)) {\n  return [{\n    json: {\n      valid: false,\n      reason: 'key_findings must be an array',\n      raw_output: explanation,\n      needs_human_review: true,\n    }\n  }];\n}\n\n// Sanity check: claimed area shouldn't exceed computed area by >10%\nif (explanation.affected_area) {\n  const computedArea = evidenceContext.change_map_summary?.flood_area_sq_meters\n    || evidenceContext.change_map_summary?.changed_area_sq_meters;\n  if (computedArea && explanation.affected_area.affected_area_sq_meters) {\n    const claimed = explanation.affected_area.affected_area_sq_meters;\n    if (claimed > computedArea * 1.1) {\n      return [{\n        json: {\n          valid: false,\n          reason: 'Claimed area (' + claimed + ') exceeds computed area (' + computedArea + ') by >10%',\n          raw_output: explanation,\n          needs_human_review: true,\n        }\n      }];\n    }\n  }\n}\n\nreturn [{\n  json: {\n    valid: true,\n    explanation: explanation,\n    needs_human_review: false,\n  }\n}];"
       },
       "id": "validate-output-1",
       "name": "Validate Output",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1080, 200]
+      "position": [1120, 200]
     },
     {
       "parameters": {
@@ -128,27 +134,66 @@
       "name": "Route by Validity",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [1300, 200]
+      "position": [1340, 200]
     },
     {
       "parameters": {
-        "jsCode": "// ── Generate Report ──────────────────────────────────────────\n// Build a formatted report from the validated explanation.\n\nconst input = $input.first().json;\nconst explanation = input.explanation;\nconst evidenceContext = $('Build Evidence Context').first().json;\n\n// Build formatted report\nconst report = {\n  // Analysis metadata\n  analysis_id: evidenceContext.analysis_id,\n  generated_at: new Date().toISOString(),\n  \n  // Explanation content\n  summary: explanation.summary,\n  key_findings: explanation.key_findings || [],\n  affected_area: explanation.affected_area || evidenceContext.change_map_summary,\n  spatial_findings: explanation.spatial_findings || {},\n  \n  // Confidence and limitations\n  confidence_statement: explanation.confidence_statement,\n  limitations: explanation.limitations || evidenceContext.limitations,\n  \n  // Evidence trail\n  evidence_references: explanation.evidence_references || [],\n  scenes_used: evidenceContext.selected_scenes,\n  \n  // Provenance\n  method: evidenceContext.method,\n  computed_statistics: evidenceContext.statistics,\n  processing_steps: evidenceContext.processing_steps,\n  \n  // Human review flag\n  human_review: false,\n};\n\nreturn [{ json: report }];"
+        "jsCode": "// ── Generate Report ──────────────────────────────────────────\nconst input = $input.first().json;\nconst explanation = input.explanation;\nconst evidenceContext = $('Validate & Prepare Context').first().json;\n\nconst report = {\n  analysis_id: evidenceContext.analysis_id,\n  generated_at: new Date().toISOString(),\n  summary: explanation.summary,\n  key_findings: explanation.key_findings || [],\n  affected_area: explanation.affected_area || evidenceContext.change_map_summary,\n  spatial_findings: explanation.spatial_findings || {},\n  confidence_statement: explanation.confidence_statement,\n  limitations: explanation.limitations || evidenceContext.limitations,\n  evidence_references: explanation.evidence_references || [],\n  scenes_used: evidenceContext.selected_scenes,\n  method: evidenceContext.method,\n  computed_statistics: evidenceContext.statistics,\n  processing_steps: evidenceContext.processing_steps,\n  human_review: false,\n};\n\nreturn [{ json: report }];"
       },
       "id": "generate-report-1",
       "name": "Generate Report",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1520, 100]
+      "position": [1560, 100]
     },
     {
       "parameters": {
-        "jsCode": "// ── Human Review Branch ─────────────────────────────────────\n// When validation fails, package for human review.\n\nconst input = $input.first().json;\nconst evidenceContext = $('Build Evidence Context').first().json;\n\nconst reviewPackage = {\n  analysis_id: evidenceContext.analysis_id,\n  generated_at: new Date().toISOString(),\n  \n  human_review: true,\n  review_reason: input.reason || 'Validation failed',\n  \n  // Provide the raw data for human interpretation\n  raw_llm_output: input.raw_output,\n  evidence_context: evidenceContext,\n  \n  // Suggest a default explanation\n  suggested_explanation: {\n    summary: 'This analysis result requires human review before publication. The automated explanation could not be validated.',\n    key_findings: [{\n      finding: 'Automated analysis completed but explanation validation failed',\n      evidence_id: evidenceContext.analysis_id,\n      confidence: 'requires_review',\n    }],\n    affected_area: evidenceContext.change_map_summary,\n    confidence_statement: 'Pending human review',\n    limitations: [\n      ...(evidenceContext.limitations || []),\n      'Automated explanation validation failed: ' + (input.reason || 'unknown'),\n    ],\n    evidence_references: evidenceContext.selected_scenes.map(s => s.item_id || s.id),\n  },\n};\n\nreturn [{ json: reviewPackage }];"
+        "jsCode": "// ── Human Review Branch ─────────────────────────────────────\nconst input = $input.first().json;\nconst evidenceContext = $('Validate & Prepare Context').first().json;\n\nconst reviewPackage = {\n  analysis_id: evidenceContext.analysis_id,\n  generated_at: new Date().toISOString(),\n  human_review: true,\n  review_reason: input.reason || 'Validation failed',\n  raw_llm_output: input.raw_output,\n  evidence_context: evidenceContext,\n  suggested_explanation: {\n    summary: 'This analysis result requires human review before publication.',\n    key_findings: [{\n      finding: 'Automated analysis completed but explanation validation failed',\n      evidence_id: evidenceContext.analysis_id,\n      confidence: 'requires_review',\n    }],\n    affected_area: evidenceContext.change_map_summary,\n    confidence_statement: 'Pending human review',\n    limitations: [\n      ...(evidenceContext.limitations || []),\n      'Automated explanation validation failed: ' + (input.reason || 'unknown'),\n    ],\n    evidence_references: evidenceContext.selected_scenes.map(s => s.item_id || s.id),\n  },\n};\n\nreturn [{ json: reviewPackage }];"
       },
       "id": "human-review-1",
       "name": "Human Review Package",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1520, 350]
+      "position": [1560, 350]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.ORBITALQUERY_CALLBACK_URL || 'http://localhost:3001/api/analysis/explain/callback' }}",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": []
+        },
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ analysis_id: $json.analysis_id, explanation: $json, source: 'n8n' }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "callback-valid-1",
+      "name": "OrbitalQuery UI Callback",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1780, 100],
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.ORBITALQUERY_CALLBACK_URL || 'http://localhost:3001/api/analysis/explain/callback' }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ analysis_id: $json.analysis_id, explanation: $json, source: 'n8n' }) }}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "callback-review-1",
+      "name": "OrbitalQuery UI Callback (Review)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1780, 350],
+      "continueOnFail": true
     },
     {
       "parameters": {
@@ -170,7 +215,7 @@
       "name": "Respond (Valid)",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [1740, 100]
+      "position": [2000, 100]
     },
     {
       "parameters": {
@@ -192,12 +237,12 @@
       "name": "Respond (Review)",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.1,
-      "position": [1740, 350]
+      "position": [2000, 350]
     },
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={\"error\": \"Invalid input: missing analysis_id or statistics\", \"status\": \"rejected\"}",
+        "responseBody": "={\"error\": \"Invalid input: missing analysis_id, statistics, or query\", \"status\": \"rejected\"}",
         "options": {
           "responseCode": 400
         }
@@ -210,23 +255,23 @@
     }
   ],
   "connections": {
-    "Webhook": {
+    "OrbitalQuery Result Webhook": {
       "main": [
         [{ "node": "Validate Input", "type": "main", "index": 0 }]
       ]
     },
     "Validate Input": {
       "main": [
-        [{ "node": "Build Evidence Context", "type": "main", "index": 0 }],
+        [{ "node": "Validate & Prepare Context", "type": "main", "index": 0 }],
         [{ "node": "Respond (Invalid)", "type": "main", "index": 0 }]
       ]
     },
-    "Build Evidence Context": {
+    "Validate & Prepare Context": {
       "main": [
-        [{ "node": "LLM Explanation", "type": "main", "index": 0 }]
+        [{ "node": "Intelligence Synthesizer", "type": "main", "index": 0 }]
       ]
     },
-    "LLM Explanation": {
+    "Intelligence Synthesizer": {
       "main": [
         [{ "node": "Validate Output", "type": "main", "index": 0 }]
       ]
@@ -244,10 +289,20 @@
     },
     "Generate Report": {
       "main": [
-        [{ "node": "Respond (Valid)", "type": "main", "index": 0 }]
+        [{ "node": "OrbitalQuery UI Callback", "type": "main", "index": 0 }]
       ]
     },
     "Human Review Package": {
+      "main": [
+        [{ "node": "OrbitalQuery UI Callback (Review)", "type": "main", "index": 0 }]
+      ]
+    },
+    "OrbitalQuery UI Callback": {
+      "main": [
+        [{ "node": "Respond (Valid)", "type": "main", "index": 0 }]
+      ]
+    },
+    "OrbitalQuery UI Callback (Review)": {
       "main": [
         [{ "node": "Respond (Review)", "type": "main", "index": 0 }]
       ]
@@ -256,6 +311,7 @@
   "settings": {
     "executionOrder": "v1"
   },
+  "pinData": {},
   "meta": {
     "instanceId": "orbitalquery-production"
   },
