@@ -9,4 +9,6 @@ faiss_index/
 data/*.bin
 data/*.pkl
 *.pyc
+venv/
+.env.local
 .vercel/

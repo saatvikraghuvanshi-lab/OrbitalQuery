@@ -1,0 +1,17 @@
+# Core web framework
+fastapi==0.141.1
+uvicorn[standard]==0.52.4
+python-multipart==0.0.32
+
+# Data processing
+numpy==2.5.2
+httpx==0.28.1
+pydantic==2.13.4
+
+# Geospatial
+rasterio==1.5.1
+shapely==2.1.2
+pyproj==3.7.2
+
+# Utilities
+python-dotenv==1.2.3
