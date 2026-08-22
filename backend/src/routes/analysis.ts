@@ -601,6 +601,91 @@ router.post('/preprocess', optionalAuth, async (req: AuthRequest, res: Response)
   });
 });
 
+// ── POST /api/analysis/change-detect ───────────────────────────────
+
+/**
+ * Deterministic change detection between two scenes.
+ *
+ * Request body:
+ *   baseline:           2D array of index values (T1)
+ *   comparison:         2D array of index values (T2)
+ *   index_name:         "NDVI" etc.
+ *   aoi_bbox:           [west, south, east, north]
+ *   threshold:          0.2
+ *   min_region_size:    5 pixels
+ *   direction:          absolute | increase | decrease
+ *   baseline_date:      "2024-01-01"
+ *   comparison_date:    "2024-06-01"
+ */
+router.post('/change-detect', optionalAuth, async (req: AuthRequest, res: Response) => {
+  const {
+    baseline, comparison, index_name, aoi_bbox,
+    threshold, min_region_size, direction,
+    baseline_date, comparison_date, crs, resolution_meters,
+  } = req.body;
+
+  if (!baseline || !Array.isArray(baseline) || !comparison || !Array.isArray(comparison)) {
+    res.status(400).json({ error: 'baseline and comparison 2D arrays are required', code: 'MISSING_ARRAYS' });
+    return;
+  }
+  if (!index_name || typeof index_name !== 'string') {
+    res.status(400).json({ error: 'index_name is required', code: 'MISSING_INDEX' });
+    return;
+  }
+  if (!aoi_bbox || !isValidBbox(aoi_bbox)) {
+    res.status(400).json({ error: 'Valid aoi_bbox is required', code: 'INVALID_BBOX' });
+    return;
+  }
+
+  const pythonBody: Record<string, any> = {
+    baseline, comparison,
+    index_name, aoi_bbox,
+    threshold: threshold || 0.2,
+    min_region_size: min_region_size || 5,
+    direction: direction || 'absolute',
+    baseline_date: baseline_date || 'unknown',
+    comparison_date: comparison_date || 'unknown',
+    crs: crs || 'unknown',
+    resolution_meters: resolution_meters || 10.0,
+  };
+
+  const result = await callPythonService('POST', '/analysis/change-detect', pythonBody, 'change-detect');
+  if (!result.ok) {
+    res.status(result.status || 502).json({ error: result.error, code: result.code, requestId: result.requestId });
+    return;
+  }
+
+  const data = result.data;
+  // Python model uses camelCase fields directly
+  res.json({
+    requestId: result.requestId,
+    status: data?.status,
+    algorithm: data?.algorithm,
+    parameters: data?.parameters,
+    baselineDate: data?.baselineDate || data?.baseline_date,
+    comparisonDate: data?.comparisonDate || data?.comparison_date,
+    indexName: data?.indexName || data?.index_name,
+    aoiBbox: data?.aoiBbox || data?.aoi_bbox,
+    crs: data?.crs,
+    resolutionMeters: data?.resolutionMeters || data?.resolution_meters,
+    totalPixels: data?.totalPixels || data?.total_pixels,
+    changedPixels: data?.changedPixels || data?.changed_pixels,
+    unchangedPixels: data?.unchangedPixels || data?.unchanged_pixels,
+    changedPct: data?.changedPct || data?.changed_pct,
+    totalAreaSqMeters: data?.totalAreaSqMeters || data?.total_area_sq_meters,
+    changedAreaSqMeters: data?.changedAreaSqMeters || data?.changed_area_sq_meters,
+    baselineStats: data?.baselineStats || data?.baseline_stats,
+    comparisonStats: data?.comparisonStats || data?.comparison_stats,
+    differenceStats: data?.differenceStats || data?.difference_stats,
+    numRegions: data?.numRegions || data?.num_regions,
+    regions: data?.regions,
+    largestRegion: data?.largestRegion || data?.largest_region,
+    processingSteps: data?.processingSteps || data?.processing_steps,
+    reproducibility: data?.reproducibility,
+    latencyMs: result.upstreamLatencyMs,
+  });
+});
+
 // ── GET /api/analysis/indices ──────────────────────────────────────
 
 /**
@@ -674,6 +759,240 @@ router.get('/health', async (_req: Request, res: Response) => {
     node: 'ok',
     python: pythonHealthy ? 'ok' : 'unavailable',
     pythonUrl: process.env.PYTHON_SERVICE_URL || 'http://localhost:8000',
+  });
+});
+
+// ── POST /api/analysis/evidence/select ─────────────────────────────
+
+/**
+ * Rank satellite scenes by analytical suitability.
+ *
+ * Request body:
+ *   scenes:           [{id, bbox, collection, properties, assets}, ...]
+ *   aoi_bbox:         [west, south, east, north]
+ *   target_start:     "YYYY-MM-DD" (optional)
+ *   target_end:       "YYYY-MM-DD" (optional)
+ *   required_bands:   ["B04", "B08"] (optional)
+ *   max_cloud_cover:  30 (optional)
+ *   top_n:            5 (optional)
+ */
+router.post('/evidence/select', optionalAuth, async (req: AuthRequest, res: Response) => {
+  const { scenes, aoi_bbox, target_start, target_end, target_month,
+    required_bands, max_cloud_cover, weights, top_n } = req.body;
+
+  if (!scenes || !Array.isArray(scenes) || scenes.length === 0) {
+    res.status(400).json({ error: 'scenes array is required', code: 'MISSING_SCENES' });
+    return;
+  }
+  if (!aoi_bbox || !isValidBbox(aoi_bbox)) {
+    res.status(400).json({ error: 'Valid aoi_bbox is required', code: 'INVALID_BBOX' });
+    return;
+  }
+
+  const pythonBody: Record<string, any> = {
+    scenes,
+    aoi_bbox,
+  };
+  if (target_start) pythonBody.target_start = target_start;
+  if (target_end) pythonBody.target_end = target_end;
+  if (target_month) pythonBody.target_month = target_month;
+  if (required_bands) pythonBody.required_bands = required_bands;
+  if (max_cloud_cover !== undefined) pythonBody.max_cloud_cover = max_cloud_cover;
+  if (weights) pythonBody.weights = weights;
+  if (top_n) pythonBody.top_n = top_n;
+
+  const result = await callPythonService('POST', '/analysis/evidence/select', pythonBody, 'evidence-select');
+  if (!result.ok) {
+    res.status(result.status || 502).json({ error: result.error, code: result.code, requestId: result.requestId });
+    return;
+  }
+
+  res.json({
+    requestId: result.requestId,
+    ...result.data,
+    latencyMs: result.upstreamLatencyMs,
+  });
+});
+
+// ── GET /api/analysis/sensors ─────────────────────────────────────
+
+/**
+ * List all registered sensors with capabilities.
+ */
+router.get('/sensors', async (_req: Request, res: Response) => {
+  const result = await callPythonService('GET', '/analysis/sensors', undefined, 'sensors');
+  if (!result.ok) {
+    res.status(result.status || 502).json({ error: result.error, code: result.code, requestId: result.requestId });
+    return;
+  }
+  res.json({
+    requestId: result.requestId,
+    ...result.data,
+    latencyMs: result.upstreamLatencyMs,
+  });
+});
+
+// ── GET /api/analysis/sensors/:name ───────────────────────────────
+
+/**
+ * Get detailed info for a specific sensor.
+ */
+router.get('/sensors/:name', async (req: Request, res: Response) => {
+  const { name } = req.params;
+  const result = await callPythonService('GET', `/analysis/sensors/${encodeURIComponent(name)}`, undefined, 'sensor-detail');
+  if (!result.ok) {
+    res.status(result.status || 502).json({ error: result.error, code: result.code, requestId: result.requestId });
+    return;
+  }
+  res.json({
+    requestId: result.requestId,
+    ...result.data,
+    latencyMs: result.upstreamLatencyMs,
+  });
+});
+
+// ── POST /api/analysis/sentinel1/search ───────────────────────────
+
+/**
+ * Search for Sentinel-1 SAR scenes.
+ *
+ * Request body:
+ *   bbox:              [west, south, east, north]
+ *   start_date:        "YYYY-MM-DD"
+ *   end_date:          "YYYY-MM-DD"
+ *   limit:             1-50
+ *   orbit_direction:   "ascending" | "descending" (optional)
+ *   polarization:      "VV" | "VH" (optional)
+ *   acquisition_mode:  "IW" | "EW" (optional)
+ */
+router.post('/sentinel1/search', optionalAuth, async (req: AuthRequest, res: Response) => {
+  const { bbox, start_date, end_date, limit, orbit_direction, polarization, acquisition_mode } = req.body;
+
+  if (!bbox || !isValidBbox(bbox)) {
+    res.status(400).json({ error: 'Valid bbox is required', code: 'INVALID_BBOX' });
+    return;
+  }
+  if (!start_date || !end_date) {
+    res.status(400).json({ error: 'Both start_date and end_date are required', code: 'MISSING_DATE' });
+    return;
+  }
+  if (!isValidDateStr(start_date) || !isValidDateStr(end_date)) {
+    res.status(400).json({ error: 'Invalid date format', code: 'INVALID_DATE' });
+    return;
+  }
+
+  const pythonBody: Record<string, any> = {
+    bbox,
+    start_date,
+    end_date,
+    limit: limit ? Math.min(Math.max(parseInt(limit) || 10, 1), 50) : 10,
+  };
+  if (orbit_direction) pythonBody.orbit_direction = orbit_direction;
+  if (polarization) pythonBody.polarization = polarization;
+  if (acquisition_mode) pythonBody.acquisition_mode = acquisition_mode;
+
+  const result = await callPythonService('POST', '/analysis/sentinel1/search', pythonBody, 'sentinel1-search');
+  if (!result.ok) {
+    res.status(result.status || 502).json({ error: result.error, code: result.code, requestId: result.requestId });
+    return;
+  }
+
+  const data = result.data;
+  res.json({
+    requestId: result.requestId,
+    status: data?.status,
+    collection: data?.collection,
+    totalMatches: data?.total_matches,
+    returned: data?.returned,
+    polarizationsFound: data?.polarizations_found,
+    orbitDirectionsFound: data?.orbit_directions_found,
+    dateRange: data?.date_range,
+    scenes: (data?.scenes || []).map((s: any) => ({
+      itemId: s.item_id,
+      collection: s.collection,
+      datetime: s.datetime,
+      orbitDirection: s.orbit_direction,
+      orbitNumber: s.orbit_number,
+      acquisitionMode: s.acquisition_mode,
+      polarization: s.polarization,
+      bbox: s.bbox,
+      assetKeys: s.asset_keys,
+      processingLevel: s.processing_level,
+    })),
+    processingSteps: data?.processing_steps,
+    latencyMs: result.upstreamLatencyMs,
+  });
+});
+
+// ── GET /api/analysis/sentinel1/info ──────────────────────────────
+
+/**
+ * Get Sentinel-1 sensor information and analysis guidance.
+ */
+router.get('/sentinel1/info', async (_req: Request, res: Response) => {
+  const result = await callPythonService('GET', '/analysis/sentinel1/info', undefined, 'sentinel1-info');
+  if (!result.ok) {
+    res.status(result.status || 502).json({ error: result.error, code: result.code, requestId: result.requestId });
+    return;
+  }
+  res.json({
+    requestId: result.requestId,
+    ...result.data,
+    latencyMs: result.upstreamLatencyMs,
+  });
+});
+
+// ── POST /api/analysis/flood/assess ───────────────────────────────
+
+/**
+ * Flood Impact Intelligence — complete vertical workflow.
+ *
+ * Accepts natural language query + AOI, discovers Sentinel-1 scenes,
+ * and optionally runs flood detection if backscatter arrays are provided.
+ *
+ * Request body:
+ *   query:             "Assess flood impact in Jaipur"
+ *   aoi_bbox:          [west, south, east, north]
+ *   event_date:        "YYYY-MM-DD" (optional)
+ *   max_cloud_cover:   30 (optional)
+ *   vv_threshold:      3.0 (optional)
+ *   resolution_meters: 10.0 (optional)
+ *   pre_vv_db:         2D array (optional)
+ *   post_vv_db:        2D array (optional)
+ */
+router.post('/flood/assess', optionalAuth, async (req: AuthRequest, res: Response) => {
+  const { query, aoi_bbox, event_date, max_cloud_cover, vv_threshold,
+    resolution_meters, pre_vv_db, post_vv_db, pre_vh_db, post_vh_db } = req.body;
+
+  if (!query || typeof query !== 'string' || query.length < 5) {
+    res.status(400).json({ error: 'query string is required (min 5 chars)', code: 'MISSING_QUERY' });
+    return;
+  }
+  if (!aoi_bbox || !isValidBbox(aoi_bbox)) {
+    res.status(400).json({ error: 'Valid aoi_bbox is required', code: 'INVALID_BBOX' });
+    return;
+  }
+
+  const pythonBody: Record<string, any> = { query, aoi_bbox };
+  if (event_date) pythonBody.event_date = event_date;
+  if (max_cloud_cover !== undefined) pythonBody.max_cloud_cover = max_cloud_cover;
+  if (vv_threshold) pythonBody.vv_threshold = vv_threshold;
+  if (resolution_meters) pythonBody.resolution_meters = resolution_meters;
+  if (pre_vv_db) pythonBody.pre_vv_db = pre_vv_db;
+  if (post_vv_db) pythonBody.post_vv_db = post_vv_db;
+  if (pre_vh_db) pythonBody.pre_vh_db = pre_vh_db;
+  if (post_vh_db) pythonBody.post_vh_db = post_vh_db;
+
+  const result = await callPythonService('POST', '/analysis/flood/assess', pythonBody, 'flood-assess');
+  if (!result.ok) {
+    res.status(result.status || 502).json({ error: result.error, code: result.code, requestId: result.requestId });
+    return;
+  }
+
+  res.json({
+    requestId: result.requestId,
+    ...result.data,
+    latencyMs: result.upstreamLatencyMs,
   });
 });
 

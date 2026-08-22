@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import HOST, PORT, STAC_API_URL
-from app.routes import analysis, health, index, preprocess, stac, timeseries
+from app.routes import analysis, change, evidence, flood, health, index, preprocess, sensor, stac, timeseries
 
 # ── Logging ──────────────────────────────────────────────────────
 
@@ -51,6 +51,10 @@ app.include_router(analysis.router)
 app.include_router(preprocess.router)
 app.include_router(timeseries.router)
 app.include_router(index.router)
+app.include_router(change.router)
+app.include_router(evidence.router)
+app.include_router(sensor.router)
+app.include_router(flood.router)
 
 
 @app.get("/", tags=["root"])
@@ -68,7 +72,12 @@ async def root():
             "preprocess": "POST /analysis/preprocess",
             "indices": "GET /analysis/indices",
             "index": "POST /analysis/index",
+            "change_detect": "POST /analysis/change-detect",
             "timeseries": "POST /analysis/timeseries",
+            "evidence": "POST /analysis/evidence/select",
+            "sensors": "GET /analysis/sensors",
+            "sentinel1_search": "POST /analysis/sentinel1/search",
+            "flood_assess": "POST /analysis/flood/assess",
         },
     }
 
