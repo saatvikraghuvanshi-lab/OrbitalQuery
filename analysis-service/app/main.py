@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import HOST, PORT, STAC_API_URL
-from app.routes import analysis, change, evidence, explain, flood, health, index, preprocess, sensor, stac, timeseries
+from app.routes import analysis, change, evidence, explain, flood, health, index, preprocess, query, sensor, stac, timeseries
 
 # ── Logging ──────────────────────────────────────────────────────
 
@@ -56,6 +56,7 @@ app.include_router(evidence.router)
 app.include_router(explain.router)
 app.include_router(sensor.router)
 app.include_router(flood.router)
+app.include_router(query.router)
 
 
 @app.get("/", tags=["root"])

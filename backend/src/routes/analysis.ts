@@ -1037,4 +1037,93 @@ router.post('/explain', optionalAuth, async (req: AuthRequest, res: Response) =>
   });
 });
 
+// ── POST /api/analysis/query/plan ──────────────────────────────────
+
+/**
+ * Convert natural language query to a validated analysis plan.
+ *
+ * Request body:
+ *   query:           "How much of Jaipur became urbanized between 2018 and 2025?"
+ *   phenomenon:      override (optional)
+ *   aoi:             override location name (optional)
+ *   bbox:            override bounding box (optional)
+ *   start_date:      override (optional)
+ *   end_date:        override (optional)
+ *   sensor:          override (optional)
+ *   analysis_type:   override (optional)
+ */
+router.post('/query/plan', optionalAuth, async (req: AuthRequest, res: Response) => {
+  const { query, phenomenon, aoi, bbox, start_date, end_date, sensor, analysis_type, bands, cloud_threshold } = req.body;
+
+  if (!query || typeof query !== 'string' || query.length < 3) {
+    res.status(400).json({ error: 'query string is required (min 3 chars)', code: 'MISSING_QUERY' });
+    return;
+  }
+
+  const pythonBody: Record<string, any> = { query };
+  if (phenomenon) pythonBody.phenomenon = phenomenon;
+  if (aoi) pythonBody.aoi = aoi;
+  if (bbox && isValidBbox(bbox)) pythonBody.bbox = bbox;
+  if (start_date) pythonBody.start_date = start_date;
+  if (end_date) pythonBody.end_date = end_date;
+  if (sensor) pythonBody.sensor = sensor;
+  if (analysis_type) pythonBody.analysis_type = analysis_type;
+  if (bands && Array.isArray(bands)) pythonBody.bands = bands;
+  if (cloud_threshold !== undefined) pythonBody.cloud_threshold = cloud_threshold;
+
+  const result = await callPythonService('POST', '/analysis/query/plan', pythonBody, 'query-plan');
+  if (!result.ok) {
+    res.status(result.status || 502).json({ error: result.error, code: result.code, requestId: result.requestId });
+    return;
+  }
+
+  res.json({
+    requestId: result.requestId,
+    ...result.data,
+    latencyMs: result.upstreamLatencyMs,
+  });
+});
+
+// ── GET /api/analysis/query/phenomena ────────────────────────────
+
+/**
+ * List all supported analysis phenomena.
+ */
+router.get('/query/phenomena', async (_req: Request, res: Response) => {
+  const result = await callPythonService('GET', '/analysis/query/phenomena', undefined, 'query-phenomena');
+  if (!result.ok) {
+    res.status(result.status || 502).json({ error: result.error, code: result.code, requestId: result.requestId });
+    return;
+  }
+  res.json({ requestId: result.requestId, ...result.data });
+});
+
+// ── GET /api/analysis/query/locations ────────────────────────────
+
+/**
+ * List all known locations with bounding boxes.
+ */
+router.get('/query/locations', async (_req: Request, res: Response) => {
+  const result = await callPythonService('GET', '/analysis/query/locations', undefined, 'query-locations');
+  if (!result.ok) {
+    res.status(result.status || 502).json({ error: result.error, code: result.code, requestId: result.requestId });
+    return;
+  }
+  res.json({ requestId: result.requestId, ...result.data });
+});
+
+// ── GET /api/analysis/query/analysis-types ───────────────────────
+
+/**
+ * List all supported analysis types.
+ */
+router.get('/query/analysis-types', async (_req: Request, res: Response) => {
+  const result = await callPythonService('GET', '/analysis/query/analysis-types', undefined, 'query-analysis-types');
+  if (!result.ok) {
+    res.status(result.status || 502).json({ error: result.error, code: result.code, requestId: result.requestId });
+    return;
+  }
+  res.json({ requestId: result.requestId, ...result.data });
+});
+
 export default router;
