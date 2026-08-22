@@ -1,28 +1,46 @@
-"""STAC search service using pystac-client + planetary-computer."""
+"""
+STAC search service — delegates to EOProvider interface.
+
+All existing function signatures are preserved for backward compatibility.
+Internally delegates to the registered EOProvider (default: Planetary Computer).
+
+This ensures the analysis engine does not depend directly on any
+provider-specific library. Provider logic lives in eo_provider.py.
+"""
 
 from __future__ import annotations
 
 import logging
 from typing import Any, Optional
 
-import planetary_computer as pc
-from pystac_client import Client
-
-from app.config import STAC_API_URL
+from app.services.eo_provider import (
+    EOProvider,
+    get_default_provider,
+    get_provider,
+)
 
 logger = logging.getLogger(__name__)
 
-# Singleton STAC client (lazy-init)
-_client: Optional[Client] = None
 
+# ══════════════════════════════════════════════════════════════════
+# Backward-compatible API (delegates to provider)
+# ══════════════════════════════════════════════════════════════════
 
-def get_stac_client() -> Client:
-    """Get or create the STAC API client."""
-    global _client
-    if _client is None:
-        _client = Client.open(STAC_API_URL, modifier=pc.sign_inplace)
-        logger.info("Connected to STAC API: %s", STAC_API_URL)
-    return _client
+def get_stac_client():
+    """
+    Get the underlying STAC client from the default provider.
+
+    NOTE: This leaks the provider-specific client. New code should use
+    the EOProvider interface directly. Kept for backward compatibility
+    with preprocessing, sentinel1, and temporal_engine modules.
+    """
+    provider = get_default_provider()
+    if hasattr(provider, '_get_client'):
+        return provider._get_client()
+    raise NotImplementedError(
+        f"Provider '{provider.get_name()}' does not expose a raw STAC client. "
+        "Use the EOProvider.search() interface instead."
+    )
 
 
 def search_stac(
@@ -36,54 +54,29 @@ def search_stac(
     """
     Search STAC API for items matching the given parameters.
 
+    Delegates to the registered EOProvider.
+
     Returns a dict with 'items' (list of signed STAC items) and 'total'.
     """
-    client = get_stac_client()
-
-    # Build query parameters
-    search_kwargs: dict[str, Any] = {
-        "collections": [collection],
-        "max_items": limit,
-    }
-
-    if bbox:
-        search_kwargs["bbox"] = bbox
-
-    if datetime:
-        search_kwargs["datetime"] = datetime
-
-    # Add cloud cover filter via query extension
-    if max_cloud_cover is not None:
-        search_kwargs["query"] = query or {}
-        search_kwargs["query"]["eo:cloud_cover"] = {
-            "lt": max_cloud_cover
-        }
-
-    if query:
-        if "query" in search_kwargs:
-            search_kwargs["query"].update(query)
-        else:
-            search_kwargs["query"] = query
-
-    logger.info("STAC search: %s", {k: v for k, v in search_kwargs.items()})
-
-    search_results = client.search(**search_kwargs)
-
-    total = search_results.matched()
-    items = list(search_results.items())
-
-    # Sign items with Planetary Computer
-    signed_items = [pc.sign(item).to_dict() for item in items]
-
+    provider = get_default_provider()
+    result = provider.search(
+        collection=collection,
+        bbox=bbox,
+        datetime=datetime,
+        max_cloud_cover=max_cloud_cover,
+        limit=limit,
+        query=query,
+    )
     return {
-        "items": signed_items,
-        "total": total or len(signed_items),
+        "items": result.items,
+        "total": result.total,
     }
 
 
 def get_item_assets(item_dict: dict[str, Any]) -> dict[str, dict]:
     """Extract assets from a STAC item dict."""
-    return item_dict.get("assets", {})
+    provider = get_default_provider()
+    return provider.get_assets(item_dict)
 
 
 # Asset types that are NOT rasterio-compatible (JPEG/PNG renders)
@@ -111,12 +104,6 @@ def select_best_asset(
     mode='analysis': prefer GeoTIFF raster bands for windowed reads.
     mode='preview': prefer visual/rendered thumbnails.
 
-    Priority (analysis mode):
-    1. If preferred_bands given, find matching asset
-    2. Look for known raster band assets (B04, B08, etc.)
-    3. Fall back to first non-thumbnail asset
-    4. Fall back to any asset
-
     Returns (asset_key, asset_dict).
     """
     if preferred_bands:
@@ -125,23 +112,18 @@ def select_best_asset(
                 return band, assets[band]
 
     if mode == "analysis":
-        # Prefer actual raster bands for windowed reads
         for key in ["B04", "B08", "B03", "B02", "B05", "B11", "B12"]:
             if key in assets:
                 return key, assets[key]
-
-        # Any non-thumbnail asset
         for key, asset in assets.items():
             if key.lower() not in NON_RASTER_ASSETS:
                 return key, asset
 
     elif mode == "preview":
-        # Prefer visual/preview thumbnails
         for key in ["visual", "rendered_preview", "thumbnail", "preview"]:
             if key in assets:
                 return key, assets[key]
 
-    # Fall back to first asset
     if assets:
         first_key = next(iter(assets))
         return first_key, assets[first_key]
@@ -151,18 +133,15 @@ def select_best_asset(
 
 def get_asset_href(asset: dict[str, Any]) -> str:
     """Get the href from a STAC asset, preferring signed href."""
-    # Planetary Computer adds a signed href
-    return asset.get("href", "")
+    provider = get_default_provider()
+    return provider.get_asset_href(asset)
 
 
 def check_stac_api_reachable() -> bool:
-    """Check if the STAC API is reachable."""
+    """Check if the STAC API is reachable via the default provider."""
     try:
-        client = get_stac_client()
-        # Simple check — get collections
-        collections = list(client.get_collections())
-        logger.info("STAC API reachable, %d collections found", len(collections))
-        return True
+        provider = get_default_provider()
+        return provider.is_reachable()
     except Exception as e:
-        logger.error("STAC API unreachable: %s", e)
+        logger.error("Provider unreachable: %s", e)
         return False

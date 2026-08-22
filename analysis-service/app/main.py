@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import HOST, PORT, STAC_API_URL
 from app.routes import analysis, change, evidence, explain, flood, health, index, preprocess, query, sensor, stac, timeseries
+from app.services.eo_provider import init_default_provider
 
 # ── Logging ──────────────────────────────────────────────────────
 
@@ -42,6 +43,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ── Initialize EO Provider ─────────────────────────────────────
+
+init_default_provider(api_url=STAC_API_URL)
+logger.info("EO Provider initialized: planetary_computer")
 
 # ── Routes ───────────────────────────────────────────────────────
 
