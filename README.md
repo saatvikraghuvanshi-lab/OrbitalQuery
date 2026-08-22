@@ -66,6 +66,56 @@ A platform that enables researchers and decision-makers to **semantically query 
 - **🎭 Mock Mode** — Frontend works standalone with mock data when backend is offline
 
 ---
+🚨 ORBITALQUERY CONTRIBUTION RULES
+
+1. NEVER push directly to main.
+
+2. NEVER force push to main.
+
+3. NEVER delete main.
+
+4. NEVER rewrite existing repository history.
+
+5. NEVER modify existing APIs, URLs, datasets, architecture,
+   environment variables, or configuration without documenting
+   the reason.
+
+6. NEVER remove existing functionality simply to make a new
+   feature work.
+
+7. NEVER replace a working implementation without first
+   understanding its dependencies.
+
+8. NEVER commit secrets, API keys, tokens, passwords,
+   credentials, .env files, or private data.
+
+9. NEVER commit large satellite datasets or generated imagery
+   unless explicitly approved.
+
+10. NEVER blindly merge AI-generated code.
+
+11. Every AI-generated change must be reviewed by a human.
+
+12. Every feature must be developed on its own branch.
+
+13. Every branch must be submitted through a Pull Request.
+
+14. Every Pull Request must explain:
+    - What changed
+    - Why it changed
+    - Files affected
+    - Dependencies added
+    - APIs/datasets affected
+    - How it was tested
+    - Known limitations
+
+15. If a change could break existing functionality,
+    discuss it before merging.
+
+16. If unsure, DO NOT delete or overwrite.
+    Ask the repository owner first.
+
+---
 ## ACTION LIST 
 🔴 IMMEDIATELY
  Keep the existing OrbitalQuery frontend/backend.
