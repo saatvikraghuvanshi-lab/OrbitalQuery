@@ -2,27 +2,26 @@
 
 import { useState, useCallback } from 'react';
 import dynamic from 'next/dynamic';
+import Header from '@/components/Header';
+import QueryInput from '@/components/QueryInput';
+import AnalysisPlanView from '@/components/AnalysisPlanView';
+import EvidencePanel from '@/components/EvidencePanel';
+import ResultsPanel from '@/components/ResultsPanel';
+import IntelligencePanel from '@/components/IntelligencePanel';
 import SearchBar from '@/components/SearchBar';
 import FilterPanel from '@/components/FilterPanel';
 import ResultsList from '@/components/ResultsList';
 import StatsBar from '@/components/StatsBar';
-import Header from '@/components/Header';
+import { useAnalysis } from '@/hooks/useAnalysis';
 
-// Dynamic import — prevents SSR hydration issues with Leaflet
 const MapView = dynamic(() => import('@/components/MapView'), {
   ssr: false,
   loading: () => (
     <div style={{
-      width: '100%',
-      height: '560px',
-      borderRadius: '16px',
-      background: '#0d1117',
-      border: '1px solid rgba(71, 85, 105, 0.3)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      color: '#64748b',
-      fontSize: '14px',
+      width: '100%', height: '500px', borderRadius: '16px',
+      background: '#0d1117', border: '1px solid rgba(71,85,105,0.3)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      color: '#64748b', fontSize: '14px',
     }}>
       <div style={{ textAlign: 'center' }}>
         <div style={{ fontSize: '32px', marginBottom: '8px' }}>🗺️</div>
@@ -32,11 +31,10 @@ const MapView = dynamic(() => import('@/components/MapView'), {
   ),
 });
 
+// ── Types ───────────────────────────────────────────────────────
+
 export interface BoundingBox {
-  north: number;
-  south: number;
-  east: number;
-  west: number;
+  north: number; south: number; east: number; west: number;
 }
 
 export interface SearchFilters {
@@ -78,118 +76,29 @@ export interface SearchResponse {
   latencyMs: number;
 }
 
-const DEMO_QUERIES = [
-  'Deforestation near Assam 2015–2020',
-  'Urban expansion in Jaipur',
-  'Glacier retreat in Himalayas',
-  'Ocean temperature Indian Ocean',
-  'Forest fire detection',
-  'Coral reef health monitoring',
-  'Flood monitoring river basin',
-  'Nighttime city lights',
-];
+type Tab = 'ask' | 'discover';
 
-function downloadFile(content: string, filename: string, type: string) {
-  const blob = new Blob([content], { type });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
+// ── Page ────────────────────────────────────────────────────────
 
-function datasetToJSON(dataset: DatasetResult): string {
-  return JSON.stringify({
-    id: dataset.id,
-    stacId: dataset.stacId,
-    title: dataset.title,
-    description: dataset.description,
-    provider: dataset.provider,
-    collection: dataset.collection,
-    platform: dataset.platform,
-    instrument: dataset.instrument,
-    resolution_m: dataset.gsd,
-    cloud_cover_pct: dataset.cloudCover,
-    geometry: dataset.geometry,
-    bbox: dataset.bbox,
-    centroid: { lat: dataset.centroidLat, lng: dataset.centroidLng },
-    start_date: dataset.startDate,
-    end_date: dataset.endDate,
-    preview_url: dataset.previewUrl,
-    stac_link: dataset.stacLink,
-    relevance_score: dataset.score,
-  }, null, 2);
-}
+export default function HomePage() {
+  const [tab, setTab] = useState<Tab>('ask');
+  const analysis = useAnalysis();
 
-function datasetToCSVRow(dataset: DatasetResult): string {
-  const escape = (s: string | null) => s ? `"${s.replace(/"/g, '""')}"` : '';
-  return [
-    dataset.stacId || '',
-    escape(dataset.title),
-    escape(dataset.description),
-    dataset.provider,
-    dataset.collection || '',
-    dataset.platform || '',
-    dataset.instrument || '',
-    dataset.gsd || '',
-    dataset.cloudCover ?? '',
-    dataset.centroidLat ?? '',
-    dataset.centroidLng ?? '',
-    dataset.startDate || '',
-    dataset.endDate || '',
-    dataset.previewUrl || '',
-    dataset.stacLink || '',
-    dataset.score?.toFixed(4) || '',
-  ].join(',');
-}
-
-export default function Home() {
+  // Dataset discovery state (preserved from original)
   const [filters, setFilters] = useState<SearchFilters>({
-    query: '',
-    bbox: null,
-    startDate: '',
-    endDate: '',
-    provider: '',
-    collection: '',
+    query: '', bbox: null, startDate: '', endDate: '', provider: '', collection: '',
   });
-
   const [results, setResults] = useState<SearchResponse | null>(null);
-  const [loading, setLoading] = useState(false);
   const [selectedDataset, setSelectedDataset] = useState<DatasetResult | null>(null);
-  const [showFilters, setShowFilters] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [viewMode, setViewMode] = useState<'split' | 'map' | 'results'>('split');
   const [comparingIds, setComparingIds] = useState<Set<string>>(new Set());
-  const [toast, setToast] = useState<string | null>(null);
-  const [activeView, setActiveView] = useState<'split' | 'map' | 'results'>('split');
 
-  const showToast = useCallback((msg: string) => {
-    setToast(msg);
-    setTimeout(() => setToast(null), 3000);
-  }, []);
-
-  // ─── Full Reset ───────────────────────────────────────────────
-  const handleReset = useCallback(() => {
-    setResults(null);
-    setSelectedDataset(null);
-    setFilters({ query: '', bbox: null, startDate: '', endDate: '', provider: '', collection: '' });
-    setComparingIds(new Set());
-    setShowFilters(false);
-    setActiveView('split');
-  }, []);
-
-  const handleSearch = useCallback(async (query: string, overrideFilters?: Partial<SearchFilters>) => {
-    const searchFilters = { ...filters, query, ...overrideFilters };
-    setFilters(searchFilters);
+  const handleSearch = useCallback(async (searchFilters: SearchFilters) => {
     setLoading(true);
-
     try {
-      const body: any = { query, limit: 50 };
-
-      if (searchFilters.bbox) {
-        body.bbox = [searchFilters.bbox.west, searchFilters.bbox.south, searchFilters.bbox.east, searchFilters.bbox.north];
-      }
+      const body: any = { query: searchFilters.query, limit: 50 };
+      if (searchFilters.bbox) body.bbox = [searchFilters.bbox.west, searchFilters.bbox.south, searchFilters.bbox.east, searchFilters.bbox.north];
       if (searchFilters.startDate) body.startDate = searchFilters.startDate;
       if (searchFilters.endDate) body.endDate = searchFilters.endDate;
       if (searchFilters.provider) body.provider = searchFilters.provider;
@@ -200,259 +109,245 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
-
       if (!res.ok) throw new Error(`Search failed: ${res.status}`);
-
       const data: SearchResponse = await res.json();
       setResults(data);
       setSelectedDataset(null);
-    } catch (error: any) {
-      console.error('Search error:', error);
+    } catch {
       setResults({ results: [], total: 0, limit: 20, offset: 0, latencyMs: 0 });
     } finally {
       setLoading(false);
     }
-  }, [filters]);
+  }, []);
 
-  const handleExportJSON = useCallback((dataset: DatasetResult) => {
-    const json = datasetToJSON(dataset);
-    navigator.clipboard.writeText(json).then(() => {
-      showToast('📋 Metadata copied to clipboard as JSON');
-    }).catch(() => {
-      downloadFile(json, `dataset-${dataset.stacId || dataset.id}.json`, 'application/json');
-      showToast('📥 JSON file downloaded');
-    });
-  }, [showToast]);
+  // ── Analysis Workflow View ──────────────────────────────────────
 
-  const handleExportCSV = useCallback((dataset: DatasetResult) => {
-    const header = 'stac_id,title,description,provider,collection,platform,instrument,resolution_m,cloud_cover_pct,centroid_lat,centroid_lng,start_date,end_date,preview_url,stac_link,relevance_score\n';
-    const csv = header + datasetToCSVRow(dataset);
-    downloadFile(csv, `dataset-${dataset.stacId || dataset.id}.csv`, 'text/csv');
-    showToast('📥 CSV file downloaded');
-  }, [showToast]);
+  if (tab === 'ask') {
+    const step = analysis.state.step;
 
-  const handleCompareToggle = useCallback((dataset: DatasetResult) => {
-    setComparingIds(prev => {
-      const next = new Set(prev);
-      if (next.has(dataset.id)) {
-        next.delete(dataset.id);
-        showToast(`Removed "${dataset.title.substring(0, 30)}..." from comparison`);
-      } else {
-        if (next.size >= 4) {
-          showToast('⚠️ Maximum 4 datasets for comparison');
-          return prev;
-        }
-        next.add(dataset.id);
-        showToast(`Added to comparison (${next.size} selected)`);
-      }
-      return next;
-    });
-  }, [showToast]);
+    return (
+      <div className="min-h-screen bg-[#0a0e1a]">
+        <Header />
+
+        {/* Tab Bar */}
+        <div className="flex justify-center gap-1 pt-4 pb-2">
+          {(['ask', 'discover'] as Tab[]).map(t => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              className={`px-6 py-2 text-sm font-medium rounded-xl transition-all ${
+                tab === t
+                  ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
+                  : 'text-slate-500 hover:text-slate-300'
+              }`}
+            >
+              {t === 'ask' ? '🔍 Ask OrbitalQuery' : '📦 Dataset Discovery'}
+            </button>
+          ))}
+        </div>
+
+        {step === 'idle' && (
+          <QueryInput onAnalyze={analysis.analyze} loading={false} />
+        )}
+
+        {step !== 'idle' && step !== 'complete' && step !== 'error' && (
+          <div className="max-w-5xl mx-auto px-4 py-8">
+            {/* Back button */}
+            <button onClick={analysis.reset} className="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-300 mb-6 transition-colors">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+              New Analysis
+            </button>
+
+            {/* Progress Steps */}
+            <div className="flex items-center gap-2 mb-6">
+              {['planning', 'searching', 'ranking', 'processing', 'deciding', 'explaining'].map((s, i) => {
+                const isActive = s === step;
+                const isDone = ['planning', 'searching', 'ranking', 'processing', 'deciding', 'explaining'].indexOf(step) > i;
+                return (
+                  <div key={s} className="flex items-center gap-2">
+                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold transition-all ${
+                      isActive ? 'bg-blue-500 text-white animate-pulse' :
+                      isDone ? 'bg-green-500/20 text-green-400' :
+                      'bg-slate-800 text-slate-600'
+                    }`}>
+                      {isDone ? '✓' : i + 1}
+                    </div>
+                    {i < 5 && <div className={`w-8 h-0.5 ${isDone ? 'bg-green-500/30' : 'bg-slate-800'}`} />}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Step Label */}
+            <div className="text-xs text-slate-500 mb-6 capitalize">
+              {step === 'planning' && '📋 Parsing your query...'}
+              {step === 'searching' && '🛰️ Searching satellite archives...'}
+              {step === 'ranking' && '📊 Ranking evidence quality...'}
+              {step === 'processing' && '⚙️ Running analysis pipeline...'}
+              {step === 'deciding' && '🧠 Computing impact assessment...'}
+              {step === 'explaining' && '📝 Generating explanation...'}
+            </div>
+
+            {/* Partial Results */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {analysis.state.plan && <AnalysisPlanView plan={analysis.state.plan} />}
+              {analysis.state.scenes.length > 0 && <EvidencePanel scenes={analysis.state.scenes} />}
+            </div>
+          </div>
+        )}
+
+        {step === 'error' && (
+          <div className="max-w-3xl mx-auto px-4 py-12">
+            <div className="glass rounded-2xl border border-red-500/20 p-6 text-center">
+              <div className="text-3xl mb-3">❌</div>
+              <h3 className="text-sm font-bold text-red-400 mb-2">Analysis Failed</h3>
+              <p className="text-xs text-slate-500 mb-4">{analysis.state.error}</p>
+              <button onClick={analysis.reset} className="px-4 py-2 rounded-xl bg-slate-800/50 text-xs text-slate-400 hover:text-slate-300 transition-colors">
+                Try Again
+              </button>
+            </div>
+          </div>
+        )}
+
+        {step === 'complete' && analysis.state.result && (
+          <div className="max-w-6xl mx-auto px-4 py-6">
+            {/* Back button */}
+            <button onClick={analysis.reset} className="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-300 mb-4 transition-colors">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+              New Analysis
+            </button>
+
+            {/* Query summary */}
+            <div className="mb-4">
+              <h2 className="text-lg font-bold text-slate-200">
+                &quot;{analysis.state.query}&quot;
+              </h2>
+              <p className="text-xs text-slate-500 mt-1">
+                Analysis complete in {analysis.state.result.analysis_id}
+              </p>
+            </div>
+
+            {/* Main content: Map + Side Panel */}
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+              {/* Map — 3/5 width */}
+              <div className="lg:col-span-3">
+                <div className="glass rounded-2xl border border-blue-500/20 overflow-hidden">
+                  <MapView
+                    results={[]}
+                    selectedDataset={null}
+                    onSelectDataset={() => {}}
+                    bbox={analysis.state.plan?.bbox ? {
+                      north: analysis.state.plan.bbox[3],
+                      south: analysis.state.plan.bbox[1],
+                      east: analysis.state.plan.bbox[2],
+                      west: analysis.state.plan.bbox[0],
+                    } : null}
+                    onBboxChange={() => {}}
+                  />
+                </div>
+              </div>
+
+              {/* Side Panel — 2/5 width */}
+              <div className="lg:col-span-2 space-y-4 max-h-[80vh] overflow-y-auto pr-1">
+                {analysis.state.plan && <AnalysisPlanView plan={analysis.state.plan} />}
+                {analysis.state.scenes.length > 0 && <EvidencePanel scenes={analysis.state.scenes} />}
+                <ResultsPanel result={analysis.state.result} />
+                <IntelligencePanel result={analysis.state.result} />
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="text-center py-6">
+          <p className="text-[10px] text-slate-700">
+            OrbitalQuery — Powered by Bhoonidhi (ISRO), Copernicus &amp; Sentinel data. Built for researchers and decision-makers.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Dataset Discovery View (preserved original) ─────────────────
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen bg-[#0a0e1a]">
       <Header />
 
-      <main className="flex-1 px-4 sm:px-6 lg:px-8 pb-8">
-        {/* Hero Search Section */}
-        <div className="max-w-4xl mx-auto text-center pt-6 pb-6">
-          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold mb-3">
-            <span className="bg-gradient-to-r from-blue-400 via-purple-400 to-cyan-400 bg-clip-text text-transparent glow-text">
-              Explore Earth Observation Data
-            </span>
-          </h1>
-          <p className="text-slate-400 text-base sm:text-lg mb-6 max-w-2xl mx-auto">
-            Search Sentinel, Landsat, NASA, and ISRO datasets using natural language.
-            Describe what you need — our AI finds the right imagery.
-          </p>
+      {/* Tab Bar */}
+      <div className="flex justify-center gap-1 pt-4 pb-2">
+        {(['ask', 'discover'] as Tab[]).map(t => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            className={`px-6 py-2 text-sm font-medium rounded-xl transition-all ${
+              tab === t
+                ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
+                : 'text-slate-500 hover:text-slate-300'
+            }`}
+          >
+            {t === 'ask' ? '🔍 Ask OrbitalQuery' : '📦 Dataset Discovery'}
+          </button>
+        ))}
+      </div>
 
-          <SearchBar
-            onSearch={handleSearch}
-            loading={loading}
-            onToggleFilters={() => setShowFilters(!showFilters)}
-            showFilters={showFilters}
-          />
+      <SearchBar
+        onSearch={(q) => handleSearch({ ...filters, query: q })}
+        loading={loading}
+        onToggleFilters={() => {}}
+        showFilters={false}
+      />
+      <FilterPanel filters={filters} onChange={setFilters} onApply={() => handleSearch(filters)} />
 
-          {/* Quick demo queries — only show when no results */}
-          {!results && !loading && (
-            <div className="mt-5 flex flex-wrap justify-center gap-2">
-              {DEMO_QUERIES.map((q) => (
-                <button
-                  key={q}
-                  onClick={() => handleSearch(q)}
-                  className="px-3 py-1.5 text-xs rounded-full border border-slate-700/50 text-slate-400
-                    hover:border-blue-500/50 hover:text-blue-300 hover:bg-blue-500/5
-                    transition-all duration-200"
-                >
-                  {q}
-                </button>
-              ))}
-            </div>
-          )}
+      {results && <StatsBar total={results.total} latencyMs={results.latencyMs} query={filters.query} />}
+
+      <div className="max-w-[1600px] mx-auto px-4 pb-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Map */}
+          <div className="rounded-2xl overflow-hidden border border-slate-700/30" style={{ minHeight: '500px' }}>
+            <MapView
+              results={results?.results || []}
+              selectedDataset={selectedDataset}
+              onSelectDataset={setSelectedDataset}
+              bbox={filters.bbox ? { north: filters.bbox.north, south: filters.bbox.south, east: filters.bbox.east, west: filters.bbox.west } : null}
+              onBboxChange={(bbox) => setFilters(prev => ({ ...prev, bbox: bbox as BoundingBox | null }))}
+            />
+          </div>
+
+          {/* Results */}
+          <div className="space-y-3">
+            {results && (
+              <ResultsList
+                results={results.results}
+                loading={loading}
+                selectedDataset={selectedDataset}
+                onSelectDataset={setSelectedDataset}
+                comparingIds={comparingIds}
+                onCompareToggle={(ds) => {
+                  setComparingIds(prev => {
+                    const next = new Set(prev);
+                    if (next.has(ds.id)) next.delete(ds.id);
+                    else if (next.size < 4) next.add(ds.id);
+                    return next;
+                  });
+                }}
+              />
+            )}
+          </div>
         </div>
+      </div>
 
-        {/* Filters Panel */}
-        {showFilters && (
-          <FilterPanel
-            filters={filters}
-            onChange={setFilters}
-            onApply={() => handleSearch(filters.query)}
-          />
-        )}
-
-        {/* ─── Results Toolbar ─────────────────────────────────── */}
-        {results && (
-          <div className="max-w-[1600px] mx-auto mb-3">
-            <div className="flex items-center justify-between gap-4 flex-wrap">
-              {/* Left: stats + reset */}
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={handleReset}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium
-                    bg-slate-800/50 text-slate-400 border border-slate-700/50
-                    hover:text-white hover:border-blue-500/50 hover:bg-blue-500/5 transition-all"
-                >
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
-                  </svg>
-                  New Search
-                </button>
-                <StatsBar
-                  total={results.total}
-                  latencyMs={results.latencyMs}
-                  query={filters.query}
-                />
-              </div>
-
-              {/* Right: view mode tabs */}
-              <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-800/50 border border-slate-700/30">
-                {[
-                  { key: 'split' as const, label: 'Split', icon: '⊞' },
-                  { key: 'map' as const, label: 'Map', icon: '🗺️' },
-                  { key: 'results' as const, label: 'Results', icon: '📋' },
-                ].map(mode => (
-                  <button
-                    key={mode.key}
-                    onClick={() => setActiveView(mode.key)}
-                    className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${
-                      activeView === mode.key
-                        ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
-                        : 'text-slate-500 hover:text-slate-300 border border-transparent'
-                    }`}
-                  >
-                    {mode.icon} {mode.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Compare mode banner */}
-        {comparingIds.size > 0 && (
-          <div className="max-w-[1600px] mx-auto mb-3">
-            <div className="flex items-center justify-between px-4 py-2 rounded-xl bg-purple-500/10 border border-purple-500/20">
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-purple-400 font-medium">
-                  ⚖️ Comparing {comparingIds.size} dataset{comparingIds.size > 1 ? 's' : ''}
-                </span>
-                <span className="text-[10px] text-slate-500">
-                  ({comparingIds.size}/4 max)
-                </span>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => {
-                    const selected = results?.results.filter(r => comparingIds.has(r.id)) || [];
-                    const json = JSON.stringify(selected, null, 2);
-                    const ts = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-');
-                    downloadFile(json, `comparison-${ts}.json`, 'application/json');
-                    showToast(`📥 Comparison exported (${selected.length} datasets)`);
-                  }}
-                  className="text-[10px] px-2 py-1 rounded-lg bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 transition-colors"
-                >
-                  Export Comparison
-                </button>
-                <button
-                  onClick={() => { setComparingIds(new Set()); showToast('Comparison cleared'); }}
-                  className="text-[10px] px-2 py-1 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-slate-800/50 transition-colors"
-                >
-                  Clear
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ─── Main Content: Map + Results (fixed height) ──────── */}
-        {results && (
-          <div className="max-w-[1600px] mx-auto">
-            <div
-              className="flex gap-4 items-stretch"
-              style={{ height: '580px' }}
-            >
-              {/* Map View — always 580px tall */}
-              {(activeView === 'split' || activeView === 'map') && (
-                <div className={`${activeView === 'split' ? 'flex-1 min-w-0' : 'w-full'}`} style={{ height: '580px' }}>
-                  <MapView
-                    results={results?.results || []}
-                    selectedDataset={selectedDataset}
-                    onSelectDataset={setSelectedDataset}
-                    bbox={filters.bbox}
-                    onBboxChange={(bbox) => {
-                      setFilters((f) => ({ ...f, bbox }));
-                      if (filters.query) {
-                        handleSearch(filters.query, { bbox });
-                      }
-                    }}
-                  />
-                </div>
-              )}
-
-              {/* Results List — always 580px tall */}
-              {(activeView === 'split' || activeView === 'results') && (
-                <div className={`${activeView === 'split' ? 'w-full lg:w-[420px] flex-shrink-0' : 'w-full'}`} style={{ height: '580px' }}>
-                  <ResultsList
-                    results={results?.results || []}
-                    loading={loading}
-                    selectedDataset={selectedDataset}
-                    onSelectDataset={setSelectedDataset}
-                    onExportJSON={handleExportJSON}
-                    onExportCSV={handleExportCSV}
-                    onCompareToggle={handleCompareToggle}
-                    comparingIds={comparingIds}
-                  />
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-      </main>
-
-      {/* Toast notification */}
-      {toast && (
-        <div className="fixed bottom-6 right-6 z-[9999] px-4 py-2.5 rounded-xl text-sm font-medium shadow-xl animate-in slide-in-from-bottom-4"
-          style={{
-            background: 'rgba(15, 23, 42, 0.95)',
-            border: '1px solid rgba(71, 85, 105, 0.3)',
-            color: '#e2e8f0',
-            backdropFilter: 'blur(16px)',
-          }}
-        >
-          {toast}
-        </div>
-      )}
-
-      {/* Footer */}
-      <footer className="border-t border-slate-800/50 py-4 px-6 text-center text-xs text-slate-600">
-        <p>
-          OrbitalQuery — Powered by STAC APIs, Planetary Computer, Sentinel, Landsat & NASA data.
-          Built for researchers and decision-makers.
+      <div className="text-center py-6">
+        <p className="text-[10px] text-slate-700">
+          OrbitalQuery — Powered by Bhoonidhi (ISRO), Copernicus &amp; Sentinel data. Built for researchers and decision-makers.
         </p>
-        <p className="mt-1 text-[10px] text-slate-700">
-          ⚠️ This is a research tool, not for operational disaster response. Always verify data through official sources.
+        <p className="text-[9px] text-yellow-600/50 mt-1">
+          ⚠ This is a research tool, not for operational disaster response. Always verify data through official sources.
         </p>
-      </footer>
+      </div>
     </div>
   );
 }

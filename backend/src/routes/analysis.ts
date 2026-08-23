@@ -1197,4 +1197,75 @@ router.get('/providers/:name/health', async (req: Request, res: Response) => {
   res.json({ requestId: result.requestId, ...result.data });
 });
 
+// ─── Decision Intelligence ────────────────────────────────────
+
+router.post('/decision', optionalAuth, async (req: AuthRequest, res: Response) => {
+  const { analysis_type, statistics, custom_thresholds } = req.body;
+
+  if (!analysis_type || !statistics) {
+    res.status(400).json({
+      error: 'analysis_type and statistics are required',
+      code: 'MISSING_PARAMS',
+    });
+    return;
+  }
+
+  const result = await callPythonService(
+    'POST',
+    '/analysis/decision',
+    { analysis_type, statistics, custom_thresholds },
+    'decision-intelligence',
+  );
+
+  if (!result.ok) {
+    res.status(result.status || 502).json({
+      error: result.error,
+      code: result.code,
+      requestId: result.requestId,
+    });
+    return;
+  }
+  res.json({ requestId: result.requestId, ...result.data });
+});
+
+// ─── Provenance / Evidence Chain ──────────────────────────────
+
+router.post('/provenance', optionalAuth, async (req: AuthRequest, res: Response) => {
+  const result = await callPythonService('POST', '/analysis/provenance', req.body, 'provenance-record');
+  if (!result.ok) {
+    res.status(result.status || 502).json({ error: result.error, code: result.code, requestId: result.requestId });
+    return;
+  }
+  res.json({ requestId: result.requestId, ...result.data });
+});
+
+router.get('/provenance/:id', optionalAuth, async (req: AuthRequest, res: Response) => {
+  const result = await callPythonService('GET', `/analysis/provenance/${req.params.id}`, undefined, 'provenance-get');
+  if (!result.ok) {
+    res.status(result.status || 404).json({ error: result.error, code: result.code, requestId: result.requestId });
+    return;
+  }
+  res.json({ requestId: result.requestId, ...result.data });
+});
+
+router.get('/provenance/:id/evidence', optionalAuth, async (req: AuthRequest, res: Response) => {
+  const result = await callPythonService('GET', `/analysis/provenance/${req.params.id}/evidence`, undefined, 'provenance-evidence');
+  if (!result.ok) {
+    res.status(result.status || 404).json({ error: result.error, code: result.code, requestId: result.requestId });
+    return;
+  }
+  res.json({ requestId: result.requestId, ...result.data });
+});
+
+router.get('/provenance', optionalAuth, async (req: AuthRequest, res: Response) => {
+  const limit = req.query.limit || '20';
+  const offset = req.query.offset || '0';
+  const result = await callPythonService('GET', `/analysis/provenance?limit=${limit}&offset=${offset}`, undefined, 'provenance-list');
+  if (!result.ok) {
+    res.status(result.status || 502).json({ error: result.error, code: result.code, requestId: result.requestId });
+    return;
+  }
+  res.json({ requestId: result.requestId, ...result.data });
+});
+
 export default router;
