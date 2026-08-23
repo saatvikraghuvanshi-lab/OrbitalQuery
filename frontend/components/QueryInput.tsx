@@ -33,7 +33,7 @@ export default function QueryInput({ onAnalyze, loading }: QueryInputProps) {
   };
 
   return (
-    <div className="min-h-[70vh] flex flex-col items-center justify-center relative">
+    <div className="flex-1 flex flex-col items-center justify-center relative" style={{ transform: 'scale(0.9)', transformOrigin: 'center center' }}>
       {/* Concentric circle decorations */}
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-20">
         <div className="w-[1200px] h-[1200px] border border-white/5 rounded-full absolute" />
@@ -43,11 +43,11 @@ export default function QueryInput({ onAnalyze, loading }: QueryInputProps) {
 
       <div className="relative z-10 flex flex-col items-center w-full max-w-4xl px-4">
         {/* Title */}
-        <div className="text-center mb-12">
-          <h2 className="text-4xl font-medium text-white mb-4">
+        <div className="text-center mb-10">
+          <h2 className="text-3xl font-medium text-white mb-3">
             Ask a question about Earth
           </h2>
-          <p className="text-gray-500 text-lg">
+          <p className="text-gray-500 text-base">
             Powered by Sentinel, Landsat, ISRO &amp; Copernicus satellite data
           </p>
         </div>
@@ -73,9 +73,9 @@ export default function QueryInput({ onAnalyze, loading }: QueryInputProps) {
             onClick={handleSubmit}
             disabled={loading || !query.trim()}
             className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-700 disabled:text-slate-500
-              text-white px-10 py-4 rounded-lg font-bold text-lg transition-colors ml-3 shadow-lg
+              text-white px-10 py-3 rounded-lg font-bold text-base transition-colors ml-3 shadow-lg
               active:scale-[0.98]"
-          >
+            >
             {loading ? (
               <span className="flex items-center gap-2">
                 <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -103,21 +103,7 @@ export default function QueryInput({ onAnalyze, loading }: QueryInputProps) {
           ))}
         </div>
 
-        {/* Footer */}
-        <div className="text-center">
-          <p className="text-sm text-gray-500 font-mono">
-            Sentinel • Landsat • NASA • ISRO
-          </p>
-          <p className="text-sm text-gray-600 mt-1">
-            OrbitalQuery — Built for researchers and decision-makers.
-          </p>
-          <p className="text-sm text-yellow-600/80 flex items-center justify-center mt-2">
-            <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
-            This is a research tool, not for operational disaster response.
-          </p>
-        </div>
+
       </div>
     </div>
   );

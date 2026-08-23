@@ -10,9 +10,10 @@
 
 body {
   font-family: 'Inter', system-ui, sans-serif;
-  background: #0c0e12;
+  background: #0a0e1a;
   color: #e4e8f0;
   min-height: 100vh;
+  overflow: hidden;
 }
 
 /* Glass panel for search bars */

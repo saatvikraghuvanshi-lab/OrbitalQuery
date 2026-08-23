@@ -181,7 +181,7 @@ function HomePageContent() {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   if (!mounted) return (
-    <div className="min-h-screen bg-[#0c0e12]" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+    <div className="h-screen flex items-center justify-center" style={{ background: '#0a0e1a' }}>
       <div style={{ color: '#64748b', fontSize: '14px' }}>Loading OrbitalQuery...</div>
     </div>
   );
@@ -192,13 +192,8 @@ function HomePageContent() {
     const step = analysis.state.step;
 
     return (
-      <div className="min-h-screen bg-[#0c0e12]">
-        <Header
-          onAnalyze={() => {
-            const q = analysis.state.query;
-            if (q) analysis.analyze(q);
-          }}
-        />
+      <div className="h-screen flex flex-col overflow-hidden" style={{ background: '#0a0e1a' }}>
+        <Header />
 
         {/* Navigation Pills — centered in header area */}
         <div className="flex justify-center gap-3 pt-5 pb-2">
@@ -227,49 +222,53 @@ function HomePageContent() {
         )}
 
         {step !== 'idle' && step !== 'complete' && step !== 'error' && (
-          <div className="max-w-[1800px] mx-auto px-4 py-8">
-            {/* Back button */}
-            <button onClick={analysis.reset} className="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-300 mb-6 transition-colors">
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-              </svg>
-              New Analysis
-            </button>
+          <div className="flex-1 overflow-y-auto">
+            <div className="max-w-[1800px] mx-auto px-4 py-8">
+              {/* Back button — centered */}
+              <div className="flex justify-center mb-6">
+                <button onClick={analysis.reset} className="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-300 transition-colors">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                  </svg>
+                  New Analysis
+                </button>
+              </div>
 
-            {/* Progress Steps */}
-            <div className="flex items-center gap-2 mb-6">
-              {['planning', 'searching', 'ranking', 'processing', 'deciding', 'explaining'].map((s, i) => {
-                const isActive = s === step;
-                const isDone = ['planning', 'searching', 'ranking', 'processing', 'deciding', 'explaining'].indexOf(step) > i;
-                return (
-                  <div key={s} className="flex items-center gap-2">
-                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold transition-all ${
-                      isActive ? 'bg-blue-500 text-white animate-pulse' :
-                      isDone ? 'bg-green-500/20 text-green-400' :
-                      'bg-slate-800 text-slate-600'
-                    }`}>
-                      {isDone ? '✓' : i + 1}
+              {/* Progress Steps */}
+              <div className="flex items-center gap-2 mb-6">
+                {['planning', 'searching', 'ranking', 'processing', 'deciding', 'explaining'].map((s, i) => {
+                  const isActive = s === step;
+                  const isDone = ['planning', 'searching', 'ranking', 'processing', 'deciding', 'explaining'].indexOf(step) > i;
+                  return (
+                    <div key={s} className="flex items-center gap-2">
+                      <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold transition-all ${
+                        isActive ? 'bg-blue-500 text-white animate-pulse' :
+                        isDone ? 'bg-green-500/20 text-green-400' :
+                        'bg-slate-800 text-slate-600'
+                      }`}>
+                        {isDone ? '✓' : i + 1}
+                      </div>
+                      {i < 5 && <div className={`w-8 h-0.5 ${isDone ? 'bg-green-500/30' : 'bg-slate-800'}`} />}
                     </div>
-                    {i < 5 && <div className={`w-8 h-0.5 ${isDone ? 'bg-green-500/30' : 'bg-slate-800'}`} />}
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
 
-            {/* Step Label */}
-            <div className="text-xs text-slate-500 mb-6 capitalize">
-              {step === 'planning' && '📋 Parsing your query...'}
-              {step === 'searching' && '🛰️ Searching satellite archives...'}
-              {step === 'ranking' && '📊 Ranking evidence quality...'}
-              {step === 'processing' && '⚙️ Running analysis pipeline...'}
-              {step === 'deciding' && '🧠 Computing impact assessment...'}
-              {step === 'explaining' && '📝 Generating explanation...'}
-            </div>
+              {/* Step Label */}
+              <div className="text-xs text-slate-500 mb-6 capitalize">
+                {step === 'planning' && '📋 Parsing your query...'}
+                {step === 'searching' && '🛰️ Searching satellite archives...'}
+                {step === 'ranking' && '📊 Ranking evidence quality...'}
+                {step === 'processing' && '⚙️ Running analysis pipeline...'}
+                {step === 'deciding' && '🧠 Computing impact assessment...'}
+                {step === 'explaining' && '📝 Generating explanation...'}
+              </div>
 
-            {/* Partial Results */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-              {analysis.state.plan && <AnalysisPlanView plan={analysis.state.plan} />}
-              {analysis.state.scenes.length > 0 && <EvidencePanel scenes={analysis.state.scenes} />}
+              {/* Partial Results */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                {analysis.state.plan && <AnalysisPlanView plan={analysis.state.plan} />}
+                {analysis.state.scenes.length > 0 && <EvidencePanel scenes={analysis.state.scenes} />}
+              </div>
             </div>
           </div>
         )}
@@ -288,14 +287,17 @@ function HomePageContent() {
         )}
 
         {step === 'complete' && analysis.state.result && (
-          <div className="max-w-6xl mx-auto px-4 py-6">
-            {/* Back button */}
-            <button onClick={analysis.reset} className="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-300 mb-4 transition-colors">
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-              </svg>
-              New Analysis
-            </button>
+          <div className="flex-1 overflow-y-auto">
+            <div className="max-w-6xl mx-auto px-4 py-6">
+              {/* Back button — centered */}
+              <div className="flex justify-center mb-4">
+                <button onClick={analysis.reset} className="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-300 transition-colors">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                  </svg>
+                  New Analysis
+                </button>
+              </div>
 
             {/* Query summary */}
             <div className="mb-4">
@@ -336,19 +338,8 @@ function HomePageContent() {
               </div>
             </div>
           </div>
+          </div>
         )}
-
-        <div className="text-center py-6">
-          <p className="text-[10px] text-slate-600">
-            Sentinél • Landsat • NASA • ISRO
-          </p>
-          <p className="text-[10px] text-slate-700 mt-1">
-            OrbitalQuery — Built for researchers and decision-makers.
-          </p>
-          <p className="text-[9px] text-yellow-600/50 mt-1">
-            ⚠ This is a research tool, not for operational disaster response.
-          </p>
-        </div>
       </div>
     );
   }
@@ -389,11 +380,11 @@ function HomePageContent() {
   }] : [];
 
   return (
-    <div className="min-h-screen bg-[#0c0e12]">
-      <Header />
+    <div className="h-screen flex flex-col overflow-hidden" style={{ background: '#0a0e1a' }}>
+        <Header />
 
       {/* Navigation Pills */}
-      <div className="flex justify-center gap-3 pt-5 pb-2">
+      <div className="flex justify-center gap-3 pt-5 pb-2 flex-shrink-0">
         <button
           onClick={() => setTab('ask')}
           className="flex items-center space-x-2 px-6 py-2.5 rounded-full bg-[#14151a] border border-white/5 text-gray-200 text-sm font-medium hover:bg-[#1a1c23] transition-colors"
@@ -529,14 +520,6 @@ function HomePageContent() {
         </div>
       </div>
 
-      <div className="text-center py-4">
-        <p className="text-[10px] text-slate-600">
-          Sentinél • Landsat • NASA • ISRO
-        </p>
-        <p className="text-[10px] text-slate-700 mt-1">
-          OrbitalQuery — Built for researchers and decision-makers.
-        </p>
-      </div>
     </div>
   );
 }
