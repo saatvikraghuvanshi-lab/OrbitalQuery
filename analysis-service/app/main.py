@@ -48,17 +48,17 @@ app.add_middleware(
 
 import os
 
-# Register Planetary Computer as fallback (not default)
+# 1. Planetary Computer (lowest priority — registered first, overridden by others)
 init_default_provider(api_url=STAC_API_URL)
-logger.info("EO Provider initialized: planetary_computer (fallback)")
+logger.info("EO Provider initialized: planetary_computer (fallback only)")
 
-# Register Copernicus CDSE (optional — not default)
+# 2. Copernicus CDSE (secondary — works without token)
 copernicus_token = os.environ.get("COPERNICUS_TOKEN")
 copernicus_provider = CopernicusProvider(token=copernicus_token)
 register_provider(copernicus_provider, default=False)
-logger.info("EO Provider registered: copernicus_cdse")
+logger.info("EO Provider registered: copernicus_cdse (secondary)")
 
-# Register Bhoonidhi / ISRO (PRIMARY — default when credentials exist)
+# 3. Bhoonidhi / ISRO (PRIMARY — registered last to override defaults)
 bhoonidhi_user = os.environ.get("BHOONIDHI_USER")
 bhoonidhi_pass = os.environ.get("BHOONIDHI_PASS")
 if bhoonidhi_user and bhoonidhi_pass:
