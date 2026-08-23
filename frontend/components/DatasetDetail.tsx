@@ -39,7 +39,6 @@ export default function DatasetDetail({ dataset, onClose, onExportJSON, onExport
   const badge = getProviderBadge(dataset.provider);
 
   // Build user-friendly links based on dataset provider/collection
-  // Primary link: go to the best UI for browsing this dataset
   const dataPortalLinks: Record<string, { url: string; label: string; desc: string }> = {
     'sentinel-2-l2a': {
       url: 'https://browser.dataspace.copernicus.eu/',
@@ -64,19 +63,22 @@ export default function DatasetDetail({ dataset, onClose, onExportJSON, onExport
   };
   const primaryLink = dataset.collection ? dataPortalLinks[dataset.collection] || null : null;
 
-  // AWS Open Data Registry page (always works)
-  const awsRegistryLinks: Record<string, string> = {
-    'sentinel-2-l2a': 'https://registry.opendata.aws/sentinel-2/',
-    'landsat-c2-l2': 'https://registry.opendata.aws/landsat/',
-    'sentinel-1-grd': 'https://registry.opendata.aws/sentinel-1/',
-    'naip': 'https://registry.opendata.aws/naip/',
-  };
-  const awsRegistryUrl = dataset.collection ? awsRegistryLinks[dataset.collection] || 'https://registry.opendata.aws/' : null;
+  // Bhoonidhi / ISRO portal link
+  const isBhoonidhi = dataset.provider?.includes('Bhoonidhi') || dataset.provider?.includes('ISRO') || dataset.provider?.includes('ResourceSat') || dataset.provider?.includes('EOS-') || dataset.provider?.includes('NISAR') || dataset.provider?.includes('CartoSat') || dataset.collection?.startsWith('ResourceSat') || dataset.collection?.startsWith('EOS-') || dataset.collection?.startsWith('NISAR') || dataset.collection?.startsWith('CartoSat') || dataset.collection?.startsWith('Sentinel-1A') || dataset.collection?.startsWith('Novasar');
+  const bhoonidhiLink = isBhoonidhi ? {
+    url: 'https://bhoonidhi.nrsc.gov.in/',
+    label: 'Bhoonidhi (ISRO)',
+    desc: 'Download from NRSC Bhoonidhi portal'
+  } : null;
 
-  // STAC API link to the item (for developers)
-  const stacApiUrl = dataset.stacId && dataset.collection
-    ? `https://earth-search.aws.element84.com/v1/collections/${dataset.collection}/items/${dataset.stacId}`
-    : null;
+  // Use actual STAC link from search results if available
+  const actualStacUrl = (dataset as any).stacLink || null;
+
+  // STAC API link to the item
+  const stacApiUrl = actualStacUrl
+    || (dataset.stacId && dataset.collection
+      ? `https://earth-search.aws.element84.com/v1/collections/${dataset.collection}/items/${dataset.stacId}`
+      : null);
 
   return (
     <div className="glass rounded-2xl overflow-hidden border border-blue-500/20">
@@ -278,10 +280,10 @@ export default function DatasetDetail({ dataset, onClose, onExportJSON, onExport
               </a>
             )}
 
-            {/* AWS Open Data Registry */}
-            {awsRegistryUrl && (
+            {/* Bhoonidhi / ISRO Portal (for ISRO data) */}
+            {bhoonidhiLink && (
               <a
-                href={awsRegistryUrl}
+                href={bhoonidhiLink.url}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-3 p-3 rounded-xl bg-slate-800/30 hover:bg-slate-800/50 border border-slate-700/30 transition-colors group"
@@ -293,10 +295,10 @@ export default function DatasetDetail({ dataset, onClose, onExportJSON, onExport
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-[11px] font-medium text-slate-300 group-hover:text-white transition-colors">
-                    AWS Open Data
+                    {bhoonidhiLink.label}
                   </div>
                   <div className="text-[10px] text-slate-600 truncate">
-                    Free access via AWS Open Data Registry
+                    {bhoonidhiLink.desc}
                   </div>
                 </div>
                 <svg className="w-4 h-4 text-slate-600 group-hover:text-slate-400 transition-colors shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
