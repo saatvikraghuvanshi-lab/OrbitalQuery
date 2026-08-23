@@ -234,8 +234,8 @@ function HomePageContent() {
                 </button>
               </div>
 
-              {/* Progress Steps */}
-              <div className="flex items-center gap-2 mb-6">
+              {/* Progress Steps — centered */}
+              <div className="flex items-center justify-center gap-2 mb-6">
                 {['planning', 'searching', 'ranking', 'processing', 'deciding', 'explaining'].map((s, i) => {
                   const isActive = s === step;
                   const isDone = ['planning', 'searching', 'ranking', 'processing', 'deciding', 'explaining'].indexOf(step) > i;
@@ -254,8 +254,8 @@ function HomePageContent() {
                 })}
               </div>
 
-              {/* Step Label */}
-              <div className="text-xs text-slate-500 mb-6 capitalize">
+              {/* Step Label — centered */}
+              <div className="text-xs text-slate-500 mb-6 capitalize text-center">
                 {step === 'planning' && '📋 Parsing your query...'}
                 {step === 'searching' && '🛰️ Searching satellite archives...'}
                 {step === 'ranking' && '📊 Ranking evidence quality...'}
@@ -264,10 +264,12 @@ function HomePageContent() {
                 {step === 'explaining' && '📝 Generating explanation...'}
               </div>
 
-              {/* Partial Results */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                {analysis.state.plan && <AnalysisPlanView plan={analysis.state.plan} />}
-                {analysis.state.scenes.length > 0 && <EvidencePanel scenes={analysis.state.scenes} />}
+              {/* Partial Results — centered */}
+              <div className="flex justify-center">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 w-full max-w-4xl">
+                  {analysis.state.plan && <AnalysisPlanView plan={analysis.state.plan} />}
+                  {analysis.state.scenes.length > 0 && <EvidencePanel scenes={analysis.state.scenes} />}
+                </div>
               </div>
             </div>
           </div>
