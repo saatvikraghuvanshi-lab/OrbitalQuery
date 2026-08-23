@@ -100,6 +100,12 @@ export default function QueryInput({ onAnalyze, loading }: QueryInputProps) {
           ))}
         </div>
 
+        {/* Footer */}
+        <div className="text-center mt-4">
+          <p className="text-xs" style={{ color: '#9f8c8a', opacity: 0.6 }}>
+            OrbitalQuery — Powered by Bhoonidhi (ISRO), Copernicus & Sentinel data. Built for researchers and decision-makers.
+          </p>
+        </div>
 
       </div>
     </div>

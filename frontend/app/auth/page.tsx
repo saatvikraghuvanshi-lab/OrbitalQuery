@@ -272,8 +272,8 @@ export default function AuthPage() {
 
         {/* Footer */}
         <footer className="mt-8 text-center">
-          <p className="text-[10px]" style={{ color: '#9f8c8a', opacity: 0.6 }}>
-            Secured by Sentinel Network • L1C Encryption Active
+          <p className="text-xs" style={{ color: '#9f8c8a', opacity: 0.6 }}>
+            OrbitalQuery — Powered by Bhoonidhi (ISRO), Copernicus & Sentinel data. Built for researchers and decision-makers.
           </p>
         </footer>
       </div>
