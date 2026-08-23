@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import HOST, PORT, STAC_API_URL
 from app.routes import analysis, change, decision, evidence, explain, flood, health, index, preprocess, providers, provenance, query, sensor, stac, timeseries
 from app.services.eo_provider import init_default_provider, register_provider, CopernicusProvider, BhoonidhiProvider
+from app.security import RateLimitMiddleware, SecurityHeadersMiddleware, AuditMiddleware, get_cors_origins
 
 # ── Logging ──────────────────────────────────────────────────────
 
@@ -35,13 +36,23 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
-# CORS — allow the Node.js backend to call this service
+# Security middleware (applied in reverse order — last added = first executed)
+# 1. Rate limiting
+app.add_middleware(RateLimitMiddleware, max_requests=60, window_seconds=60)
+
+# 2. Security headers
+app.add_middleware(SecurityHeadersMiddleware)
+
+# 3. Audit logging
+app.add_middleware(AuditMiddleware)
+
+# CORS — use environment-aware origins (no wildcard in production)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3001", "http://localhost:3000", "*"],
+    allow_origins=get_cors_origins(),
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 # ── Initialize EO Providers ───────────────────────────────────
@@ -87,13 +98,16 @@ app.include_router(decision.router)
 app.include_router(provenance.router)
 
 
+import os as _os
+_ENV = _os.getenv("ENVIRONMENT", "development")
+
 @app.get("/", tags=["root"])
 async def root():
     """Root endpoint — service info."""
     return {
         "service": "OrbitalQuery EO Analysis Service",
         "version": "0.1.0",
-        "docs": "/docs",
+        "docs": "/docs" if _ENV != "production" else "disabled in production",
         "stac_api": STAC_API_URL,
         "endpoints": {
             "health": "GET /health",
