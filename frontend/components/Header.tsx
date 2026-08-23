@@ -27,19 +27,16 @@ export default function Header() {
     <header className="border-b border-white/5 sticky top-0 z-50" style={{ background: '#0c0e12' }}>
       <div className="max-w-[1800px] mx-auto px-6 py-3">
         <div className="flex items-center justify-between">
-          {/* Logo */}
-          <div className="flex items-center gap-3">
+          {/* Logo — PNG already has text */}
+          <div className="flex items-center">
             <Image
               src="/orbitalquery-logo.png"
               alt="ØrbitalQuery"
-              width={36}
+              width={120}
               height={36}
-              className="object-contain rounded"
+              className="object-contain"
               priority
             />
-            <span className="text-sm font-bold tracking-tight text-white hidden sm:block">
-              <span className="text-[#dc2626]">Ø</span>rbital<span className="text-[#dc2626]">Q</span>uery
-            </span>
           </div>
 
           {/* Right side: Settings + User Avatar + Logout */}
