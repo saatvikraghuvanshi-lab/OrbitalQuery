@@ -24,7 +24,7 @@ export default function Header() {
   };
 
   return (
-    <header className="border-b border-white/5 sticky top-0 z-50" style={{ background: '#0c0e12' }}>
+    <header className="border-b border-white/5 sticky top-0 z-50" style={{ background: '#0a0e1a' }}>
       <div className="max-w-[1800px] mx-auto px-6 py-3">
         <div className="flex items-center justify-between">
           {/* Logo — PNG already has text */}
