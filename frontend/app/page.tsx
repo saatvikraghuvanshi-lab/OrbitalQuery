@@ -253,13 +253,13 @@ function HomePageContent() {
                     results={[]}
                     selectedDataset={null}
                     onSelectDataset={() => {}}
-                    bbox={analysis.state.plan?.bbox ? {
+                    bbox={analysis.state.plan?.bbox && Array.isArray(analysis.state.plan.bbox) && analysis.state.plan.bbox.length >= 4 ? {
                       north: analysis.state.plan.bbox[3],
                       south: analysis.state.plan.bbox[1],
                       east: analysis.state.plan.bbox[2],
                       west: analysis.state.plan.bbox[0],
                     } : null}
-                    onBboxChange={() => {}}
+                    onBboxChange={(_bbox: any) => {}}
                   />
                 </div>
               </div>
