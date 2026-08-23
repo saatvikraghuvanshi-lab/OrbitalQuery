@@ -1197,4 +1197,35 @@ router.get('/providers/:name/health', async (req: Request, res: Response) => {
   res.json({ requestId: result.requestId, ...result.data });
 });
 
+// ─── Decision Intelligence ────────────────────────────────────
+
+router.post('/decision', optionalAuth, async (req: AuthRequest, res: Response) => {
+  const { analysis_type, statistics, custom_thresholds } = req.body;
+
+  if (!analysis_type || !statistics) {
+    res.status(400).json({
+      error: 'analysis_type and statistics are required',
+      code: 'MISSING_PARAMS',
+    });
+    return;
+  }
+
+  const result = await callPythonService(
+    'POST',
+    '/analysis/decision',
+    { analysis_type, statistics, custom_thresholds },
+    'decision-intelligence',
+  );
+
+  if (!result.ok) {
+    res.status(result.status || 502).json({
+      error: result.error,
+      code: result.code,
+      requestId: result.requestId,
+    });
+    return;
+  }
+  res.json({ requestId: result.requestId, ...result.data });
+});
+
 export default router;

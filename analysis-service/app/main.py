@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import HOST, PORT, STAC_API_URL
-from app.routes import analysis, change, evidence, explain, flood, health, index, preprocess, providers, query, sensor, stac, timeseries
+from app.routes import analysis, change, decision, evidence, explain, flood, health, index, preprocess, providers, query, sensor, stac, timeseries
 from app.services.eo_provider import init_default_provider, register_provider, CopernicusProvider, BhoonidhiProvider
 
 # ── Logging ──────────────────────────────────────────────────────
@@ -83,6 +83,7 @@ app.include_router(sensor.router)
 app.include_router(flood.router)
 app.include_router(query.router)
 app.include_router(providers.router)
+app.include_router(decision.router)
 
 
 @app.get("/", tags=["root"])
