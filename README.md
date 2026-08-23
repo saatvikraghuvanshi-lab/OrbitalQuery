@@ -66,6 +66,7 @@ A platform that enables researchers and decision-makers to **semantically query 
 - **🎭 Mock Mode** — Frontend works standalone with mock data when backend is offline
 ---
 Research Document: [ORBITALQUERY_RESEARCH_REPORT.docx](https://github.com/user-attachments/files/31349935/ORBITALQUERY_RESEARCH_REPORT.docx)
+                  credits: Priya Patel
 ---
 🚨 ORBITALQUERY CONTRIBUTION RULES
 
