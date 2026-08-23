@@ -121,10 +121,10 @@ export function useAnalysis() {
 
       // Step 2: Search for scenes
       const searchBody: any = {
-        bbox: plan.bbox || [68.0, 6.0, 97.5, 37.5],
+        bbox: plan.bbox || [75.7, 26.8, 75.9, 27.0],
         collection: plan.collection || 'sentinel-2-l2a',
-        start_date: plan.time_range?.start || '2024-01-01',
-        end_date: plan.time_range?.end || '2024-12-31',
+        start_date: plan.time_range?.start || plan.start_date || '2024-01-01',
+        end_date: plan.time_range?.end || plan.end_date || '2024-12-31',
         limit: 10,
       };
 
