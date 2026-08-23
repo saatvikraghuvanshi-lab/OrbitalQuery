@@ -88,6 +88,7 @@ function HomePageContent() {
   const [filters, setFilters] = useState<SearchFilters>({
     query: '', bbox: null, startDate: '', endDate: '', provider: '', collection: '',
   });
+  const [lastQuery, setLastQuery] = useState('');
   const [results, setResults] = useState<SearchResponse | null>(null);
   const [selectedDataset, setSelectedDataset] = useState<DatasetResult | null>(null);
   const [loading, setLoading] = useState(false);
@@ -120,6 +121,7 @@ function HomePageContent() {
       });
       if (!res.ok) throw new Error(`Search failed: ${res.status}`);
       const data: SearchResponse = await res.json();
+      setLastQuery(searchFilters.query);
       setResults(data);
       setSelectedDataset(null);
     } catch {
@@ -156,11 +158,13 @@ function HomePageContent() {
         </div>
 
         {step === 'idle' && (
-          <QueryInput onAnalyze={analysis.analyze} loading={false} />
+          <div className="max-w-5xl mx-auto px-4">
+            <QueryInput onAnalyze={analysis.analyze} loading={false} />
+          </div>
         )}
 
         {step !== 'idle' && step !== 'complete' && step !== 'error' && (
-          <div className="max-w-5xl mx-auto px-4 py-8">
+          <div className="max-w-[1800px] mx-auto px-4 py-8">
             {/* Back button */}
             <button onClick={analysis.reset} className="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-300 mb-6 transition-colors">
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -200,7 +204,7 @@ function HomePageContent() {
             </div>
 
             {/* Partial Results */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
               {analysis.state.plan && <AnalysisPlanView plan={analysis.state.plan} />}
               {analysis.state.scenes.length > 0 && <EvidencePanel scenes={analysis.state.scenes} />}
             </div>
@@ -241,9 +245,9 @@ function HomePageContent() {
             </div>
 
             {/* Main content: Map + Side Panel */}
-            <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-              {/* Map — 3/5 width */}
-              <div className="lg:col-span-3">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              {/* Map — 2/3 width */}
+              <div className="lg:col-span-2">
                 <div className="glass rounded-2xl border border-blue-500/20 overflow-hidden">
                   <MapView
                     results={[]}
@@ -260,8 +264,8 @@ function HomePageContent() {
                 </div>
               </div>
 
-              {/* Side Panel — 2/5 width */}
-              <div className="lg:col-span-2 space-y-4 max-h-[80vh] overflow-y-auto pr-1">
+              {/* Side Panel — 1/3 width */}
+              <div className="lg:col-span-1 space-y-4 max-h-[80vh] overflow-y-auto pr-1">
                 {analysis.state.plan && <AnalysisPlanView plan={analysis.state.plan} />}
                 {analysis.state.scenes.length > 0 && <EvidencePanel scenes={analysis.state.scenes} />}
                 <ResultsPanel result={analysis.state.result} />
@@ -272,8 +276,14 @@ function HomePageContent() {
         )}
 
         <div className="text-center py-6">
-          <p className="text-[10px] text-slate-700">
-            OrbitalQuery — Powered by Bhoonidhi (ISRO), Copernicus &amp; Sentinel data. Built for researchers and decision-makers.
+          <p className="text-[10px] text-slate-600">
+            Sentinél • Landsat • NASA • ISRO
+          </p>
+          <p className="text-[10px] text-slate-700 mt-1">
+            OrbitalQuery — Built for researchers and decision-makers.
+          </p>
+          <p className="text-[9px] text-yellow-600/50 mt-1">
+            ⚠ This is a research tool, not for operational disaster response.
           </p>
         </div>
       </div>
@@ -303,20 +313,25 @@ function HomePageContent() {
         ))}
       </div>
 
-      <SearchBar
-        onSearch={(q) => handleSearch({ ...filters, query: q })}
-        loading={loading}
-        onToggleFilters={() => {}}
-        showFilters={false}
-      />
-      <FilterPanel filters={filters} onChange={setFilters} onApply={() => handleSearch(filters)} />
+      <div className="max-w-4xl mx-auto px-4">
+        <SearchBar
+          onSearch={(q) => handleSearch({ ...filters, query: q })}
+          loading={loading}
+          onToggleFilters={() => {}}
+          showFilters={false}
+        />
+      </div>
+      <FilterPanel filters={filters} onChange={setFilters} onApply={() => {
+        const q = lastQuery || filters.query;
+        handleSearch({ ...filters, query: q });
+      }} />
 
-      {results && <StatsBar total={results.total} latencyMs={results.latencyMs} query={filters.query} />}
+      {results && <StatsBar total={results.total} latencyMs={results.latencyMs} query={lastQuery || filters.query} />}
 
-      <div className="max-w-[1600px] mx-auto px-4 pb-8">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {/* Map */}
-          <div className="rounded-2xl overflow-hidden border border-slate-700/30" style={{ minHeight: '500px' }}>
+      <div className="max-w-[1800px] mx-auto px-4 pb-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          {/* Map — 2/3 width */}
+          <div className="lg:col-span-2 rounded-2xl overflow-hidden border border-slate-700/30" style={{ minHeight: '500px' }}>
             <MapView
               results={results?.results || []}
               selectedDataset={selectedDataset}
@@ -326,8 +341,8 @@ function HomePageContent() {
             />
           </div>
 
-          {/* Results */}
-          <div className="space-y-3">
+          {/* Results — 1/3 width */}
+          <div className="lg:col-span-1 space-y-3">
             {results && (
               <ResultsList
                 results={results.results}
@@ -350,11 +365,14 @@ function HomePageContent() {
       </div>
 
       <div className="text-center py-6">
-        <p className="text-[10px] text-slate-700">
-          OrbitalQuery — Powered by Bhoonidhi (ISRO), Copernicus &amp; Sentinel data. Built for researchers and decision-makers.
+        <p className="text-[10px] text-slate-600">
+          Sentinél • Landsat • NASA • ISRO
+        </p>
+        <p className="text-[10px] text-slate-700 mt-1">
+          OrbitalQuery — Built for researchers and decision-makers.
         </p>
         <p className="text-[9px] text-yellow-600/50 mt-1">
-          ⚠ This is a research tool, not for operational disaster response. Always verify data through official sources.
+          ⚠ This is a research tool, not for operational disaster response.
         </p>
       </div>
     </div>
