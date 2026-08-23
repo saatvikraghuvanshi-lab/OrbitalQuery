@@ -39,7 +39,7 @@ logger = logging.getLogger("orbitalquery-security")
 # ══════════════════════════════════════════════════════════════════
 
 # AOI limits
-MAX_BBOX_AREA_DEG2 = 100.0          # max bbox area in square degrees
+MAX_BBOX_AREA_DEG2 = 1000.0         # max bbox area in square degrees (allows India-wide STAC discovery)
 MAX_BBOX_SPAN_DEG = 60.0            # max single dimension span
 MIN_BBOX_AREA_DEG2 = 0.0001         # ~11m x 11m minimum
 
@@ -674,7 +674,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
         # Only log API routes, not static files
         if path.startswith("/"):
             log_msg = sanitize_log_message(
-                f"{method} {path} → {status} ({elapsed_ms:.0f}ms) from {client_ip}"
+                f"{method} {path} -> {status} ({elapsed_ms:.0f}ms) from {client_ip}"
             )
             if status >= 500:
                 logger.error(log_msg)

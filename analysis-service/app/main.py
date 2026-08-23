@@ -74,8 +74,8 @@ bhoonidhi_user = os.environ.get("BHOONIDHI_USER")
 bhoonidhi_pass = os.environ.get("BHOONIDHI_PASS")
 if bhoonidhi_user and bhoonidhi_pass:
     bhoonidhi_provider = BhoonidhiProvider(user_id=bhoonidhi_user, password=bhoonidhi_pass)
-    register_provider(bhoonidhi_provider, default=True)  # Bhoonidhi is primary
-    logger.info("EO Provider registered: bhoonidhi (DEFAULT — ISRO data)")
+    register_provider(bhoonidhi_provider, default=False)  # Bhoonidhi is secondary (not STAC-compatible)
+    logger.info("EO Provider registered: bhoonidhi (secondary — ISRO data)")
 else:
     logger.info("Bhoonidhi skipped (set BHOONIDHI_USER + BHOONIDHI_PASS to enable)")
 

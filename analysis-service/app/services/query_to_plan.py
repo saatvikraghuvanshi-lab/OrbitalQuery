@@ -458,6 +458,22 @@ def build_analysis_plan(query: str, overrides: Optional[dict[str, Any]] = None) 
     start_date = overrides.get("start_date") or dates["start_date"]
     end_date = overrides.get("end_date") or dates["end_date"]
 
+    # Provide sensible defaults when dates are missing
+    # Prevents validation failures for queries without explicit dates
+    from datetime import date as _date, timedelta
+    if not start_date and not end_date:
+        # Default: last 12 months for temporal comparison
+        end_date = _date.today().isoformat()
+        start_date = (_date.today() - timedelta(days=365)).isoformat()
+    elif not start_date:
+        # Have end_date but no start: go back 1 year
+        from datetime import datetime as _dt
+        end_dt = _dt.fromisoformat(end_date)
+        start_date = (end_dt - timedelta(days=365)).date().isoformat()
+    elif not end_date:
+        # Have start_date but no end: use today
+        end_date = _date.today().isoformat()
+
     # 4. Select sensor and analysis type
     sensor = overrides.get("sensor") or select_sensor(phenomenon)
     analysis_type = overrides.get("analysis_type") or select_analysis_type(phenomenon)

@@ -98,13 +98,25 @@ export function useAnalysis() {
         body: JSON.stringify({ query }),
       });
 
-      if (!planRes.ok) {
-        const planErr = await planRes.json();
-        throw new Error(planErr.message || planErr.error || 'Failed to parse query');
+      let planData: any;
+      try {
+        planData = await planRes.json();
+      } catch {
+        throw new Error('Backend is unreachable. Please try again.');
       }
 
-      const planData = await planRes.json();
-      const plan = planData.plan || planData;
+      if (!planRes.ok) {
+        throw new Error(planData?.detail || planData?.message || planData?.error || 'Failed to parse query');
+      }
+
+      if (planData.status === 'error') {
+        throw new Error(planData.message || (planData.errors?.[0]) || 'Query could not be converted to an analysis plan. Please provide a location, date range, and what you want to analyze.');
+      }
+
+      const plan = planData.plan;
+      if (!plan) {
+        throw new Error('No analysis plan was generated. Please describe what you want to analyze (e.g. "Flood impact in Jaipur from July to September 2024").');
+      }
       setState(prev => ({ ...prev, step: 'searching', plan }));
 
       // Step 2: Search for scenes
@@ -123,8 +135,14 @@ export function useAnalysis() {
       });
 
       let scenes: Scene[] = [];
-      if (searchRes.ok) {
-        const searchData = await searchRes.json();
+      let searchData: any = null;
+      try {
+        searchData = await searchRes.json();
+      } catch {
+        // Non-JSON response — backend may be down
+      }
+
+      if (searchRes.ok && searchData) {
         scenes = (searchData.items || []).map((item: any) => ({
           scene_id: item.id,
           satellite: item.properties?.platform || 'Unknown',
