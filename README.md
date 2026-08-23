@@ -118,52 +118,7 @@ Research Document: [ORBITALQUERY_RESEARCH_REPORT.docx](https://github.com/user-a
     Ask the repository owner first.
 
 ---
-## ACTION LIST 
-🔴 IMMEDIATELY
- Keep the existing OrbitalQuery frontend/backend.
- Create analysis-engine Python service.
- Add pystac-client.
- Add Planetary Computer access.
- Retrieve actual Sentinel-2 assets.
- Read COGs using rasterio/rioxarray.
- Test a real AOI in India.
-🟠 NEXT
- Add stackstac.
- Build temporal cube.
- Add cloud filtering.
- Add spatial alignment.
- Implement NDVI.
- Implement NDWI.
- Implement NDBI.
- Implement NBR.
-🟡 THEN
- Build generic change-detection engine.
- Add scene ranking.
- Add area statistics.
- Generate change polygons.
- Add before/after map.
- Add timeline.
-🟢 THEN
- Add Sentinel-1.
- Build flood-impact workflow.
- Add pre/post analysis.
- Add multi-sensor evidence.
-🔵 THEN
- Integrate Prithvi.
- Test pretrained flood/damage segmentation.
- Add ML confidence.
- Compare classical vs ML result.
-🟣 THEN
- Apply for Bhoonidhi API.
- Add Bhoonidhi provider.
- Investigate NISAR integration.
- Add India-specific EO sources.
-⚫ FINALLY
- Evidence chain.
- Provenance.
- Decision report.
- Confidence/limitations.
- Beautiful demo workflow.
+
 ## 🚀 Quick Start (Zero Config)
 
 No API keys, no external database, no complex setup. Just Node.js.
