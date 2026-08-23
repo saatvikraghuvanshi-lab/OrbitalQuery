@@ -330,3 +330,120 @@ class TestProviderABC:
 
     def test_planetary_provider_is_subclass(self):
         assert issubclass(PlanetaryComputerProvider, EOProvider)
+
+    def test_bhoonidhi_provider_is_subclass(self):
+        from app.services.eo_provider import BhoonidhiProvider
+        assert issubclass(BhoonidhiProvider, EOProvider)
+
+
+# ══════════════════════════════════════════════════════════════════
+# SECTION 6: Bhoonidhi Provider (unit tests — no network)
+# ══════════════════════════════════════════════════════════════════
+
+
+class TestBhoonidhiProvider:
+    """Unit tests for BhoonidhiProvider — no network calls."""
+
+    def test_get_name(self):
+        from app.services.eo_provider import BhoonidhiProvider
+        p = BhoonidhiProvider(user_id="test", password="test")
+        assert p.get_name() == "bhoonidhi"
+
+    def test_capabilities(self):
+        from app.services.eo_provider import BhoonidhiProvider
+        p = BhoonidhiProvider(user_id="test", password="test")
+        caps = p.get_capabilities()
+        assert caps.name == "bhoonidhi"
+        assert caps.supports_stac is True
+        assert caps.supports_signed_urls is False
+        assert "sentinel-1-grd" in caps.collections
+        assert "eos-04-sar" in caps.collections
+        assert "nisar" in caps.collections
+
+    def test_map_collection_sentinel1(self):
+        from app.services.eo_provider import BhoonidhiProvider
+        p = BhoonidhiProvider(user_id="test", password="test")
+        assert p._map_collection("sentinel-1-grd") == "Sentinel-1A_SAR-IW_GRD"
+
+    def test_map_collection_unknown_passthrough(self):
+        from app.services.eo_provider import BhoonidhiProvider
+        p = BhoonidhiProvider(user_id="test", password="test")
+        assert p._map_collection("sentinel-2-l2a") == "sentinel-2-l2a"
+
+    def test_map_collection_direct_bhoonidhi_id(self):
+        from app.services.eo_provider import BhoonidhiProvider
+        p = BhoonidhiProvider(user_id="test", password="test")
+        assert p._map_collection("EOS-04_SAR-MRS_L2A") == "EOS-04_SAR-MRS_L2A"
+
+    def test_metadata_extraction(self):
+        from app.services.eo_provider import BhoonidhiProvider
+        p = BhoonidhiProvider(user_id="test", password="test")
+        item = {
+            "id": "test-item-123",
+            "collection": "eos-04-sar",
+            "bbox": [75.0, 26.0, 76.0, 27.0],
+            "geometry": {"type": "Point", "coordinates": [75.5, 26.5]},
+            "properties": {
+                "datetime": "2024-01-15T00:00:00Z",
+                "eo:cloud_cover": 5,
+                "platform": "eos-04",
+                "Online": "Y",
+            },
+            "assets": {"VV": {"href": "https://example.com/vv.tif"}},
+        }
+        meta = p.get_metadata(item)
+        assert meta["item_id"] == "test-item-123"
+        assert meta["provider"] == "bhoonidhi"
+        assert meta["online"] == "Y"
+        assert meta["cloud_cover"] == 5
+
+    def test_get_assets(self):
+        from app.services.eo_provider import BhoonidhiProvider
+        p = BhoonidhiProvider(user_id="test", password="test")
+        item = {"assets": {"VV": {"href": "x"}, "VH": {"href": "y"}}}
+        assets = p.get_assets(item)
+        assert "VV" in assets
+        assert "VH" in assets
+
+    def test_get_asset_href(self):
+        from app.services.eo_provider import BhoonidhiProvider
+        p = BhoonidhiProvider(user_id="test", password="test")
+        asset = {"href": "https://bhoonidhi-api.nrsc.gov.in/download?id=X&collection=Y"}
+        assert p.get_asset_href(asset) == asset["href"]
+
+    def test_get_asset_href_empty(self):
+        from app.services.eo_provider import BhoonidhiProvider
+        p = BhoonidhiProvider(user_id="test", password="test")
+        asset = {"href": ""}
+        href = p.get_asset_href(asset)
+        assert "download" in href or href == ""
+
+    def test_unreachable_without_credentials(self):
+        from app.services.eo_provider import BhoonidhiProvider
+        p = BhoonidhiProvider(user_id="", password="")
+        assert p.is_reachable() is False
+
+    def test_implements_interface(self):
+        from app.services.eo_provider import BhoonidhiProvider
+        assert issubclass(BhoonidhiProvider, EOProvider)
+
+
+class TestBhoonidhiCollectionMaps:
+    """Test collection mapping constants."""
+
+    def test_s1_grd_maps(self):
+        from app.services.eo_provider import ORBITAL_TO_BHOONIDHI, BHOONIDHI_COLLECTION_MAP
+        assert ORBITAL_TO_BHOONIDHI["sentinel-1-grd"] == "Sentinel-1A_SAR-IW_GRD"
+        assert BHOONIDHI_COLLECTION_MAP["sentinel-1-grd"] == "Sentinel-1A_SAR-IW_GRD"
+
+    def test_isro_collections_present(self):
+        from app.services.eo_provider import BHOONIDHI_COLLECTION_MAP
+        assert "resourcesat-2-awifs" in BHOONIDHI_COLLECTION_MAP
+        assert "eos-04-sar" in BHOONIDHI_COLLECTION_MAP
+        assert "nisar" in BHOONIDHI_COLLECTION_MAP
+        assert "cartosat" in BHOONIDHI_COLLECTION_MAP
+
+    def test_reverse_map(self):
+        from app.services.eo_provider import BHOONIDHI_REVERSE_MAP
+        assert BHOONIDHI_REVERSE_MAP["Sentinel-1A_SAR-IW_GRD"] == "sentinel-1-grd"
+        assert BHOONIDHI_REVERSE_MAP["EOS-04_SAR-MRS_L2A"] == "eos-04-sar"

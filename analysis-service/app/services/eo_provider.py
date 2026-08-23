@@ -308,6 +308,591 @@ class PlanetaryComputerProvider(EOProvider):
 
 
 # ══════════════════════════════════════════════════════════════════
+# Copernicus Data Space Ecosystem Provider
+# ══════════════════════════════════════════════════════════════════
+
+# CDSE STAC collection IDs use a different naming convention than Planetary Computer.
+# This map translates common names → CDSE collection IDs.
+CDSE_COLLECTION_MAP: dict[str, str] = {
+    "sentinel-2-l2a": "SENTINEL-2",
+    "sentinel-2-l1c": "SENTINEL-2",
+    "sentinel-1-grd": "SENTINEL-1",
+}
+
+# CDSE uses different asset key naming.
+CDSE_ASSET_MAP: dict[str, dict[str, str]] = {
+    "SENTINEL-2": {
+        "B01": "B01", "B02": "B02", "B03": "B03", "B04": "B04",
+        "B05": "B05", "B06": "B06", "B07": "B07", "B08": "B08",
+        "B8A": "B8A", "B09": "B09", "B11": "B11", "B12": "B12",
+        "SCL": "SCL", "AOT": "AOT", "WVP": "WVP",
+    },
+    "SENTINEL-1": {
+        "vv": "VV", "vh": "VH",
+    },
+}
+
+
+class CopernicusProvider(EOProvider):
+    """
+    Copernicus Data Space Ecosystem (CDSE) STAC API provider.
+
+    Uses the current documented STAC endpoint:
+    https://stac.dataspace.copernicus.eu/v1/
+
+    DO NOT use deprecated SciHub/Open Access Hub interfaces.
+
+    Handles:
+    - STAC search via pystac-client
+    - Collection ID translation (CDSE uses different names)
+    - Asset key normalization
+    - Metadata extraction from CDSE-specific properties
+    """
+
+    def __init__(self, api_url: Optional[str] = None, token: Optional[str] = None):
+        self._api_url = api_url or "https://stac.dataspace.copernicus.eu/v1/"
+        self._token = token  # Optional Bearer token for authenticated access
+        self._client = None
+
+    def _get_client(self):
+        """Lazy-init STAC client."""
+        if self._client is None:
+            from pystac_client import Client
+            headers = {}
+            if self._token:
+                headers["Authorization"] = f"Bearer {self._token}"
+            self._client = Client.open(
+                self._api_url,
+                headers=headers if headers else None,
+            )
+            logger.info("[Copernicus] Connected to %s", self._api_url)
+        return self._client
+
+    def _map_collection(self, collection: str) -> str:
+        """Translate OrbitalQuery collection name → CDSE collection ID."""
+        return CDSE_COLLECTION_MAP.get(collection, collection)
+
+    def _normalize_assets(
+        self, assets: dict[str, dict], collection: str
+    ) -> dict[str, dict]:
+        """
+        Normalize CDSE asset keys to match OrbitalQuery conventions.
+
+        CDSE may use different key names (e.g. uppercase VH vs lowercase vh).
+        We normalize to lowercase keys for consistency with the analysis engine.
+        """
+        normalized = {}
+        asset_map = CDSE_ASSET_MAP.get(collection, {})
+
+        for key, asset in assets.items():
+            # Try to find a normalized name
+            normalized_key = key
+            for our_name, cdse_name in asset_map.items():
+                if key.upper() == cdse_name.upper():
+                    normalized_key = our_name
+                    break
+
+            normalized[normalized_key] = asset
+
+        return normalized
+
+    def get_name(self) -> str:
+        return "copernicus_cdse"
+
+    def search(
+        self,
+        collection: str,
+        bbox: Optional[list[float]] = None,
+        datetime: Optional[str] = None,
+        max_cloud_cover: Optional[int] = None,
+        limit: int = 10,
+        query: Optional[dict[str, Any]] = None,
+    ) -> SearchResult:
+        client = self._get_client()
+        cdse_collection = self._map_collection(collection)
+
+        search_kwargs: dict[str, Any] = {
+            "collections": [cdse_collection],
+            "max_items": limit,
+        }
+        if bbox:
+            search_kwargs["bbox"] = bbox
+        if datetime:
+            search_kwargs["datetime"] = datetime
+        if max_cloud_cover is not None:
+            # CDSE STAC supports query extension for cloud cover
+            search_kwargs["query"] = query or {}
+            search_kwargs["query"]["eo:cloud_cover"] = {"lt": max_cloud_cover}
+        if query:
+            if "query" in search_kwargs:
+                search_kwargs["query"].update(query)
+            else:
+                search_kwargs["query"] = query
+
+        logger.info(
+            "[Copernicus] search: collection=%s (cdse=%s) params=%s",
+            collection, cdse_collection,
+            {k: v for k, v in search_kwargs.items()},
+        )
+
+        search_results = client.search(**search_kwargs)
+        total = search_results.matched()
+        items = list(search_results.items())
+
+        # Normalize items to OrbitalQuery schema
+        normalized_items = []
+        for item in items:
+            d = item.to_dict() if hasattr(item, "to_dict") else item
+            # Normalize collection name back to OrbitalQuery convention
+            d["collection"] = collection
+            # Normalize assets
+            d["assets"] = self._normalize_assets(d.get("assets", {}), cdse_collection)
+            normalized_items.append(d)
+
+        return SearchResult(
+            items=normalized_items,
+            total=total or len(normalized_items),
+            provider="copernicus_cdse",
+            collection=collection,
+            search_params=search_kwargs,
+        )
+
+    def get_item(self, collection: str, item_id: str) -> Optional[ItemDetail]:
+        client = self._get_client()
+        cdse_collection = self._map_collection(collection)
+        try:
+            item = client.get_collection(cdse_collection).get_item(item_id)
+            if item is None:
+                return None
+            d = item.to_dict() if hasattr(item, "to_dict") else item
+            d["collection"] = collection
+            d["assets"] = self._normalize_assets(d.get("assets", {}), cdse_collection)
+            return ItemDetail(
+                item_id=d.get("id", item_id),
+                collection=collection,
+                bbox=d.get("bbox", []),
+                geometry=d.get("geometry", {}),
+                properties=d.get("properties", {}),
+                assets=d.get("assets", {}),
+                provider="copernicus_cdse",
+                signed=False,
+            )
+        except Exception as e:
+            logger.error("[Copernicus] get_item failed: %s", e)
+            return None
+
+    def get_assets(self, item: dict[str, Any]) -> dict[str, dict[str, Any]]:
+        return item.get("assets", {})
+
+    def get_asset_href(self, asset: dict[str, Any]) -> str:
+        return asset.get("href", "")
+
+    def get_capabilities(self) -> ProviderCapabilities:
+        return ProviderCapabilities(
+            name="copernicus_cdse",
+            supports_stac=True,
+            supports_cloud_hosted=True,
+            supports_signed_urls=False,
+            collections=[
+                "sentinel-2-l2a", "sentinel-2-l1c",
+                "sentinel-1-grd",
+            ],
+            max_bbox_area_deg2=100.0,
+            notes=(
+                "Copernicus Data Space Ecosystem. "
+                "Free tier with rate limits. Optional Bearer token for higher limits. "
+                "STAC endpoint: stac.dataspace.copernicus.eu/v1/"
+            ),
+        )
+
+    def get_metadata(self, item: dict[str, Any]) -> dict[str, Any]:
+        props = item.get("properties", {})
+        return {
+            "item_id": item.get("id", ""),
+            "collection": item.get("collection", ""),
+            "datetime": props.get("datetime", ""),
+            "cloud_cover": props.get("eo:cloud_cover"),
+            "bbox": item.get("bbox", []),
+            "platform": props.get("platform", ""),
+            "instruments": props.get("instruments", []),
+            "created": props.get("created", ""),
+            "updated": props.get("updated", ""),
+        }
+
+    def is_reachable(self) -> bool:
+        try:
+            client = self._get_client()
+            collections = list(client.get_collections())
+            logger.info("[Copernicus] reachable, %d collections", len(collections))
+            return True
+        except Exception as e:
+            logger.error("[Copernicus] unreachable: %s", e)
+            return False
+
+
+# ══════════════════════════════════════════════════════════════════
+# Bhoonidhi / ISRO Provider
+# ══════════════════════════════════════════════════════════════════
+
+# Bhoonidhi collection IDs use ISRO naming conventions.
+# This map translates common OrbitalQuery names → Bhoonidhi collection IDs.
+BHOONIDHI_COLLECTION_MAP: dict[str, str] = {
+    "sentinel-1-grd": "Sentinel-1A_SAR-IW_GRD",
+    "sentinel-1-slc": "Sentinel-1A_SAR-IW_SLC",
+    # Indian satellite collections
+    "resourcesat-2-awifs": "ResourceSat-2_AWIFS_L2",
+    "resourcesat-2-liss3": "ResourceSat-2_LISS3_L2",
+    "resourcesat-2-liss4": "ResourceSat-2_LISS4-MX70_L2",
+    "eos-04-sar": "EOS-04_SAR-MRS_L2A",
+    "eos-06-ocm": "EOS-06_OCM-LAC_L1C",
+    "nisar": "NISAR_SSAR_GCOV",
+    "cartosat": "CartoSat-1_PAN_CartoDEM_30m",
+    "novasar": "Novasar-1_AIS",
+}
+
+# Reverse map for normalizing Bhoonidhi collection → OrbitalQuery name
+BHOONIDHI_REVERSE_MAP: dict[str, str] = {v: k for k, v in BHOONIDHI_COLLECTION_MAP.items()}
+
+# OrbitalQuery collection → Bhoonidhi collection (for search)
+# Most common: sentinel-2 is NOT on Bhoonidhi, but S1 and ISRO satellites are
+ORBITAL_TO_BHOONIDHI: dict[str, str] = {
+    "sentinel-2-l2a": None,  # Not available on Bhoonidhi
+    "sentinel-1-grd": "Sentinel-1A_SAR-IW_GRD",
+    "sentinel-1-slc": "Sentinel-1A_SAR-IW_SLC",
+}
+
+
+class BhoonidhiProvider(EOProvider):
+    """
+    ISRO Bhoonidhi STAC API provider.
+
+    Uses the official Bhoonidhi API:
+    - Auth: POST https://bhoonidhi-api.nrsc.gov.in/auth/token (JWT)
+    - Search: POST https://bhoonidhi-api.nrsc.gov.in/data/search (STAC-compatible)
+    - Download: GET https://bhoonidhi-api.nrsc.gov.in/download?id=<id>&collection=<col>
+
+    Environment variables required:
+    - BHOONIDHI_USER: Bhoonidhi userId
+    - BHOONIDHI_PASS: Bhoonidhi password
+
+    Rate limits (from official docs):
+    - Auth: 20 requests/hour/IP
+    - Search: 3 requests/second/IP
+    - Download: 3 concurrent per user/IP
+    """
+
+    AUTH_URL = "https://bhoonidhi-api.nrsc.gov.in/auth/token"
+    SEARCH_URL = "https://bhoonidhi-api.nrsc.gov.in/data/search"
+    COLLECTIONS_URL = "https://bhoonidhi-api.nrsc.gov.in/data/collections"
+    DOWNLOAD_URL = "https://bhoonidhi-api.nrsc.gov.in/download"
+
+    def __init__(
+        self,
+        user_id: Optional[str] = None,
+        password: Optional[str] = None,
+    ):
+        import os
+        self._user_id = user_id or os.environ.get("BHOONIDHI_USER", "")
+        self._password = password or os.environ.get("BHOONIDHI_PASS", "")
+        self._access_token: Optional[str] = None
+        self._refresh_token: Optional[str] = None
+        self._token_expiry: float = 0  # timestamp when token expires
+        self._http = None  # lazy httpx client
+
+    def _get_http(self):
+        """Lazy-init httpx client."""
+        if self._http is None:
+            import httpx
+            self._http = httpx.Client(timeout=30.0)
+        return self._http
+
+    def _authenticate(self) -> bool:
+        """
+        Authenticate and get JWT access token.
+
+        Token validity: ~1200 seconds (20 minutes).
+        We cache and refresh as needed.
+        """
+        import time
+
+        # Check if current token is still valid (with 60s buffer)
+        if self._access_token and time.time() < self._token_expiry - 60:
+            return True
+
+        # Try refresh first
+        if self._refresh_token:
+            try:
+                return self._do_token_request({
+                    "userId": self._user_id,
+                    "refresh_token": self._refresh_token,
+                    "grant_type": "refresh_token",
+                })
+            except Exception as e:
+                logger.warning("[Bhoonidhi] Refresh failed, trying password auth: %s", e)
+
+        # Full password authentication
+        if not self._user_id or not self._password:
+            logger.error("[Bhoonidhi] No credentials — set BHOONIDHI_USER and BHOONIDHI_PASS")
+            return False
+
+        try:
+            return self._do_token_request({
+                "userId": self._user_id,
+                "password": self._password,
+                "grant_type": "password",
+            })
+        except Exception as e:
+            logger.error("[Bhoonidhi] Auth failed: %s", e)
+            return False
+
+    def _do_token_request(self, payload: dict) -> bool:
+        """Send token request and store credentials."""
+        import time
+        http = self._get_http()
+        resp = http.post(self.AUTH_URL, json=payload)
+        resp.raise_for_status()
+        data = resp.json()
+
+        self._access_token = data.get("access_token")
+        self._refresh_token = data.get("refresh_token")
+        expires_in = data.get("expires_in", 1200)
+        self._token_expiry = time.time() + expires_in
+
+        logger.info(
+            "[Bhoonidhi] Authenticated, token expires in %ds",
+            expires_in,
+        )
+        return bool(self._access_token)
+
+    def _auth_headers(self) -> dict:
+        """Return Authorization header with current token."""
+        if not self._authenticate():
+            raise RuntimeError("Bhoonidhi authentication failed — check BHOONIDHI_USER/BHOONIDHI_PASS")
+        return {"Authorization": f"Bearer {self._access_token}"}
+
+    def _map_collection(self, collection: str) -> str:
+        """Translate OrbitalQuery collection name → Bhoonidhi collection ID."""
+        mapped = ORBITAL_TO_BHOONIDHI.get(collection)
+        if mapped:
+            return mapped
+        # Try direct Bhoonidhi collection ID (user might pass it directly)
+        if collection in BHOONIDHI_COLLECTION_MAP.values():
+            return collection
+        return collection  # pass through, let the API decide
+
+    def get_name(self) -> str:
+        return "bhoonidhi"
+
+    def search(
+        self,
+        collection: str,
+        bbox: Optional[list[float]] = None,
+        datetime: Optional[str] = None,
+        max_cloud_cover: Optional[int] = None,
+        limit: int = 10,
+        query: Optional[dict[str, Any]] = None,
+    ) -> SearchResult:
+        http = self._get_http()
+        headers = self._auth_headers()
+        bhoonidhi_collection = self._map_collection(collection)
+
+        # Bhoonidhi uses STAC-compatible POST search
+        search_body: dict[str, Any] = {
+            "collections": [bhoonidhi_collection],
+            "limit": min(limit, 500),
+        }
+
+        if bbox:
+            search_body["bbox"] = [str(b) for b in bbox]  # Bhoonidhi expects string array
+
+        if datetime:
+            search_body["datetime"] = datetime
+
+        # Cloud cover filter via CQL2 filter
+        if max_cloud_cover is not None:
+            search_body["filter"] = {
+                "args": [
+                    {"property": "eo:cloud_cover"},
+                    max_cloud_cover,
+                ],
+                "op": "lt",
+            }
+            search_body["filter-lang"] = "cql2-json"
+
+        # Additional STAC query filters
+        if query:
+            if "filter" in search_body:
+                # Merge with existing filter using AND
+                existing = search_body["filter"]
+                search_body["filter"] = {
+                    "args": [existing, query],
+                    "op": "and",
+                }
+            else:
+                search_body["filter"] = query
+                search_body["filter-lang"] = "cql2-json"
+
+        logger.info(
+            "[Bhoonidhi] search: collection=%s (bhoonidhi=%s) params=%s",
+            collection, bhoonidhi_collection,
+            {k: v for k, v in search_body.items()},
+        )
+
+        resp = http.post(self.SEARCH_URL, json=search_body, headers=headers)
+        resp.raise_for_status()
+        data = resp.json()
+
+        # Bhoonidhi returns STAC FeatureCollection
+        features = data.get("features", [])
+        context = data.get("context", {})
+        total = context.get("returned", len(features))
+
+        # Normalize items to OrbitalQuery convention
+        normalized_items = []
+        for feature in features:
+            d = feature.copy()
+            # Normalize collection back to OrbitalQuery name
+            d["collection"] = collection
+            # Ensure standard STAC structure
+            if "properties" not in d:
+                d["properties"] = {}
+            normalized_items.append(d)
+
+        return SearchResult(
+            items=normalized_items,
+            total=total,
+            provider="bhoonidhi",
+            collection=collection,
+            search_params=search_body,
+        )
+
+    def get_item(self, collection: str, item_id: str) -> Optional[ItemDetail]:
+        http = self._get_http()
+        headers = self._auth_headers()
+        bhoonidhi_collection = self._map_collection(collection)
+
+        try:
+            url = f"{self.COLLECTIONS_URL}/{bhoonidhi_collection}/items/{item_id}"
+            resp = http.get(url, headers=headers)
+            resp.raise_for_status()
+            d = resp.json()
+
+            # Normalize
+            d["collection"] = collection
+            if "properties" not in d:
+                d["properties"] = {}
+
+            return ItemDetail(
+                item_id=d.get("id", item_id),
+                collection=collection,
+                bbox=d.get("bbox", []),
+                geometry=d.get("geometry", {}),
+                properties=d.get("properties", {}),
+                assets=d.get("assets", {}),
+                provider="bhoonidhi",
+                signed=False,
+            )
+        except Exception as e:
+            logger.error("[Bhoonidhi] get_item failed: %s", e)
+            return None
+
+    def get_assets(self, item: dict[str, Any]) -> dict[str, dict[str, Any]]:
+        return item.get("assets", {})
+
+    def get_asset_href(self, asset: dict[str, Any]) -> str:
+        """
+        Get download URL for a Bhoonidhi asset.
+
+        Bhoonidhi uses a different download endpoint:
+        GET /download?id=<item_id>&collection=<collection>
+
+        The asset href from STAC may point to the download endpoint.
+        We return it as-is since it's already a valid URL.
+        """
+        href = asset.get("href", "")
+        # If href is empty, construct the download URL
+        if not href:
+            item_id = asset.get("id", "")
+            collection = asset.get("collection", "")
+            if item_id and collection:
+                return f"{self.DOWNLOAD_URL}?id={item_id}&collection={collection}"
+        return href
+
+    def get_capabilities(self) -> ProviderCapabilities:
+        return ProviderCapabilities(
+            name="bhoonidhi",
+            supports_stac=True,
+            supports_cloud_hosted=True,  # Products marked Online=Y
+            supports_signed_urls=False,  # Uses JWT auth, not signed URLs
+            collections=[
+                "sentinel-1-grd", "sentinel-1-slc",
+                "resourcesat-2-awifs", "resourcesat-2-liss3",
+                "resourcesat-2-liss4", "eos-04-sar",
+                "eos-06-ocm", "nisar", "cartosat", "novasar",
+            ],
+            max_bbox_area_deg2=100.0,
+            notes=(
+                "ISRO Bhoonidhi platform. Requires BHOONIDHI_USER/BHOONIDHI_PASS. "
+                "Rate limits: 3 search/sec, 20 auth/hr. "
+                "Unique collections: ResourceSat, EOS-04 SAR, EOS-06 OCM, NISAR, CartoSat. "
+                "NOT available: Sentinel-2 (use Planetary Computer instead)."
+            ),
+        )
+
+    def get_metadata(self, item: dict[str, Any]) -> dict[str, Any]:
+        props = item.get("properties", {})
+        return {
+            "item_id": item.get("id", ""),
+            "collection": item.get("collection", ""),
+            "datetime": props.get("datetime", ""),
+            "cloud_cover": props.get("eo:cloud_cover"),
+            "bbox": item.get("bbox", []),
+            "platform": props.get("platform", ""),
+            "instruments": props.get("instruments", []),
+            "created": props.get("created", ""),
+            "updated": props.get("updated", ""),
+            "online": props.get("Online", ""),
+            "provider": "bhoonidhi",
+        }
+
+    def is_reachable(self) -> bool:
+        """
+        Check if Bhoonidhi API is reachable.
+
+        Tries to authenticate (requires valid credentials).
+        Returns False if no credentials configured.
+        """
+        if not self._user_id or not self._password:
+            logger.warning("[Bhoonidhi] No credentials configured (BHOONIDHI_USER/BHOONIDHI_PASS)")
+            return False
+        try:
+            return self._authenticate()
+        except Exception as e:
+            logger.error("[Bhoonidhi] unreachable: %s", e)
+            return False
+
+    def logout(self) -> bool:
+        """Revoke the current session."""
+        if not self._refresh_token:
+            return True
+        try:
+            http = self._get_http()
+            resp = http.post(
+                "https://bhoonidhi-api.nrsc.gov.in/auth/logout",
+                headers={"Authorization": f"Bearer {self._refresh_token}"},
+            )
+            resp.raise_for_status()
+            self._access_token = None
+            self._refresh_token = None
+            self._token_expiry = 0
+            logger.info("[Bhoonidhi] Logged out")
+            return True
+        except Exception as e:
+            logger.error("[Bhoonidhi] Logout failed: %s", e)
+            return False
+
+
+# ══════════════════════════════════════════════════════════════════
 # Mock Provider (for testing)
 # ══════════════════════════════════════════════════════════════════
 

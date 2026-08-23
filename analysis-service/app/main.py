@@ -9,8 +9,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import HOST, PORT, STAC_API_URL
-from app.routes import analysis, change, evidence, explain, flood, health, index, preprocess, query, sensor, stac, timeseries
-from app.services.eo_provider import init_default_provider
+from app.routes import analysis, change, evidence, explain, flood, health, index, preprocess, providers, query, sensor, stac, timeseries
+from app.services.eo_provider import init_default_provider, register_provider, CopernicusProvider, BhoonidhiProvider
 
 # ── Logging ──────────────────────────────────────────────────────
 
@@ -44,10 +44,27 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ── Initialize EO Provider ─────────────────────────────────────
+# ── Initialize EO Providers ───────────────────────────────────
 
 init_default_provider(api_url=STAC_API_URL)
 logger.info("EO Provider initialized: planetary_computer")
+
+# Register Copernicus CDSE (optional — not default)
+import os
+copernicus_token = os.environ.get("COPERNICUS_TOKEN")
+copernicus_provider = CopernicusProvider(token=copernicus_token)
+register_provider(copernicus_provider, default=False)
+logger.info("EO Provider registered: copernicus_cdse")
+
+# Register Bhoonidhi / ISRO (optional — not default)
+bhoonidhi_user = os.environ.get("BHOONIDHI_USER")
+bhoonidhi_pass = os.environ.get("BHOONIDHI_PASS")
+if bhoonidhi_user and bhoonidhi_pass:
+    bhoonidhi_provider = BhoonidhiProvider(user_id=bhoonidhi_user, password=bhoonidhi_pass)
+    register_provider(bhoonidhi_provider, default=False)
+    logger.info("EO Provider registered: bhoonidhi")
+else:
+    logger.info("Bhoonidhi skipped (set BHOONIDHI_USER + BHOONIDHI_PASS to enable)")
 
 # ── Routes ───────────────────────────────────────────────────────
 
@@ -63,6 +80,7 @@ app.include_router(explain.router)
 app.include_router(sensor.router)
 app.include_router(flood.router)
 app.include_router(query.router)
+app.include_router(providers.router)
 
 
 @app.get("/", tags=["root"])

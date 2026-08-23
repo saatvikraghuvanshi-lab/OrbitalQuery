@@ -1153,4 +1153,48 @@ router.post('/explain/callback', async (req: Request, res: Response) => {
   });
 });
 
+// ── GET /api/analysis/providers ─────────────────────────────────────
+
+/**
+ * List all registered EO providers with capabilities.
+ */
+router.get('/providers', async (_req: Request, res: Response) => {
+  const result = await callPythonService('GET', '/analysis/providers', undefined, 'providers-list');
+  if (!result.ok) {
+    res.status(result.status || 502).json({ error: result.error, code: result.code, requestId: result.requestId });
+    return;
+  }
+  res.json({ requestId: result.requestId, ...result.data });
+});
+
+// ── GET /api/analysis/providers/:name ───────────────────────────────
+
+/**
+ * Get detailed info for a specific provider.
+ */
+router.get('/providers/:name', async (req: Request, res: Response) => {
+  const { name } = req.params;
+  const result = await callPythonService('GET', `/analysis/providers/${encodeURIComponent(name)}`, undefined, 'provider-detail');
+  if (!result.ok) {
+    res.status(result.status || 502).json({ error: result.error, code: result.code, requestId: result.requestId });
+    return;
+  }
+  res.json({ requestId: result.requestId, ...result.data });
+});
+
+// ── GET /api/analysis/providers/:name/health ─────────────────────────
+
+/**
+ * Check if a specific provider is reachable.
+ */
+router.get('/providers/:name/health', async (req: Request, res: Response) => {
+  const { name } = req.params;
+  const result = await callPythonService('GET', `/analysis/providers/${encodeURIComponent(name)}/health`, undefined, 'provider-health');
+  if (!result.ok) {
+    res.status(result.status || 502).json({ error: result.error, code: result.code, requestId: result.requestId });
+    return;
+  }
+  res.json({ requestId: result.requestId, ...result.data });
+});
+
 export default router;
