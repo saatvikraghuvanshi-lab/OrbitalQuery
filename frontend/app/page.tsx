@@ -12,6 +12,7 @@ import SearchBar from '@/components/SearchBar';
 import FilterPanel from '@/components/FilterPanel';
 import ResultsList from '@/components/ResultsList';
 import StatsBar from '@/components/StatsBar';
+import DatasetList, { Dataset } from '@/components/DatasetList';
 import { useAnalysis } from '@/hooks/useAnalysis';
 
 const MapView = dynamic(() => import('@/components/MapView'), {
@@ -94,6 +95,60 @@ function HomePageContent() {
   const [loading, setLoading] = useState(false);
   const [viewMode, setViewMode] = useState<'split' | 'map' | 'results'>('split');
   const [comparingIds, setComparingIds] = useState<Set<string>>(new Set());
+  const [allDatasets, setAllDatasets] = useState<Dataset[]>([]);
+  const [selectedDiscoverId, setSelectedDiscoverId] = useState<string | null>(null);
+  const [datasetsLoading, setDatasetsLoading] = useState(false);
+  const [discoverBbox, setDiscoverBbox] = useState<BoundingBox | null>(null);
+
+  // Load all datasets from STAC providers on mount
+  useEffect(() => {
+    async function loadDatasets() {
+      setDatasetsLoading(true);
+      try {
+        const collections = [
+          'sentinel-2-l2a', 'sentinel-1-grd', 'landsat-c2-l2',
+          'ResourceSat-2A_AWIFS_L2', 'ResourceSat-2A_LISS3_L2',
+          'ccm-optical', 'ccm-sar',
+        ];
+        const all: Dataset[] = [];
+        // Fetch datasets from all providers in parallel
+        const promises = collections.map(async (col) => {
+          try {
+            const res = await fetch('/api/search', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ query: col, collection: col, limit: 10 }),
+            });
+            if (!res.ok) return [];
+            const data = await res.json();
+            return (data.results || []).map((r: any) => ({
+              id: r.id,
+              title: r.title || r.id,
+              provider: r.provider || col,
+              collection: r.collection || col,
+              date: r.startDate || r.endDate || null,
+              bbox: r.bbox,
+              cloudCover: r.cloudCover,
+              score: r.score,
+            }));
+          } catch {
+            return [];
+          }
+        });
+        const results = await Promise.all(promises);
+        results.forEach(r => all.push(...r));
+        // Deduplicate by id
+        const seen = new Set<string>();
+        const unique = all.filter(d => { if (seen.has(d.id)) return false; seen.add(d.id); return true; });
+        setAllDatasets(unique);
+      } catch (err) {
+        console.error('Failed to load datasets:', err);
+      } finally {
+        setDatasetsLoading(false);
+      }
+    }
+    loadDatasets();
+  }, []);
 
   const handleSearch = useCallback(async (searchFilters: SearchFilters) => {
     setLoading(true);
@@ -290,7 +345,40 @@ function HomePageContent() {
     );
   }
 
-  // ── Dataset Discovery View (preserved original) ─────────────────
+  // ── Dataset Discovery View ────────────────────────────────────
+
+  // Filter datasets by provider/collection
+  const filteredDatasets = allDatasets.filter(ds => {
+    if (filters.provider && !ds.provider?.toLowerCase().includes(filters.provider.toLowerCase())) return false;
+    if (filters.collection && !ds.collection?.toLowerCase().includes(filters.collection.toLowerCase())) return false;
+    return true;
+  });
+
+  // The selected discover dataset
+  const selectedDiscoverDataset = filteredDatasets.find(d => d.id === selectedDiscoverId) || null;
+
+  // Convert to MapView-compatible format
+  const discoverMapViewResults: DatasetResult[] = selectedDiscoverDataset ? [{
+    id: selectedDiscoverDataset.id,
+    stacId: null,
+    title: selectedDiscoverDataset.title,
+    description: null,
+    bbox: selectedDiscoverDataset.bbox,
+    centroidLat: selectedDiscoverDataset.bbox ? (selectedDiscoverDataset.bbox[1] + selectedDiscoverDataset.bbox[3]) / 2 : 0,
+    centroidLng: selectedDiscoverDataset.bbox ? (selectedDiscoverDataset.bbox[0] + selectedDiscoverDataset.bbox[2]) / 2 : 0,
+    provider: selectedDiscoverDataset.provider,
+    collection: selectedDiscoverDataset.collection,
+    platform: null,
+    instrument: null,
+    gsd: null,
+    cloudCover: selectedDiscoverDataset.cloudCover ?? null,
+    geometry: null,
+    startDate: selectedDiscoverDataset.date,
+    endDate: null,
+    previewUrl: selectedDiscoverDataset.previewUrl ?? null,
+    stacLink: null,
+    score: selectedDiscoverDataset.score,
+  }] : [];
 
   return (
     <div className="min-h-screen bg-[#0a0e1a]">
@@ -313,66 +401,127 @@ function HomePageContent() {
         ))}
       </div>
 
-      <div className="max-w-4xl mx-auto px-4">
-        <SearchBar
-          onSearch={(q) => handleSearch({ ...filters, query: q })}
-          loading={loading}
-          onToggleFilters={() => {}}
-          showFilters={false}
-        />
-      </div>
-      <FilterPanel filters={filters} onChange={setFilters} onApply={() => {
-        const q = lastQuery || filters.query;
-        handleSearch({ ...filters, query: q });
-      }} />
+      {/* Compact filter bar */}
+      <div className="max-w-[1800px] mx-auto px-4 mb-3">
+        <div className="glass rounded-xl border border-slate-700/30 px-4 py-3">
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Provider filter */}
+            <div className="flex items-center gap-2">
+              <label className="text-[10px] text-slate-500 uppercase tracking-wider font-medium">Provider</label>
+              <select
+                value={filters.provider}
+                onChange={(e) => setFilters(prev => ({ ...prev, provider: e.target.value }))}
+                className="bg-slate-800/50 border border-slate-700/50 rounded-lg px-3 py-1.5 text-xs text-slate-300 focus:border-blue-500/50 focus:outline-none"
+              >
+                <option value="">All Providers</option>
+                <option value="ISRO">🇮🇳 ISRO / Bhoonidhi</option>
+                <option value="Copernicus">🇪🇺 Copernicus</option>
+                <option value="NASA">🇺🇸 NASA</option>
+                <option value="Planetary Computer">🌐 Planetary Computer</option>
+              </select>
+            </div>
 
-      {results && <StatsBar total={results.total} latencyMs={results.latencyMs} query={lastQuery || filters.query} />}
+            {/* Collection filter */}
+            <div className="flex items-center gap-2">
+              <label className="text-[10px] text-slate-500 uppercase tracking-wider font-medium">Collection</label>
+              <select
+                value={filters.collection}
+                onChange={(e) => setFilters(prev => ({ ...prev, collection: e.target.value }))}
+                className="bg-slate-800/50 border border-slate-700/50 rounded-lg px-3 py-1.5 text-xs text-slate-300 focus:border-blue-500/50 focus:outline-none"
+              >
+                <option value="">All Collections</option>
+                <option value="sentinel-2">Sentinel-2 L2A</option>
+                <option value="sentinel-1">Sentinel-1 GRD</option>
+                <option value="landsat">Landsat C2 L2</option>
+                <option value="ResourceSat">ResourceSat (ISRO)</option>
+                <option value="EOS">EOS (ISRO)</option>
+                <option value="ccm">Contributing Missions</option>
+              </select>
+            </div>
 
-      <div className="max-w-[1800px] mx-auto px-4 pb-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {/* Map — 2/3 width */}
-          <div className="lg:col-span-2 rounded-2xl overflow-hidden border border-slate-700/30" style={{ minHeight: '500px' }}>
-            <MapView
-              results={results?.results || []}
-              selectedDataset={selectedDataset}
-              onSelectDataset={setSelectedDataset}
-              bbox={filters.bbox ? { north: filters.bbox.north, south: filters.bbox.south, east: filters.bbox.east, west: filters.bbox.west } : null}
-              onBboxChange={(bbox) => setFilters(prev => ({ ...prev, bbox: bbox as BoundingBox | null }))}
-            />
-          </div>
-
-          {/* Results — 1/3 width */}
-          <div className="lg:col-span-1 space-y-3">
-            {results && (
-              <ResultsList
-                results={results.results}
-                loading={loading}
-                selectedDataset={selectedDataset}
-                onSelectDataset={setSelectedDataset}
-                comparingIds={comparingIds}
-                onCompareToggle={(ds) => {
-                  setComparingIds(prev => {
-                    const next = new Set(prev);
-                    if (next.has(ds.id)) next.delete(ds.id);
-                    else if (next.size < 4) next.add(ds.id);
-                    return next;
-                  });
-                }}
+            {/* Date range */}
+            <div className="flex items-center gap-2">
+              <label className="text-[10px] text-slate-500 uppercase tracking-wider font-medium">From</label>
+              <input
+                type="date"
+                value={filters.startDate}
+                onChange={(e) => setFilters(prev => ({ ...prev, startDate: e.target.value }))}
+                className="bg-slate-800/50 border border-slate-700/50 rounded-lg px-3 py-1.5 text-xs text-slate-300 focus:border-blue-500/50 focus:outline-none"
               />
-            )}
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="text-[10px] text-slate-500 uppercase tracking-wider font-medium">To</label>
+              <input
+                type="date"
+                value={filters.endDate}
+                onChange={(e) => setFilters(prev => ({ ...prev, endDate: e.target.value }))}
+                className="bg-slate-800/50 border border-slate-700/50 rounded-lg px-3 py-1.5 text-xs text-slate-300 focus:border-blue-500/50 focus:outline-none"
+              />
+            </div>
+
+            {/* Dataset count */}
+            <div className="ml-auto text-[10px] text-slate-500">
+              {filteredDatasets.length} datasets
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="text-center py-6">
+      {/* Main content: Map + Dataset List */}
+      <div className="max-w-[1800px] mx-auto px-4 pb-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4" style={{ height: 'calc(100vh - 200px)', minHeight: '500px' }}>
+          {/* Map — 2/3 width */}
+          <div className="lg:col-span-2 rounded-2xl overflow-hidden border border-slate-700/30">
+            <MapView
+              results={discoverMapViewResults}
+              selectedDataset={selectedDiscoverDataset as any}
+              onSelectDataset={(ds) => {
+                if (ds) setSelectedDiscoverId(ds.id);
+              }}
+              bbox={discoverBbox}
+              onBboxChange={(bbox) => setDiscoverBbox(bbox as BoundingBox | null)}
+            />
+          </div>
+
+          {/* Dataset List — 1/3 width */}
+          <div className="lg:col-span-1 rounded-2xl border border-slate-700/30 bg-slate-900/50 overflow-hidden">
+            <div className="px-4 py-3 border-b border-slate-700/30">
+              <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                Available Datasets
+              </h3>
+              <p className="text-[10px] text-slate-500 mt-0.5">
+                Click a dataset to view on map
+              </p>
+            </div>
+            <div style={{ height: 'calc(100% - 52px)' }}>
+              <DatasetList
+                datasets={filteredDatasets}
+                selectedId={selectedDiscoverId}
+                onSelect={(ds) => {
+                  setSelectedDiscoverId(ds.id);
+                  // Zoom map to bbox
+                  if (ds.bbox && ds.bbox.length === 4) {
+                    setDiscoverBbox({
+                      north: ds.bbox[3],
+                      south: ds.bbox[1],
+                      east: ds.bbox[2],
+                      west: ds.bbox[0],
+                    });
+                  }
+                }}
+                loading={datasetsLoading}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="text-center py-4">
         <p className="text-[10px] text-slate-600">
           Sentinél • Landsat • NASA • ISRO
         </p>
         <p className="text-[10px] text-slate-700 mt-1">
           OrbitalQuery — Built for researchers and decision-makers.
-        </p>
-        <p className="text-[9px] text-yellow-600/50 mt-1">
-          ⚠ This is a research tool, not for operational disaster response.
         </p>
       </div>
     </div>
