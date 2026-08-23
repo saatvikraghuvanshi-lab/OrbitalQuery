@@ -68,21 +68,18 @@ export default function QueryInput({ onAnalyze, loading }: QueryInputProps) {
             placeholder='Try "Assess flood impact in this region..."'
             className="flex-1 bg-transparent border-none text-gray-200 placeholder-gray-500 focus:ring-0 text-xl py-5 outline-none"
             disabled={loading}
-          />
-          <button
+          />          <button
             onClick={handleSubmit}
             disabled={loading || !query.trim()}
-            className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-700 disabled:text-slate-500
-              text-white px-10 py-3 rounded-lg font-bold text-base transition-colors ml-3 shadow-lg
-              active:scale-[0.98]"
-            >
+            className="p-3 rounded-lg text-gray-400 hover:text-white hover:bg-white/5
+              disabled:text-slate-600 transition-all ml-3"
+          >
             {loading ? (
-              <span className="flex items-center gap-2">
-                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                Analyzing
-              </span>
+              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
             ) : (
-              'Analyze'
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
             )}
           </button>
         </div>
