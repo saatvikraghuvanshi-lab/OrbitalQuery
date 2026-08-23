@@ -6,7 +6,12 @@ import Image from 'next/image';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Separator } from '@/components/ui/separator';
 
-export default function Header() {
+interface HeaderProps {
+  activeTab?: 'ask' | 'discover';
+  onNavigate?: (tab: 'ask' | 'discover') => void;
+}
+
+export default function Header({ activeTab = 'ask', onNavigate }: HeaderProps) {
   const router = useRouter();
   const [userName, setUserName] = useState('');
 
@@ -37,6 +42,36 @@ export default function Header() {
               className="object-contain"
               priority
             />
+          </div>
+
+          {/* Center: Nav Pills */}
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => onNavigate?.('ask')}
+              className={`flex items-center space-x-2 px-5 py-2 rounded-full text-sm font-medium transition-colors ${
+                activeTab === 'ask'
+                  ? 'bg-[#1e1c36] text-[#a4a0e8]'
+                  : 'bg-[#14151a] text-gray-200 border border-white/5 hover:bg-[#1a1c23]'
+              }`}
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <span>Ask OrbitalQuery</span>
+            </button>
+            <button
+              onClick={() => onNavigate?.('discover')}
+              className={`flex items-center space-x-2 px-5 py-2 rounded-full text-sm font-medium transition-colors ${
+                activeTab === 'discover'
+                  ? 'bg-[#1e1c36] text-[#a4a0e8]'
+                  : 'bg-[#14151a] text-gray-200 border border-white/5 hover:bg-[#1a1c23]'
+              }`}
+            >
+              <svg className="w-4 h-4" style={{ color: '#d48b59' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
+              </svg>
+              <span>Dataset Discovery</span>
+            </button>
           </div>
 
           {/* Right side: Settings + User Avatar + Logout */}
