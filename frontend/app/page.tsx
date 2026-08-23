@@ -181,7 +181,7 @@ function HomePageContent() {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   if (!mounted) return (
-    <div className="min-h-screen bg-[#0a0e1a]" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+    <div className="min-h-screen bg-[#0c0e12]" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ color: '#64748b', fontSize: '14px' }}>Loading OrbitalQuery...</div>
     </div>
   );
@@ -192,30 +192,38 @@ function HomePageContent() {
     const step = analysis.state.step;
 
     return (
-      <div className="min-h-screen bg-[#0a0e1a]">
-        <Header />
+      <div className="min-h-screen bg-[#0c0e12]">
+        <Header
+          onAnalyze={() => {
+            const q = analysis.state.query;
+            if (q) analysis.analyze(q);
+          }}
+        />
 
-        {/* Tab Bar */}
-        <div className="flex justify-center gap-1 pt-4 pb-2">
-          {(['ask', 'discover'] as Tab[]).map(t => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={`px-6 py-2 text-sm font-medium rounded-xl transition-all ${
-                tab === t
-                  ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
-                  : 'text-slate-500 hover:text-slate-300'
-              }`}
-            >
-              {t === 'ask' ? '🔍 Ask OrbitalQuery' : '📦 Dataset Discovery'}
-            </button>
-          ))}
+        {/* Navigation Pills — centered in header area */}
+        <div className="flex justify-center gap-3 pt-5 pb-2">
+          <button
+            onClick={() => setTab('ask')}
+            className="flex items-center space-x-2 px-6 py-2.5 rounded-full bg-[#1e1c36] text-[#a4a0e8] text-sm font-medium hover:bg-[#252244] transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <span>Ask OrbitalQuery</span>
+          </button>
+          <button
+            onClick={() => setTab('discover')}
+            className="flex items-center space-x-2 px-6 py-2.5 rounded-full bg-[#14151a] border border-white/5 text-gray-200 text-sm font-medium hover:bg-[#1a1c23] transition-colors"
+          >
+            <svg className="w-4 h-4 text-[#d48b59]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
+            </svg>
+            <span>Dataset Discovery</span>
+          </button>
         </div>
 
         {step === 'idle' && (
-          <div className="max-w-5xl mx-auto px-4">
-            <QueryInput onAnalyze={analysis.analyze} loading={false} />
-          </div>
+          <QueryInput onAnalyze={analysis.analyze} loading={false} />
         )}
 
         {step !== 'idle' && step !== 'complete' && step !== 'error' && (
@@ -381,24 +389,29 @@ function HomePageContent() {
   }] : [];
 
   return (
-    <div className="min-h-screen bg-[#0a0e1a]">
+    <div className="min-h-screen bg-[#0c0e12]">
       <Header />
 
-      {/* Tab Bar */}
-      <div className="flex justify-center gap-1 pt-4 pb-2">
-        {(['ask', 'discover'] as Tab[]).map(t => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`px-6 py-2 text-sm font-medium rounded-xl transition-all ${
-              tab === t
-                ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
-                : 'text-slate-500 hover:text-slate-300'
-            }`}
-          >
-            {t === 'ask' ? '🔍 Ask OrbitalQuery' : '📦 Dataset Discovery'}
-          </button>
-        ))}
+      {/* Navigation Pills */}
+      <div className="flex justify-center gap-3 pt-5 pb-2">
+        <button
+          onClick={() => setTab('ask')}
+          className="flex items-center space-x-2 px-6 py-2.5 rounded-full bg-[#14151a] border border-white/5 text-gray-200 text-sm font-medium hover:bg-[#1a1c23] transition-colors"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          <span>Ask OrbitalQuery</span>
+        </button>
+        <button
+          onClick={() => setTab('discover')}
+          className="flex items-center space-x-2 px-6 py-2.5 rounded-full bg-[#1e1c36] text-[#a4a0e8] text-sm font-medium hover:bg-[#252244] transition-colors"
+        >
+          <svg className="w-4 h-4 text-[#d48b59]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
+          </svg>
+          <span>Dataset Discovery</span>
+        </button>
       </div>
 
       {/* Compact filter bar */}

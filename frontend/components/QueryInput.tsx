@@ -1,6 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
+
+interface QueryInputProps {
+  onAnalyze: (query: string) => void;
+  loading: boolean;
+}
 
 const SUGGESTIONS = [
   'Assess flood impact in Assam',
@@ -13,13 +18,13 @@ const SUGGESTIONS = [
   'Coastal erosion in Kerala',
 ];
 
-interface QueryInputProps {
-  onAnalyze: (query: string) => void;
-  loading: boolean;
-}
-
 export default function QueryInput({ onAnalyze, loading }: QueryInputProps) {
   const [query, setQuery] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
 
   const handleSubmit = () => {
     if (query.trim() && !loading) {
@@ -27,72 +32,92 @@ export default function QueryInput({ onAnalyze, loading }: QueryInputProps) {
     }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSubmit();
-    }
-  };
-
   return (
-    <div className="max-w-3xl mx-auto px-4 py-12">
-      {/* Hero */}
-      <div className="text-center mb-10">
-        <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-400 via-purple-400 to-cyan-400 bg-clip-text text-transparent mb-4">
-          OrbitalQuery
-        </h1>
-        <p className="text-lg text-slate-400 mb-2">
-          Ask a question about Earth
-        </p>
-        <p className="text-sm text-slate-600">
-          Powered by Sentinel, Landsat, ISRO & Copernicus satellite data
-        </p>
+    <div className="min-h-[70vh] flex flex-col items-center justify-center relative">
+      {/* Concentric circle decorations */}
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-20">
+        <div className="w-[1200px] h-[1200px] border border-white/5 rounded-full absolute" />
+        <div className="w-[900px] h-[900px] border border-white/5 rounded-full absolute" />
+        <div className="w-[600px] h-[600px] border border-white/5 rounded-full absolute" />
       </div>
 
-      {/* Input */}
-      <div className="relative mb-8">
-        <div className="glass rounded-2xl border border-blue-500/20 p-1">
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder='Try "Assess flood impact in this region..."'
-              disabled={loading}
-              className="flex-1 bg-transparent px-5 py-4 text-sm text-slate-200 placeholder-slate-600 outline-none disabled:opacity-50"
-            />
-            <button
-              onClick={handleSubmit}
-              disabled={!query.trim() || loading}
-              className="px-6 py-3 mr-1 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 text-white text-sm font-medium hover:from-blue-500 hover:to-purple-500 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-            >
-              {loading ? (
-                <span className="flex items-center gap-2">
-                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                  Analyzing
-                </span>
-              ) : 'Analyze'}
-            </button>
-          </div>
+      <div className="relative z-10 flex flex-col items-center w-full max-w-4xl px-4">
+        {/* Title */}
+        <div className="text-center mb-12">
+          <h2 className="text-4xl font-medium text-white mb-4">
+            Ask a question about Earth
+          </h2>
+          <p className="text-gray-500 text-lg">
+            Powered by Sentinel, Landsat, ISRO &amp; Copernicus satellite data
+          </p>
         </div>
-      </div>
 
-      {/* Suggestion Chips */}
-      <div className="flex flex-wrap justify-center gap-2">
-        {SUGGESTIONS.map((s) => (
-          <button
-            key={s}
-            onClick={() => { setQuery(s); onAnalyze(s); }}
+        {/* Search Bar — Glass Panel */}
+        <div className="w-full glass-panel rounded-xl p-3 flex items-center shadow-2xl ring-1 ring-white/10 focus-within:ring-[#f03b43]/50 transition-all mb-10">
+          <div className="pl-5 pr-3 text-gray-400">
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+          </div>
+          <input
+            ref={inputRef}
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
+            placeholder='Try "Assess flood impact in this region..."'
+            className="flex-1 bg-transparent border-none text-gray-200 placeholder-gray-500 focus:ring-0 text-xl py-5 outline-none"
             disabled={loading}
-            className="px-4 py-2 text-xs rounded-full border border-slate-700/50 text-slate-500 hover:text-slate-300 hover:border-slate-600/50 hover:bg-slate-800/30 transition-all disabled:opacity-40"
+          />
+          <button
+            onClick={handleSubmit}
+            disabled={loading || !query.trim()}
+            className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-700 disabled:text-slate-500
+              text-white px-10 py-4 rounded-lg font-bold text-lg transition-colors ml-3 shadow-lg
+              active:scale-[0.98]"
           >
-            {s}
+            {loading ? (
+              <span className="flex items-center gap-2">
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                Analyzing
+              </span>
+            ) : (
+              'Analyze'
+            )}
           </button>
-        ))}
+        </div>
+
+        {/* Suggestion Chips */}
+        <div className="flex flex-wrap justify-center gap-3 mb-16">
+          {SUGGESTIONS.map((s) => (
+            <button
+              key={s}
+              onClick={() => { setQuery(s); onAnalyze(s); }}
+              disabled={loading}
+              className="px-5 py-2.5 rounded-full border border-white/10 bg-white/5 text-sm text-gray-400
+                hover:bg-white/10 hover:text-gray-200 hover:border-white/20
+                transition-all duration-200 disabled:opacity-50"
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+
+        {/* Footer */}
+        <div className="text-center">
+          <p className="text-sm text-gray-500 font-mono">
+            Sentinel • Landsat • NASA • ISRO
+          </p>
+          <p className="text-sm text-gray-600 mt-1">
+            OrbitalQuery — Built for researchers and decision-makers.
+          </p>
+          <p className="text-sm text-yellow-600/80 flex items-center justify-center mt-2">
+            <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            This is a research tool, not for operational disaster response.
+          </p>
+        </div>
       </div>
     </div>
   );
