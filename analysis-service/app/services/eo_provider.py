@@ -703,34 +703,13 @@ class BhoonidhiProvider(EOProvider):
         }
 
         if bbox:
-            search_body["bbox"] = [str(b) for b in bbox]  # Bhoonidhi expects string array
+            search_body["bbox"] = [float(b) for b in bbox]  # Bhoonidhi expects numeric array
 
         if datetime:
             search_body["datetime"] = datetime
 
-        # Cloud cover filter via CQL2 filter
-        if max_cloud_cover is not None:
-            search_body["filter"] = {
-                "args": [
-                    {"property": "eo:cloud_cover"},
-                    max_cloud_cover,
-                ],
-                "op": "lt",
-            }
-            search_body["filter-lang"] = "cql2-json"
-
-        # Additional STAC query filters
-        if query:
-            if "filter" in search_body:
-                # Merge with existing filter using AND
-                existing = search_body["filter"]
-                search_body["filter"] = {
-                    "args": [existing, query],
-                    "op": "and",
-                }
-            else:
-                search_body["filter"] = query
-                search_body["filter-lang"] = "cql2-json"
+        # NOTE: Bhoonidhi API does not support CQL2 filter syntax.
+        # Cloud cover filtering is done client-side after results are returned.
 
         logger.info(
             "[Bhoonidhi] search: collection=%s (bhoonidhi=%s) params=%s",

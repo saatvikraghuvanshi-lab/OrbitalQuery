@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException
 from app.config import ALLOWED_COLLECTIONS, DEFAULT_MAX_CLOUD_COVER
 from app.models.requests import STACSearchRequest, STACSearchResponse
 from app.services.stac_service import search_stac
+from app.services.eo_provider import get_provider, get_default_provider
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/stac", tags=["stac"])
@@ -24,14 +25,11 @@ async def stac_search(request: STACSearchRequest):
 
     Returns signed STAC item metadata ready for raster access.
     """
-    # Validate collection
+    # Validate collection (lenient — let providers decide)
     if request.collection not in ALLOWED_COLLECTIONS:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"Collection '{request.collection}' is not supported. "
-                f"Allowed: {ALLOWED_COLLECTIONS}"
-            ),
+        logger.warning(
+            "Collection '%s' not in known list — forwarding to provider anyway",
+            request.collection,
         )
 
     # Build geometry
@@ -64,8 +62,18 @@ async def stac_search(request: STACSearchRequest):
         elif request.end_date:
             datetime_str = f"../{request.end_date.isoformat()}"
 
+    # Select provider (use specified or default)
+    provider_name = getattr(request, "provider", None)
     try:
-        result = search_stac(
+        provider = get_provider(provider_name) if provider_name else get_default_provider()
+    except KeyError:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Provider '{provider_name}' not registered",
+        )
+
+    try:
+        result = provider.search(
             collection=request.collection,
             bbox=bbox,
             datetime=datetime_str,
@@ -73,7 +81,7 @@ async def stac_search(request: STACSearchRequest):
             limit=request.limit,
         )
     except Exception as e:
-        logger.error("STAC search failed: %s", e)
+        logger.error("STAC search failed via %s: %s", provider.get_name(), e)
         raise HTTPException(
             status_code=502,
             detail=f"STAC API search failed: {str(e)}",
@@ -81,7 +89,7 @@ async def stac_search(request: STACSearchRequest):
 
     return STACSearchResponse(
         collection=request.collection,
-        total_matches=result["total"],
-        returned=len(result["items"]),
-        items=result["items"],
+        total_matches=result.total,
+        returned=len(result.items),
+        items=result.items,
     )
