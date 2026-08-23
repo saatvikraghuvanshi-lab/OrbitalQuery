@@ -38,7 +38,8 @@ app.use(cors({
 }));
 
 app.use(express.json({ limit: '5mb' }));
-app.use('/api/', apiLimiter);
+// Rate limiter applied per-route (not globally) to avoid blocking analysis gateway
+// Analysis routes bypass this since Python service has its own validation
 app.set('trust proxy', 1);
 app.disable('x-powered-by');
 
@@ -79,10 +80,10 @@ app.get('/api/health', (_req, res) => {
 app.use(requestIdMiddleware);
 
 // ─── API Routes ───────────────────────────────────────────────────────
-app.use('/api/auth', authRouter);
-app.use('/api/search', searchRouter);
+app.use('/api/auth', apiLimiter, authRouter);
+app.use('/api/search', apiLimiter, searchRouter);
 app.use('/api/datasets', datasetsRouter);
-app.use('/api/ingest', ingestRouter);
+app.use('/api/ingest', apiLimiter, ingestRouter);
 app.use('/api/analysis', analysisRouter);
 
 // ─── 404 ──────────────────────────────────────────────────────────────

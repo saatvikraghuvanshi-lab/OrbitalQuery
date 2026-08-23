@@ -97,6 +97,10 @@ class STACSearchRequest(BaseModel):
         le=50,
         description="Maximum number of results",
     )
+    provider: Optional[str] = Field(
+        None,
+        description="Provider name (e.g. 'bhoonidhi', 'copernicus_cdse', 'planetary_computer'). Uses default if not specified.",
+    )
 
     @field_validator("datetime")
     @classmethod

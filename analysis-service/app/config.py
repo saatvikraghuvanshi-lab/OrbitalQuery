@@ -24,13 +24,38 @@ DEFAULT_LIMIT = int(os.getenv("DEFAULT_LIMIT", "10"))
 HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", "8000"))
 
-# Allowed collections
+# Allowed collections (Planetary Computer + Bhoonidhi + Copernicus)
 ALLOWED_COLLECTIONS = [
+    # Planetary Computer / Copernicus
     "sentinel-2-l2a",
     "landsat-c2-l2",
     "sentinel-1-grd",
     "naip",
     "io-lulc-annual-v02",
+    # Copernicus CDSE
+    "ccm-optical",
+    "ccm-sar",
+    # Bhoonidhi / ISRO
+    "ResourceSat-2A_AWIFS_L2",
+    "ResourceSat-2A_AWIFS_BOA",
+    "ResourceSat-2A_LISS3_L2",
+    "ResourceSat-2A_LISS3_BOA",
+    "ResourceSat-2A_LISS4-MX70_L2",
+    "ResourceSat-2_AWIFS_L2",
+    "ResourceSat-2_AWIFS_BOA",
+    "ResourceSat-2_LISS3_L2",
+    "ResourceSat-2_LISS3_BOA",
+    "ResourceSat-2_LISS4-MX70_L2",
+    "EOS-04_SAR-MRS_L2A",
+    "EOS-04_SAR-MRS_L2B",
+    "EOS-04_SAR-CRS_L2A",
+    "EOS-06_OCM-LAC_L1C",
+    "EOS-06_OCM-GAC_L1C",
+    "Sentinel-1A_SAR-IW_GRD",
+    "Sentinel-1A_SAR-IW_SLC",
+    "CartoSat-1_PAN_CartoDEM_30m",
+    "NISAR_SSAR_RSLC",
+    "NISAR_SSAR_GCOV",
 ]
 
 # Date range limits
