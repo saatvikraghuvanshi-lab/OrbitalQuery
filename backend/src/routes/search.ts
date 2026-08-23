@@ -140,8 +140,8 @@ router.post('/', searchLimiter, sanitizeSearchQuery, optionalAuth, async (req: A
           geometry: item.geometry || null,
           bbox: item.bbox || null,
           relevance_score: 0.95,
-          stacLink: item.links?.self?.href || null,
-          preview_url: item.assets?.thumbnail?.href || item.assets?.visual?.href || null,
+          stacLink: (Array.isArray(item.links) ? item.links.find((l: any) => l.rel === 'self')?.href : item.links?.self?.href) || null,
+          previewUrl: item.assets?.thumbnail?.href || item.assets?.visual?.href || null,
           source: 'stac',
         }));
       }
