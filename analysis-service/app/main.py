@@ -46,23 +46,25 @@ app.add_middleware(
 
 # ── Initialize EO Providers ───────────────────────────────────
 
+import os
+
+# Register Planetary Computer as fallback (not default)
 init_default_provider(api_url=STAC_API_URL)
-logger.info("EO Provider initialized: planetary_computer")
+logger.info("EO Provider initialized: planetary_computer (fallback)")
 
 # Register Copernicus CDSE (optional — not default)
-import os
 copernicus_token = os.environ.get("COPERNICUS_TOKEN")
 copernicus_provider = CopernicusProvider(token=copernicus_token)
 register_provider(copernicus_provider, default=False)
 logger.info("EO Provider registered: copernicus_cdse")
 
-# Register Bhoonidhi / ISRO (optional — not default)
+# Register Bhoonidhi / ISRO (PRIMARY — default when credentials exist)
 bhoonidhi_user = os.environ.get("BHOONIDHI_USER")
 bhoonidhi_pass = os.environ.get("BHOONIDHI_PASS")
 if bhoonidhi_user and bhoonidhi_pass:
     bhoonidhi_provider = BhoonidhiProvider(user_id=bhoonidhi_user, password=bhoonidhi_pass)
-    register_provider(bhoonidhi_provider, default=False)
-    logger.info("EO Provider registered: bhoonidhi")
+    register_provider(bhoonidhi_provider, default=True)  # Bhoonidhi is primary
+    logger.info("EO Provider registered: bhoonidhi (DEFAULT — ISRO data)")
 else:
     logger.info("Bhoonidhi skipped (set BHOONIDHI_USER + BHOONIDHI_PASS to enable)")
 
