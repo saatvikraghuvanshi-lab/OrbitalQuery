@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import Header from '@/components/Header';
 import QueryInput from '@/components/QueryInput';
@@ -80,7 +80,15 @@ type Tab = 'ask' | 'discover';
 
 // ── Page ────────────────────────────────────────────────────────
 
-export default function HomePage() {
+function HomePageContent() {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  if (!mounted) return (
+    <div className="min-h-screen bg-[#0a0e1a]" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ color: '#64748b', fontSize: '14px' }}>Loading OrbitalQuery...</div>
+    </div>
+  );
+
   const [tab, setTab] = useState<Tab>('ask');
   const analysis = useAnalysis();
 
@@ -350,4 +358,8 @@ export default function HomePage() {
       </div>
     </div>
   );
+}
+
+export default function HomePage() {
+  return <HomePageContent />;
 }
