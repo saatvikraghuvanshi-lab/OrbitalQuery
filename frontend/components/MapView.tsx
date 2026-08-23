@@ -53,16 +53,6 @@ if (typeof window !== 'undefined') {
   });
 }
 
-// Clean up map on unmount to prevent "already initialized" error
-function CleanupMap() {
-  const map = useMap();
-  useEffect(() => {
-    return () => {
-      map.remove();
-    };
-  }, [map]);
-  return null;
-}
 
 // Auto-fit bounds to search results
 function FitBounds({ results }: { results: DatasetResult[] }) {
@@ -248,7 +238,6 @@ export default function MapView({ results, selectedDataset, onSelectDataset, bbo
         <FitBounds results={results} />
         <ZoomToSelected dataset={selectedDataset} />
         <DrawHandler isDrawing={isDrawing} onBboxChange={onBboxChange} onDrawBbox={setDrawBbox} />
-        <CleanupMap />
       </MapContainer>
 
       {/* Style selector */}
