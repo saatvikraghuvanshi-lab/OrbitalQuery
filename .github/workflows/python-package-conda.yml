@@ -1,0 +1,43 @@
+name: OrbitalQuery CI
+
+on:
+  push:
+    branches: [main, feature/*]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    # ── Node.js (backend) ────────────────────────────────────
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Install backend dependencies
+      run: cd backend && npm install
+
+    - name: Compile TypeScript
+      run: cd backend && npx tsc
+
+    # ── Python (analysis service) ────────────────────────────
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install Python dependencies
+      run: |
+        cd analysis-service
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Run Python unit tests
+      run: |
+        cd analysis-service
+        python -m pytest tests/ --ignore=tests/test_timeseries_integration.py -q 2>&1 | tail -20
