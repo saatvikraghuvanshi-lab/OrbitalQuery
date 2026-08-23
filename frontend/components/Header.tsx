@@ -5,22 +5,69 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Separator } from '@/components/ui/separator';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
+import { Slider } from '@/components/ui/slider';
 
 interface HeaderProps {
   activeTab?: 'ask' | 'discover';
   onNavigate?: (tab: 'ask' | 'discover') => void;
+  onSettingsChange?: (settings: AppSettings) => void;
 }
 
-export default function Header({ activeTab = 'ask', onNavigate }: HeaderProps) {
+export interface AppSettings {
+  defaultMapStyle: string;
+  defaultProvider: string;
+  maxCloudCover: number;
+  autoZoom: boolean;
+  showFootprints: boolean;
+  animationSpeed: 'slow' | 'normal' | 'fast';
+}
+
+const DEFAULT_SETTINGS: AppSettings = {
+  defaultMapStyle: 'dark',
+  defaultProvider: 'all',
+  maxCloudCover: 20,
+  autoZoom: true,
+  showFootprints: true,
+  animationSpeed: 'normal',
+};
+
+export function loadSettings(): AppSettings {
+  if (typeof window === 'undefined') return DEFAULT_SETTINGS;
+  try {
+    const saved = localStorage.getItem('oq_settings');
+    if (saved) return { ...DEFAULT_SETTINGS, ...JSON.parse(saved) };
+  } catch {}
+  return DEFAULT_SETTINGS;
+}
+
+function saveSettings(settings: AppSettings) {
+  localStorage.setItem('oq_settings', JSON.stringify(settings));
+}
+
+export default function Header({ activeTab = 'ask', onNavigate, onSettingsChange }: HeaderProps) {
   const router = useRouter();
   const [userName, setUserName] = useState('');
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
 
   useEffect(() => {
+    setSettings(loadSettings());
     try {
       const user = JSON.parse(localStorage.getItem('oq_user') || '{}');
       setUserName(user.name || user.email || 'User');
     } catch {}
   }, []);
+
+  const updateSetting = <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => {
+    const next = { ...settings, [key]: value };
+    setSettings(next);
+    saveSettings(next);
+    onSettingsChange?.(next);
+  };
 
   const handleLogout = () => {
     localStorage.removeItem('oq_token');
@@ -29,23 +76,26 @@ export default function Header({ activeTab = 'ask', onNavigate }: HeaderProps) {
   };
 
   return (
-    <header className="border-b border-white/5 sticky top-0 z-50" style={{ background: '#0a0e1a' }}>
-      <div className="max-w-[1800px] mx-auto px-6 py-3">
-        <div className="flex items-center justify-between">
-          {/* Logo — PNG already has text */}
-          <div className="flex items-center">
-            <Image
-              src="/orbitalquery-logo.png"
-              alt="ØrbitalQuery"
-              width={120}
-              height={36}
-              className="object-contain"
-              priority
-            />
+    <>
+      <header className="border-b border-white/5 sticky top-0 z-50" style={{ background: '#0a0e1a' }}>
+        <div className="max-w-[1800px] mx-auto px-6 py-3 relative">
+          {/* Main row: logo (left) | spacer (right) */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center w-[200px]">
+              <Image
+                src="/orbitalquery-logo.png"
+                alt="ØrbitalQuery"
+                width={120}
+                height={36}
+                className="object-contain"
+                priority
+              />
+            </div>
+            <div className="w-[200px]" />
           </div>
 
-          {/* Center: Nav Pills */}
-          <div className="flex items-center gap-3">
+          {/* Nav pills — absolutely centered in header */}
+          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center gap-3">
             <button
               onClick={() => onNavigate?.('ask')}
               className={`flex items-center space-x-2 px-5 py-2 rounded-full text-sm font-medium transition-colors ${
@@ -74,10 +124,10 @@ export default function Header({ activeTab = 'ask', onNavigate }: HeaderProps) {
             </button>
           </div>
 
-          {/* Right side: Settings + User Avatar + Logout */}
-          <div className="flex items-center gap-4">
-            {/* Settings icon */}
+          {/* Right side: Settings + Avatar — absolutely positioned */}
+          <div className="absolute right-6 top-1/2 -translate-y-1/2 flex items-center gap-4">
             <button
+              onClick={() => setSettingsOpen(true)}
               className="p-2 rounded-lg hover:bg-white/5 transition-colors text-gray-400 hover:text-white"
               title="Settings"
             >
@@ -89,16 +139,15 @@ export default function Header({ activeTab = 'ask', onNavigate }: HeaderProps) {
 
             <Separator orientation="vertical" className="h-6 bg-white/10" />
 
-            {/* User avatar + dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger className="flex items-center gap-2 rounded-full hover:bg-white/5 transition-colors px-2 py-1 outline-none">
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#571bc1] to-[#dc2626] flex items-center justify-center text-white text-xs font-bold">
-                    {userName.charAt(0).toUpperCase()}
-                  </div>
-                  <span className="text-xs text-gray-400 hidden sm:block">{userName}</span>
-                  <svg className="w-3 h-3 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                  </svg>
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#571bc1] to-[#dc2626] flex items-center justify-center text-white text-xs font-bold">
+                  {userName.charAt(0).toUpperCase()}
+                </div>
+                <span className="text-xs text-gray-400 hidden sm:block">{userName}</span>
+                <svg className="w-3 h-3 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                </svg>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48" style={{ background: '#1e2024', border: '1px solid #33353a' }}>
                 <DropdownMenuItem className="text-xs text-gray-300 cursor-default">
@@ -121,7 +170,117 @@ export default function Header({ activeTab = 'ask', onNavigate }: HeaderProps) {
             </DropdownMenu>
           </div>
         </div>
-      </div>
-    </header>
+      </header>
+
+      {/* Settings Dialog */}
+      <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
+        <DialogContent className="sm:max-w-md" style={{ background: '#111318', border: '1px solid #33353a' }}>
+          <DialogHeader>
+            <DialogTitle className="text-white text-lg">Settings</DialogTitle>
+            <DialogDescription className="text-gray-400 text-sm">
+              Configure your OrbitalQuery preferences
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex flex-col gap-6 py-4">
+            {/* Default Map Style */}
+            <div className="flex flex-col gap-2">
+              <Label className="text-sm text-gray-300">Default Map Style</Label>
+              <Select
+                value={settings.defaultMapStyle}
+                onValueChange={(v) => { if (v) updateSetting('defaultMapStyle', v); }}
+              >
+                <SelectTrigger style={{ background: '#0c0e13', border: '1px solid #33353a', color: '#e2e2e9' }}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent style={{ background: '#1e2024', border: '1px solid #33353a' }}>
+                  <SelectItem value="dark">🌑 Dark</SelectItem>
+                  <SelectItem value="light">🗺️ Voyager</SelectItem>
+                  <SelectItem value="streets">🌍 Streets</SelectItem>
+                  <SelectItem value="satellite">🛰️ Satellite</SelectItem>
+                  <SelectItem value="terrain">🌑 Dark Lite</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Default Provider */}
+            <div className="flex flex-col gap-2">
+              <Label className="text-sm text-gray-300">Default Data Provider</Label>
+              <Select
+                value={settings.defaultProvider}
+                onValueChange={(v) => { if (v) updateSetting('defaultProvider', v); }}
+              >
+                <SelectTrigger style={{ background: '#0c0e13', border: '1px solid #33353a', color: '#e2e2e9' }}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent style={{ background: '#1e2024', border: '1px solid #33353a' }}>
+                  <SelectItem value="all">All Providers</SelectItem>
+                  <SelectItem value="copernicus">🇪🇺 Copernicus</SelectItem>
+                  <SelectItem value="isro">🇮🇳 ISRO / Bhoonidhi</SelectItem>
+                  <SelectItem value="nasa">🇺🇸 NASA</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Max Cloud Cover */}
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm text-gray-300">Max Cloud Cover</Label>
+                <span className="text-xs text-gray-500">{settings.maxCloudCover}%</span>
+              </div>
+              <Slider
+                value={[settings.maxCloudCover]}
+                onValueChange={(val) => { const v = Array.isArray(val) ? val[0] : val; updateSetting('maxCloudCover', v as number); }}
+                min={0}
+                max={100}
+                step={5}
+              />
+            </div>
+
+            {/* Auto Zoom */}
+            <div className="flex items-center justify-between">
+              <div className="flex flex-col gap-0.5">
+                <Label className="text-sm text-gray-300">Auto-zoom to results</Label>
+                <p className="text-[10px] text-gray-500">Map zooms to selected dataset area</p>
+              </div>
+              <Switch
+                checked={settings.autoZoom}
+                onCheckedChange={(v) => updateSetting('autoZoom', v)}
+              />
+            </div>
+
+            {/* Show Footprints */}
+            <div className="flex items-center justify-between">
+              <div className="flex flex-col gap-0.5">
+                <Label className="text-sm text-gray-300">Show dataset footprints</Label>
+                <p className="text-[10px] text-gray-500">Display geometry outlines on the map</p>
+              </div>
+              <Switch
+                checked={settings.showFootprints}
+                onCheckedChange={(v) => updateSetting('showFootprints', v)}
+              />
+            </div>
+
+            {/* Animation Speed */}
+            <div className="flex flex-col gap-2">
+              <Label className="text-sm text-gray-300">Animation Speed</Label>
+              <Select
+                value={settings.animationSpeed}
+                onValueChange={(v) => { if (v) updateSetting('animationSpeed', v as 'slow' | 'normal' | 'fast'); }}
+              >
+                <SelectTrigger style={{ background: '#0c0e13', border: '1px solid #33353a', color: '#e2e2e9' }}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent style={{ background: '#1e2024', border: '1px solid #33353a' }}>
+                  <SelectItem value="slow">Slow</SelectItem>
+                  <SelectItem value="normal">Normal</SelectItem>
+                  <SelectItem value="fast">Fast</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
