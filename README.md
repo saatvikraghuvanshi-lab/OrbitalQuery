@@ -64,7 +64,8 @@ A platform that enables researchers and decision-makers to **semantically query 
 - **🛡️ Security** — Rate limiting, input sanitization, Helmet headers, CORS hardening
 - **🌙 Dark Theme** — Beautiful space-themed dark UI with glass morphism effects
 - **🎭 Mock Mode** — Frontend works standalone with mock data when backend is offline
-
+---
+Research Document: [ORBITALQUERY_RESEARCH_REPORT.docx](https://github.com/user-attachments/files/31349935/ORBITALQUERY_RESEARCH_REPORT.docx)
 ---
 🚨 ORBITALQUERY CONTRIBUTION RULES
 
