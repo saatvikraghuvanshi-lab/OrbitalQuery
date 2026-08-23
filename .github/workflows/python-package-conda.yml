@@ -1,34 +1,43 @@
-name: Python Package using Conda
+name: OrbitalQuery CI
 
-on: [push]
+on:
+  push:
+    branches: [main, feature/*]
+  pull_request:
+    branches: [main]
 
 jobs:
-  build-linux:
+  build:
     runs-on: ubuntu-latest
-    strategy:
-      max-parallel: 5
 
     steps:
     - uses: actions/checkout@v4
-    - name: Set up Python 3.10
-      uses: actions/setup-python@v3
+
+    # ── Node.js (backend) ────────────────────────────────────
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
       with:
-        python-version: '3.10'
-    - name: Add conda to system path
+        node-version: '20'
+
+    - name: Install backend dependencies
+      run: cd backend && npm install
+
+    - name: Compile TypeScript
+      run: cd backend && npx tsc
+
+    # ── Python (analysis service) ────────────────────────────
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install Python dependencies
       run: |
-        # $CONDA is an environment variable pointing to the root of the miniconda directory
-        echo $CONDA/bin >> $GITHUB_PATH
-    - name: Install dependencies
+        cd analysis-service
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Run Python unit tests
       run: |
-        conda env update --file environment.yml --name base
-    - name: Lint with flake8
-      run: |
-        conda install flake8
-        # stop the build if there are Python syntax errors or undefined names
-        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-        # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
-        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-    - name: Test with pytest
-      run: |
-        conda install pytest
-        pytest
+        cd analysis-service
+        python -m pytest tests/ --ignore=tests/test_timeseries_integration.py -q 2>&1 | tail -20

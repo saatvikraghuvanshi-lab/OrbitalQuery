@@ -10,6 +10,69 @@ const router = Router();
 const searchEngine = new SemanticSearchEngine();
 
 /**
+ * Extract a bounding box from query text by matching known locations.
+ * Returns a tight bbox around the location for targeted STAC search.
+ */
+function extractLocationBbox(query: string): number[] {
+  const q = query.toLowerCase();
+
+  // Indian cities and regions with tight bboxes [west, south, east, north]
+  const locations: Record<string, number[]> = {
+    // Major cities
+    'jaipur': [75.7, 26.8, 75.95, 27.05],
+    'mumbai': [72.75, 18.85, 73.05, 19.15],
+    'delhi': [77.0, 28.4, 77.4, 28.75],
+    'new delhi': [77.0, 28.4, 77.4, 28.75],
+    'bangalore': [77.4, 12.85, 77.75, 13.1],
+    'bengaluru': [77.4, 12.85, 77.75, 13.1],
+    'chennai': [80.05, 12.9, 80.35, 13.15],
+    'kolkata': [88.25, 22.45, 88.45, 22.65],
+    'hyderabad': [78.3, 17.3, 78.6, 17.55],
+    'ahmedabad': [72.5, 22.95, 72.75, 23.15],
+    'pune': [73.75, 18.45, 74.0, 18.65],
+    'lucknow': [80.85, 26.75, 81.1, 26.95],
+    'bhopal': [77.35, 23.2, 77.55, 23.4],
+    'patna': [85.05, 25.55, 85.25, 25.7],
+    'guwahati': [91.65, 26.1, 91.8, 26.25],
+    'cherrapunji': [91.65, 25.25, 91.75, 25.35],
+    'thar desert': [69.0, 24.0, 74.0, 28.0],
+    'jaisalmer': [70.5, 26.7, 71.1, 27.0],
+    'sundarbans': [88.5, 21.6, 89.2, 22.1],
+    'kashmir': [73.5, 33.0, 77.5, 36.5],
+    'himalayas': [77.0, 28.0, 80.0, 35.0],
+    'lassa': [78.5, 27.5, 79.0, 28.0],
+    // Indian states/regions
+    'rajasthan': [69.5, 23.0, 76.5, 30.5],
+    'assam': [89.5, 24.0, 96.0, 28.0],
+    'uttarakhand': [77.5, 28.5, 81.0, 31.5],
+    'karnataka': [74.0, 11.5, 78.5, 18.5],
+    'tamil nadu': [76.0, 7.5, 80.5, 13.5],
+    'odisha': [81.0, 17.5, 87.5, 22.5],
+    'madhya pradesh': [74.0, 21.0, 82.5, 26.5],
+    'maharashtra': [72.5, 15.5, 80.5, 22.0],
+    'andhra pradesh': [77.0, 12.5, 84.5, 19.5],
+    'kerala': [74.8, 8.0, 77.5, 12.8],
+    // International
+    'amazon': [-75.0, -15.0, -45.0, 5.0],
+    'tokyo': [139.5, 35.4, 140.0, 35.9],
+    'london': [-0.5, 51.3, 0.3, 51.7],
+    'cairo': [31.0, 29.8, 31.5, 30.2],
+    'sydney': [150.5, -34.2, 151.5, -33.6],
+  };
+
+  // Check for exact location match
+  for (const [loc, bbox] of Object.entries(locations)) {
+    if (q.includes(loc)) {
+      console.log(`[search] Extracted location '${loc}' from query`);
+      return bbox;
+    }
+  }
+
+  // Default: India bounding box
+  return [68.0, 6.0, 97.5, 37.5];
+}
+
+/**
  * Parse JSON string fields from SQLite into objects
  */
 function parseDatasetJson(dataset: any) {
@@ -81,8 +144,8 @@ router.post('/', searchLimiter, sanitizeSearchQuery, optionalAuth, async (req: A
       // Determine bbox for STAC search
       let stacBbox = bbox;
       if (!stacBbox) {
-        // Default: India bounding box for Indian users
-        stacBbox = [68.0, 6.0, 97.5, 37.5];
+        // Extract location from query text
+        stacBbox = extractLocationBbox(query);
       }
 
       // Determine collection for STAC search
