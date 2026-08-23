@@ -81,14 +81,6 @@ type Tab = 'ask' | 'discover';
 // ── Page ────────────────────────────────────────────────────────
 
 function HomePageContent() {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-  if (!mounted) return (
-    <div className="min-h-screen bg-[#0a0e1a]" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ color: '#64748b', fontSize: '14px' }}>Loading OrbitalQuery...</div>
-    </div>
-  );
-
   const [tab, setTab] = useState<Tab>('ask');
   const analysis = useAnalysis();
 
@@ -101,6 +93,15 @@ function HomePageContent() {
   const [loading, setLoading] = useState(false);
   const [viewMode, setViewMode] = useState<'split' | 'map' | 'results'>('split');
   const [comparingIds, setComparingIds] = useState<Set<string>>(new Set());
+
+  // Hydration guard: render nothing until client-side
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  if (!mounted) return (
+    <div className="min-h-screen bg-[#0a0e1a]" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ color: '#64748b', fontSize: '14px' }}>Loading OrbitalQuery...</div>
+    </div>
+  );
 
   const handleSearch = useCallback(async (searchFilters: SearchFilters) => {
     setLoading(true);
