@@ -438,6 +438,3 @@ OrbitalQuery/
 
 MIT License
 
----
-
-Built with ❤️ for Earth observation researchers and environmental decision-makers.
