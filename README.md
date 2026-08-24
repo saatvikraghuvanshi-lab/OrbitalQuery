@@ -398,6 +398,27 @@ OrbitalQuery/
 
 ---
 
+## 🛠️ Tech Stack
+
+| Layer | Technology | Purpose |
+|-------|-----------|---------|
+| **Frontend** | Next.js 18 + TypeScript | React framework with SSR/SSG |
+| **Styling** | Tailwind CSS | Utility-first CSS with dark theme |
+| **Mapping** | Leaflet.js | Interactive maps + bounding box drawing |
+| **Backend** | Node.js + Express | REST API gateway |
+| **ORM** | Prisma | Type-safe database queries |
+| **Database** | SQLite | Lightweight local database |
+| **Analysis** | Python + FastAPI | EO data processing microservice |
+| **Raster** | rasterio + rioxarray | Satellite imagery I/O and computation |
+| **Data Cubes** | xarray + dask | Multi-dimensional array operations |
+| **Search** | TF-IDF (custom) | Semantic search engine |
+| **Auth** | JWT + bcrypt | Token-based authentication |
+| **Data API** | STAC (Planetary Computer, AWS, NASA) | Earth Observation data access |
+| **Frontend Deploy** | Vercel | Serverless frontend hosting |
+| **Backend Deploy** | Render | Container hosting with free tier |
+
+---
+
 ## 🏗️ Architecture
 
 ### System Overview
