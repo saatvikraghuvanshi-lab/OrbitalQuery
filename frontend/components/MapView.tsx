@@ -53,6 +53,7 @@ if (typeof window !== 'undefined') {
   });
 }
 
+
 // Auto-fit bounds to search results
 function FitBounds({ results }: { results: DatasetResult[] }) {
   const map = useMap();
@@ -81,6 +82,25 @@ function ZoomToSelected({ dataset }: { dataset: DatasetResult | null }) {
       map.flyTo([dataset.centroidLat, dataset.centroidLng], 8);
     }
   }, [dataset, map]);
+  return null;
+}
+
+// Toggle map dragging based on draw mode
+function ToggleDrag({ isDrawing }: { isDrawing: boolean }) {
+  const map = useMap();
+  useEffect(() => {
+    if (isDrawing) {
+      map.dragging.disable();
+      map.getContainer().style.cursor = 'crosshair';
+    } else {
+      map.dragging.enable();
+      map.getContainer().style.cursor = '';
+    }
+    return () => {
+      map.dragging.enable();
+      map.getContainer().style.cursor = '';
+    };
+  }, [isDrawing, map]);
   return null;
 }
 
@@ -222,6 +242,15 @@ export default function MapView({ results, selectedDataset, onSelectDataset, bbo
             });
           }}
         />
+        {/* Selected dataset bbox overlay */}
+        {selectedDataset?.bbox && Array.isArray(selectedDataset.bbox) && selectedDataset.bbox.length === 4 && (
+          <Rectangle
+            key={`sel-${selectedDataset.id}`}
+            bounds={[[selectedDataset.bbox[1], selectedDataset.bbox[0]], [selectedDataset.bbox[3], selectedDataset.bbox[2]]]}
+            pathOptions={{ color: '#22d3ee', weight: 2.5, fillColor: '#22d3ee', fillOpacity: 0.08, dashArray: '8 4' }}
+          />
+        )}
+        {/* User-drawn bbox overlay */}
         {bbox && (
           <Rectangle
             bounds={[[bbox.south, bbox.west], [bbox.north, bbox.east]]}
@@ -236,6 +265,7 @@ export default function MapView({ results, selectedDataset, onSelectDataset, bbo
         )}
         <FitBounds results={results} />
         <ZoomToSelected dataset={selectedDataset} />
+        <ToggleDrag isDrawing={isDrawing} />
         <DrawHandler isDrawing={isDrawing} onBboxChange={onBboxChange} onDrawBbox={setDrawBbox} />
       </MapContainer>
 

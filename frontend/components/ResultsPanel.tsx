@@ -1,9 +1,7 @@
 'use client';
 
-import { AnalysisResult } from '@/hooks/useAnalysis';
-
 interface ResultsPanelProps {
-  result: AnalysisResult;
+  result: any;
 }
 
 const SEVERITY_COLORS: Record<string, string> = {
@@ -51,8 +49,8 @@ export default function ResultsPanel({ result }: ResultsPanelProps) {
               </div>
               <div className="text-lg font-bold text-slate-200">
                 {typeof value === 'number' ? (
-                  value < 1 && value > 0 ? value.toFixed(4) : value.toFixed(1)
-                ) : value}
+                  value < 1 && value > 0 ? value.toFixed(4) : Number(value).toFixed(1)
+                ) : String(value)}
                 <span className="text-[10px] text-slate-500 font-normal ml-1">
                   {key.includes('km2') ? 'km²' : key.includes('pct') || key.includes('%') ? '%' : ''}
                 </span>

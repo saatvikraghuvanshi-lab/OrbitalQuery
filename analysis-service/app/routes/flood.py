@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from app.services.flood_analysis import run_flood_assessment
+from app.security import validate_bbox, validate_array_payload, validate_query_safe
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/analysis", tags=["flood"])
@@ -60,6 +61,17 @@ async def flood_assess(request: FloodAssessmentRequest):
     and optionally runs flood detection if backscatter arrays are provided.
     """
     import numpy as np
+    from app.security import sanitize_error_message
+
+    # Security: validate query and bbox
+    validate_query_safe(request.query)
+    validate_bbox(request.aoi_bbox)
+
+    # Security: validate array payloads to prevent memory exhaustion
+    validate_array_payload(request.pre_vv_db)
+    validate_array_payload(request.post_vv_db)
+    validate_array_payload(request.pre_vh_db)
+    validate_array_payload(request.post_vh_db)
 
     # Convert optional lists to numpy arrays
     pre_vv_db = np.array(request.pre_vv_db, dtype=np.float32) if request.pre_vv_db else None
@@ -81,7 +93,7 @@ async def flood_assess(request: FloodAssessmentRequest):
             resolution_meters=request.resolution_meters,
         )
     except Exception as e:
-        logger.error("Flood assessment failed: %s", e)
-        raise HTTPException(status_code=500, detail=f"Assessment failed: {e}")
+        logger.error("Flood assessment failed: %s", sanitize_error_message(e))
+        raise HTTPException(status_code=500, detail="Assessment failed")
 
     return FloodAssessmentResponse(**result.to_dict())

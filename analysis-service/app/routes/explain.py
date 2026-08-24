@@ -14,6 +14,7 @@ from app.services.explanation import (
     prepare_for_n8n,
     validate_explanation,
 )
+from app.security import validate_query_safe, sanitize_error_message, sanitize_response_data
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/analysis", tags=["explanation"])
@@ -64,10 +65,13 @@ async def explain_analysis(request: ExplanationRequest):
     In 'deterministic' mode: generates fact-based explanation without LLM.
     In 'n8n' mode: prepares payload for n8n webhook (caller must forward).
     """
+    # Security: validate query for injection
+    sanitized_query = validate_query_safe(request.query)
+
     # Build the analysis result dict
     analysis_result = {
         "analysis_id": request.analysis_id,
-        "query": request.query,
+        "query": sanitized_query,
         "analysis_plan": request.analysis_plan,
         "aoi_bbox": request.aoi_bbox,
         "event_date": request.event_date,
@@ -90,6 +94,10 @@ async def explain_analysis(request: ExplanationRequest):
         if not n8n_webhook_url:
             logger.warning("N8N_WEBHOOK_URL not set — falling back to deterministic mode")
         else:
+            # Security: validate n8n URL against SSRF
+            from app.security import validate_url_safe
+            validate_url_safe(n8n_webhook_url)
+
             payload = prepare_for_n8n(analysis_result)
             try:
                 async with httpx.AsyncClient(timeout=60.0) as client:
@@ -132,8 +140,8 @@ async def explain_analysis(request: ExplanationRequest):
     try:
         explanation: Explanation = generate_deterministic_explanation(analysis_result)
     except Exception as e:
-        logger.error("Explanation generation failed: %s", e)
-        raise HTTPException(status_code=500, detail=f"Explanation failed: {e}")
+        logger.error("Explanation generation failed: %s", sanitize_error_message(e))
+        raise HTTPException(status_code=500, detail="Explanation generation failed")
 
     # Validate
     is_valid, error_msg = validate_explanation(

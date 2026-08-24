@@ -447,3 +447,169 @@ class TestBhoonidhiCollectionMaps:
         from app.services.eo_provider import BHOONIDHI_REVERSE_MAP
         assert BHOONIDHI_REVERSE_MAP["Sentinel-1A_SAR-IW_GRD"] == "sentinel-1-grd"
         assert BHOONIDHI_REVERSE_MAP["EOS-04_SAR-MRS_L2A"] == "eos-04-sar"
+
+
+# ══════════════════════════════════════════════════════════════════
+# SECTION 7: AWS Earth Search Provider (unit tests — no network)
+# ══════════════════════════════════════════════════════════════════
+
+
+class TestAWSEarthSearchProvider:
+    """Unit tests for AWSEarthSearchProvider — no network calls."""
+
+    def test_get_name(self):
+        from app.services.eo_provider import AWSEarthSearchProvider
+        p = AWSEarthSearchProvider()
+        assert p.get_name() == "aws_earth_search"
+
+    def test_capabilities(self):
+        from app.services.eo_provider import AWSEarthSearchProvider
+        p = AWSEarthSearchProvider()
+        caps = p.get_capabilities()
+        assert caps.name == "aws_earth_search"
+        assert caps.supports_stac is True
+        assert caps.supports_cloud_hosted is True
+        assert caps.supports_signed_urls is False
+        assert "sentinel-2-l2a" in caps.collections
+        assert "sentinel-1-grd" in caps.collections
+        assert "landsat-c2-l2" in caps.collections
+        assert "naip" in caps.collections
+
+    def test_map_collection_sentinel2(self):
+        from app.services.eo_provider import AWSEarthSearchProvider
+        p = AWSEarthSearchProvider()
+        assert p._map_collection("sentinel-2-l2a") == "sentinel-2-l2a"
+
+    def test_map_collection_unknown_passthrough(self):
+        from app.services.eo_provider import AWSEarthSearchProvider
+        p = AWSEarthSearchProvider()
+        assert p._map_collection("unknown-collection") == "unknown-collection"
+
+    def test_metadata_extraction(self):
+        from app.services.eo_provider import AWSEarthSearchProvider
+        p = AWSEarthSearchProvider()
+        item = {
+            "id": "S2A_MSIL2A_20240301_N0510",
+            "collection": "sentinel-2-l2a",
+            "bbox": [75.7, 26.8, 75.9, 27.0],
+            "geometry": {"type": "Polygon", "coordinates": []},
+            "properties": {
+                "datetime": "2024-03-01T12:00:00Z",
+                "eo:cloud_cover": 5.2,
+                "platform": "sentinel-2a",
+                "instruments": ["msi"],
+            },
+            "assets": {},
+        }
+        meta = p.get_metadata(item)
+        assert meta["item_id"] == "S2A_MSIL2A_20240301_N0510"
+        assert meta["cloud_cover"] == 5.2
+        assert meta["platform"] == "sentinel-2a"
+
+    def test_get_assets(self):
+        from app.services.eo_provider import AWSEarthSearchProvider
+        p = AWSEarthSearchProvider()
+        item = {"assets": {"B04": {"href": "https://s3.amazonaws.com/B04.tif"}}}
+        assets = p.get_assets(item)
+        assert "B04" in assets
+
+    def test_get_asset_href(self):
+        from app.services.eo_provider import AWSEarthSearchProvider
+        p = AWSEarthSearchProvider()
+        href = p.get_asset_href({"href": "https://s3.amazonaws.com/B04.tif"})
+        assert href == "https://s3.amazonaws.com/B04.tif"
+
+    def test_implements_interface(self):
+        from app.services.eo_provider import AWSEarthSearchProvider
+        assert issubclass(AWSEarthSearchProvider, EOProvider)
+
+
+# ══════════════════════════════════════════════════════════════════
+# SECTION 8: NASA CMR Provider (unit tests — no network)
+# ══════════════════════════════════════════════════════════════════
+
+
+class TestNASACMRProvider:
+    """Unit tests for NASACMRProvider — no network calls."""
+
+    def test_get_name(self):
+        from app.services.eo_provider import NASACMRProvider
+        p = NASACMRProvider()
+        assert p.get_name() == "nasa_cmr"
+
+    def test_capabilities(self):
+        from app.services.eo_provider import NASACMRProvider
+        p = NASACMRProvider()
+        caps = p.get_capabilities()
+        assert caps.name == "nasa_cmr"
+        assert caps.supports_stac is False
+        assert caps.supports_cloud_hosted is True
+        assert "modis-terra-ndvi-16day-250m" in caps.collections
+        assert "viirs-active-fire-375m" in caps.collections
+        assert "modis-terra-snow-500m-daily" in caps.collections
+        assert "landsat-hls" in caps.collections
+
+    def test_map_collection_ndvi(self):
+        from app.services.eo_provider import NASACMRProvider, NASA_CMR_COLLECTIONS
+        p = NASACMRProvider()
+        info = p._map_collection("modis-terra-ndvi-16day-250m")
+        assert info is not None
+        assert info["concept_id"] == "C1748066515-LPCLOUD"
+        assert info["platform"] == "Terra"
+        assert info["instrument"] == "MODIS"
+
+    def test_map_collection_fire(self):
+        from app.services.eo_provider import NASACMRProvider
+        p = NASACMRProvider()
+        info = p._map_collection("viirs-active-fire-375m")
+        assert info is not None
+        assert info["platform"] == "NOAA-20"
+        assert info["instrument"] == "VIIRS"
+
+    def test_map_collection_unknown(self):
+        from app.services.eo_provider import NASACMRProvider
+        p = NASACMRProvider()
+        info = p._map_collection("nonexistent")
+        assert info is None
+
+    def test_search_unknown_collection_returns_empty(self):
+        from app.services.eo_provider import NASACMRProvider
+        p = NASACMRProvider()
+        result = p.search(collection="nonexistent", limit=5)
+        assert result.items == []
+        assert result.total == 0
+
+    def test_get_assets(self):
+        from app.services.eo_provider import NASACMRProvider
+        p = NASACMRProvider()
+        item = {"assets": {"ndvi": {"href": "https://example.com/ndvi.tif"}}}
+        assets = p.get_assets(item)
+        assert "ndvi" in assets
+
+    def test_get_asset_href(self):
+        from app.services.eo_provider import NASACMRProvider
+        p = NASACMRProvider()
+        href = p.get_asset_href({"href": "https://example.com/data.tif"})
+        assert href == "https://example.com/data.tif"
+
+    def test_implements_interface(self):
+        from app.services.eo_provider import NASACMRProvider
+        assert issubclass(NASACMRProvider, EOProvider)
+
+    def test_metadata_extraction(self):
+        from app.services.eo_provider import NASACMRProvider
+        p = NASACMRProvider()
+        item = {
+            "id": "test-granule-123",
+            "collection": "modis-terra-ndvi-16day-250m",
+            "bbox": [78.3, 17.2, 78.6, 17.5],
+            "properties": {
+                "datetime": "2024-03-01T00:00:00Z",
+                "platform": "terra",
+                "instruments": ["modis"],
+            },
+            "assets": {},
+        }
+        meta = p.get_metadata(item)
+        assert meta["item_id"] == "test-granule-123"
+        assert meta["platform"] == "terra"

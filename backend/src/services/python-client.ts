@@ -15,9 +15,12 @@ const PYTHON_SERVICE_URL =
   process.env.PYTHON_SERVICE_URL || 'http://localhost:8000';
 
 const PYTHON_SERVICE_TIMEOUT_MS = parseInt(
-  process.env.PYTHON_SERVICE_TIMEOUT_MS || '120000',
+  process.env.PYTHON_SERVICE_TIMEOUT_MS || '180000', // 3 minutes — allows Python cold-start on free tier
   10,
 );
+
+const MAX_RETRIES = 1; // Retry once on 503 (cold start)
+const RETRY_DELAY_MS = 5000; // Wait 5s for cold start before retry
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -56,7 +59,7 @@ export async function callPythonService<T = any>(
   );
 
   try {
-    const response = await fetch(url, {
+    let response = await fetch(url, {
       method,
       headers: {
         'Content-Type': 'application/json',
@@ -66,6 +69,21 @@ export async function callPythonService<T = any>(
       signal: AbortSignal.timeout(PYTHON_SERVICE_TIMEOUT_MS),
     });
 
+    // Retry once on 503 (Render cold-start)
+    if (response.status === 503) {
+      console.log(`[python-client] ← 503, retrying in ${RETRY_DELAY_MS}ms (cold start) | requestId=${requestId}`);
+      await new Promise(r => setTimeout(r, RETRY_DELAY_MS));
+      response = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Request-ID': requestId,
+        },
+        body: body ? JSON.stringify(body) : undefined,
+        signal: AbortSignal.timeout(PYTHON_SERVICE_TIMEOUT_MS),
+      });
+    }
+
     const upstreamLatencyMs = Date.now() - start;
     const text = await response.text();
 
@@ -73,7 +91,7 @@ export async function callPythonService<T = any>(
     try {
       data = JSON.parse(text);
     } catch {
-      // Non-JSON response from Python service
+      // Non-JSON response from Python service (e.g. 503 HTML from Render)
       console.error(
         `[python-client] ← ${response.status} (non-JSON) | requestId=${requestId} latency=${upstreamLatencyMs}ms`,
       );
@@ -81,7 +99,7 @@ export async function callPythonService<T = any>(
         ok: false,
         requestId,
         status: response.status,
-        error: 'Python service returned invalid response',
+        error: response.status === 503 ? 'Analysis service is starting up (cold start). Please try again in 30 seconds.' : 'Python service returned invalid response',
         code: 'UPSTREAM_INVALID_RESPONSE',
         upstreamLatencyMs,
       };
@@ -137,7 +155,7 @@ export async function callPythonService<T = any>(
     return {
       ok: false,
       requestId,
-      error: 'Python analysis service is unavailable',
+      error: 'Analysis service is currently unavailable. It may be starting up from sleep — please try again in 30 seconds.',
       code: 'UPSTREAM_UNAVAILABLE',
       upstreamLatencyMs,
     };

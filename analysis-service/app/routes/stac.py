@@ -10,6 +10,7 @@ from app.config import ALLOWED_COLLECTIONS, DEFAULT_MAX_CLOUD_COVER
 from app.models.requests import STACSearchRequest, STACSearchResponse
 from app.services.stac_service import search_stac
 from app.services.eo_provider import get_provider, get_default_provider
+from app.security import validate_bbox, validate_geojson, validate_date_range, validate_scene_count, validate_url_safe
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/stac", tags=["stac"])
@@ -25,17 +26,20 @@ async def stac_search(request: STACSearchRequest):
 
     Returns signed STAC item metadata ready for raster access.
     """
-    # Validate collection (lenient — let providers decide)
+    # ── Security: Validate inputs ────────────────────────────────
     if request.collection not in ALLOWED_COLLECTIONS:
         logger.warning(
             "Collection '%s' not in known list — forwarding to provider anyway",
             request.collection,
         )
 
-    # Build geometry
+    # Validate scene count
+    validated_limit = validate_scene_count(request.limit)
+
+    # Build geometry with security validation
     bbox = request.bbox
     if bbox is None and request.geometry:
-        # Convert GeoJSON to bbox
+        validate_geojson(request.geometry.model_dump())
         if request.geometry.bbox:
             bbox = request.geometry.bbox
         elif request.geometry.type == "Polygon":
@@ -49,6 +53,13 @@ async def stac_search(request: STACSearchRequest):
             status_code=400,
             detail="Either bbox or geometry must be provided",
         )
+
+    # Security: Validate bbox size and bounds
+    validate_bbox(bbox)
+
+    # Security: Validate date range
+    if request.start_date and request.end_date:
+        validate_date_range(request.start_date.isoformat(), request.end_date.isoformat())
 
     # Build datetime
     datetime_str = request.datetime
@@ -78,13 +89,14 @@ async def stac_search(request: STACSearchRequest):
             bbox=bbox,
             datetime=datetime_str,
             max_cloud_cover=request.max_cloud_cover,
-            limit=request.limit,
+            limit=validated_limit,
         )
     except Exception as e:
-        logger.error("STAC search failed via %s: %s", provider.get_name(), e)
+        from app.security import sanitize_error_message
+        logger.error("STAC search failed via %s: %s", provider.get_name(), sanitize_error_message(e))
         raise HTTPException(
             status_code=502,
-            detail=f"STAC API search failed: {str(e)}",
+            detail="STAC API search failed",
         )
 
     return STACSearchResponse(

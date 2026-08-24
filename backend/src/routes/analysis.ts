@@ -1268,4 +1268,46 @@ router.get('/provenance', optionalAuth, async (req: AuthRequest, res: Response) 
   res.json({ requestId: result.requestId, ...result.data });
 });
 
+// ─── Temporal Comparison Pipeline ───────────────────────────────
+
+/**
+ * Full temporal comparison pipeline — the single reusable engine.
+ *
+ * POST /api/analysis/temporal-compare
+ *
+ * Accepts a natural language query, builds an analysis plan,
+ * searches for scenes in both time periods, computes spectral indices,
+ * runs change detection, and returns real metrics.
+ */
+router.post('/temporal-compare', optionalAuth, async (req: AuthRequest, res: Response) => {
+  const { query, phenomenon, aoi, bbox, start_date, end_date, sensor, analysis_type, cloud_threshold } = req.body;
+
+  if (!query || typeof query !== 'string' || query.length < 5) {
+    res.status(400).json({ error: 'query string is required (min 5 chars)', code: 'MISSING_QUERY' });
+    return;
+  }
+
+  const pythonBody: Record<string, any> = { query };
+  if (phenomenon) pythonBody.phenomenon = phenomenon;
+  if (aoi) pythonBody.aoi = aoi;
+  if (bbox && isValidBbox(bbox)) pythonBody.bbox = bbox;
+  if (start_date) pythonBody.start_date = start_date;
+  if (end_date) pythonBody.end_date = end_date;
+  if (sensor) pythonBody.sensor = sensor;
+  if (analysis_type) pythonBody.analysis_type = analysis_type;
+  if (cloud_threshold !== undefined) pythonBody.cloud_threshold = cloud_threshold;
+
+  const result = await callPythonService('POST', '/analysis/temporal-compare', pythonBody, 'temporal-compare');
+  if (!result.ok) {
+    res.status(result.status || 502).json({ error: result.error, code: result.code, requestId: result.requestId });
+    return;
+  }
+
+  res.json({
+    requestId: result.requestId,
+    ...result.data,
+    latencyMs: result.upstreamLatencyMs,
+  });
+});
+
 export default router;

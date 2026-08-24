@@ -9,8 +9,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import HOST, PORT, STAC_API_URL
-from app.routes import analysis, change, decision, evidence, explain, flood, health, index, preprocess, providers, provenance, query, sensor, stac, timeseries
-from app.services.eo_provider import init_default_provider, register_provider, CopernicusProvider, BhoonidhiProvider
+from app.routes import analysis, change, decision, evidence, explain, flood, health, index, preprocess, providers, provenance, query, sensor, stac, timeseries, temporal_compare
+from app.services.eo_provider import init_default_provider, register_provider, CopernicusProvider, BhoonidhiProvider, AWSEarthSearchProvider, NASACMRProvider
+from app.security import RateLimitMiddleware, SecurityHeadersMiddleware, AuditMiddleware, get_cors_origins
 
 # ── Logging ──────────────────────────────────────────────────────
 
@@ -35,13 +36,23 @@ app = FastAPI(
     redoc_url="/redoc",
 )
 
-# CORS — allow the Node.js backend to call this service
+# Security middleware (applied in reverse order — last added = first executed)
+# 1. Rate limiting
+app.add_middleware(RateLimitMiddleware, max_requests=60, window_seconds=60)
+
+# 2. Security headers
+app.add_middleware(SecurityHeadersMiddleware)
+
+# 3. Audit logging
+app.add_middleware(AuditMiddleware)
+
+# CORS — use environment-aware origins (no wildcard in production)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3001", "http://localhost:3000", "*"],
+    allow_origins=get_cors_origins(),
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 # ── Initialize EO Providers ───────────────────────────────────
@@ -63,10 +74,26 @@ bhoonidhi_user = os.environ.get("BHOONIDHI_USER")
 bhoonidhi_pass = os.environ.get("BHOONIDHI_PASS")
 if bhoonidhi_user and bhoonidhi_pass:
     bhoonidhi_provider = BhoonidhiProvider(user_id=bhoonidhi_user, password=bhoonidhi_pass)
-    register_provider(bhoonidhi_provider, default=True)  # Bhoonidhi is primary
-    logger.info("EO Provider registered: bhoonidhi (DEFAULT — ISRO data)")
+    register_provider(bhoonidhi_provider, default=False)  # Bhoonidhi is secondary (not STAC-compatible)
+    logger.info("EO Provider registered: bhoonidhi (secondary — ISRO data)")
 else:
     logger.info("Bhoonidhi skipped (set BHOONIDHI_USER + BHOONIDHI_PASS to enable)")
+
+# 4. AWS Earth Search (tertiary — free, no auth, good fallback)
+try:
+    aws_provider = AWSEarthSearchProvider()
+    register_provider(aws_provider, default=False)
+    logger.info("EO Provider registered: aws_earth_search (tertiary — free fallback)")
+except Exception as e:
+    logger.warning("AWS Earth Search registration failed: %s", e)
+
+# 5. NASA CMR (for MODIS/VIIRS/Landsat HLS — fire, snow, vegetation)
+try:
+    nasa_provider = NASACMRProvider()
+    register_provider(nasa_provider, default=False)
+    logger.info("EO Provider registered: nasa_cmr (MODIS/VIIRS fire+snow+vegetation)")
+except Exception as e:
+    logger.warning("NASA CMR registration failed: %s", e)
 
 # ── Routes ───────────────────────────────────────────────────────
 
@@ -85,7 +112,11 @@ app.include_router(query.router)
 app.include_router(providers.router)
 app.include_router(decision.router)
 app.include_router(provenance.router)
+app.include_router(temporal_compare.router)
 
+
+import os as _os
+_ENV = _os.getenv("ENVIRONMENT", "development")
 
 @app.get("/", tags=["root"])
 async def root():
@@ -93,7 +124,7 @@ async def root():
     return {
         "service": "OrbitalQuery EO Analysis Service",
         "version": "0.1.0",
-        "docs": "/docs",
+        "docs": "/docs" if _ENV != "production" else "disabled in production",
         "stac_api": STAC_API_URL,
         "endpoints": {
             "health": "GET /health",
