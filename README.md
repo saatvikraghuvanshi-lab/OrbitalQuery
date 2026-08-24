@@ -9,6 +9,7 @@ A platform that enables researchers and decision-makers to **semantically query 
 ![Prisma](https://img.shields.io/badge/Prisma-5-blue)
 ![Leaflet](https://img.shields.io/badge/Leaflet-1.9-green)
 
+OrbitalQuery is a semantic search engine for Earth Observation satellite datasets that lets researchers query archives using natural language (e.g., "deforestation near Assam 2015–2020") instead of manually browsing STAC catalogs — and unlike competitors like STAC Browser or Sentinel Hub, it combines AI-powered semantic search with a full analysis pipeline (temporal comparison, change detection, spectral indices) in a single zero-config platform, so you go from question to insight without switching tools.
 ---
 
 > ⚠️ **Disclaimer:** OrbitalQuery is a research and exploration tool. It is **not intended for operational disaster response** or mission-critical decision-making. Always verify dataset accuracy and suitability through official sources before making policy or operational decisions.
