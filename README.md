@@ -375,6 +375,29 @@ OrbitalQuery/
 
 ---
 
+## 📸 Screenshots
+
+<table>
+<tr>
+<td align="center"><b>Login</b><br/><img src="docs/screenshots/OQ1.png" width="400"/></td>
+<td align="center"><b>Ask — Natural Language Search</b><br/><img src="docs/screenshots/OQ2.png" width="400"/></td>
+</tr>
+<tr>
+<td align="center"><b>Showcase — Pre-built Analysis Queries</b><br/><img src="docs/screenshots/OQ3.png" width="400"/></td>
+<td align="center"><b>Discover — Dataset Browser with Map</b><br/><img src="docs/screenshots/OQ4.png" width="400"/></td>
+</tr>
+<tr>
+<td align="center"><b>Analysis Pipeline — Processing Steps</b><br/><img src="docs/screenshots/OQ5.png" width="400"/></td>
+<td align="center"><b>Before / After — Satellite Imagery Comparison</b><br/><img src="docs/screenshots/OQ6.png" width="400"/></td>
+</tr>
+<tr>
+<td align="center"><b>Key Metrics — Change Detection Results</b><br/><img src="docs/screenshots/OQ7.png" width="400"/></td>
+<td align="center"><b>Full Analysis — Temporal Comparison Complete</b><br/><img src="docs/screenshots/OQ8.png" width="400"/></td>
+</tr>
+</table>
+
+---
+
 ## 🏗️ Architecture
 
 ### System Overview
