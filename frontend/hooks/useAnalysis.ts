@@ -148,7 +148,12 @@ export function useAnalysis() {
       }
 
       if (!res.ok) {
-        throw new Error(data?.detail || data?.message || data?.error || `Analysis failed (${res.status})`);
+        const errMsg = data?.detail || data?.message || data?.error || `Analysis failed (${res.status})`;
+        // Make cold-start errors user-friendly
+        if (errMsg.includes('starting up') || errMsg.includes('unavailable') || errMsg.includes('invalid response')) {
+          throw new Error('🛰️ The analysis engine is waking up from sleep (Render free tier). Please try again in 30-60 seconds.');
+        }
+        throw new Error(errMsg);
       }
 
       if (data.status === 'error') {
