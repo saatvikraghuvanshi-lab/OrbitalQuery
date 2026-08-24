@@ -24,6 +24,7 @@ from app.services.capability_registry import (
     list_analysis_types,
     PHENOMENON_REGISTRY,
 )
+from app.security import validate_query_safe
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/analysis/query", tags=["query"])
@@ -80,9 +81,12 @@ async def convert_query_to_plan(req: QueryPlanRequest) -> QueryPlanResponse:
     """
     request_id = str(uuid.uuid4())
 
+    # Security: validate query for injection + length
+    sanitized_query = validate_query_safe(req.query)
+
     logger.info(
         "[query/plan] requestId=%s query='%s'",
-        request_id, req.query[:80],
+        request_id, sanitized_query[:80],
     )
 
     # Build overrides dict

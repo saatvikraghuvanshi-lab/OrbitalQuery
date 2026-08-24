@@ -1,9 +1,7 @@
 'use client';
 
-import { AnalysisResult } from '@/hooks/useAnalysis';
-
 interface IntelligencePanelProps {
-  result: AnalysisResult;
+  result: any;
   onViewEvidence?: () => void;
 }
 

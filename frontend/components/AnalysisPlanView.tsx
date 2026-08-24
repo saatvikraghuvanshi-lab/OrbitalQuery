@@ -10,9 +10,13 @@ const PHENOMENON_ICONS: Record<string, string> = {
   flood_impact: '🌊',
   urban_expansion: '🏙️',
   vegetation_change: '🌿',
+  vegetation_loss: '🌿',
+  deforestation: '🪓',
   burn_severity: '🔥',
   snow_cover: '❄️',
+  glacier_retreat: '🏔️',
   water_change: '💧',
+  coastal_erosion: '🌊',
   soil_moisture: '🏜️',
   land_cover_change: '🗺️',
 };
@@ -21,9 +25,12 @@ const PHENOMENON_LABELS: Record<string, string> = {
   flood_impact: 'Flood Impact',
   urban_expansion: 'Urban Expansion',
   vegetation_change: 'Vegetation Change',
+  deforestation: 'Deforestation',
   burn_severity: 'Burn Severity',
   snow_cover: 'Snow Cover',
+  glacier_retreat: 'Glacier Retreat',
   water_change: 'Water Change',
+  coastal_erosion: 'Coastal Erosion',
   soil_moisture: 'Soil Moisture',
   land_cover_change: 'Land Cover Change',
 };
@@ -63,14 +70,14 @@ export default function AnalysisPlanView({ plan }: AnalysisPlanViewProps) {
         <div className="bg-slate-800/30 rounded-xl p-3">
           <div className="text-[10px] text-slate-600 mb-1">Period</div>
           <div className="text-xs font-medium text-slate-300">
-            {plan.time_range?.start || '—'} → {plan.time_range?.end || '—'}
+            {plan.start_date || '—'} → {plan.end_date || '—'}
           </div>
         </div>
 
         <div className="bg-slate-800/30 rounded-xl p-3">
           <div className="text-[10px] text-slate-600 mb-1">Evidence</div>
           <div className="text-xs font-medium text-slate-300">
-            {(plan.preferred_sensors || [plan.collection]).join(', ')}
+            {(plan.sensor || 'sentinel-2-l2a')}{plan.bands ? ` (${plan.bands.slice(0, 3).join(', ')})` : ''}
           </div>
         </div>
 

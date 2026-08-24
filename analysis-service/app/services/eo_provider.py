@@ -74,6 +74,85 @@ class ItemDetail:
 
 
 # ══════════════════════════════════════════════════════════════════
+# Item Normalization
+# ══════════════════════════════════════════════════════════════════
+
+def normalize_stac_item(item: dict[str, Any], provider: str = "unknown") -> dict[str, Any]:
+    """
+    Normalize a STAC-like item from any provider to a common format.
+
+    Ensures these fields are always present:
+    - id: string
+    - collection: string
+    - bbox: list[float] (4 elements)
+    - geometry: dict (GeoJSON)
+    - properties.datetime: ISO string
+    - properties.eo:cloud_cover: float or None
+    - properties.platform: string
+    - assets: dict
+    - provider: string (which provider returned this)
+    """
+    props = item.get("properties", {})
+    assets = item.get("assets", {})
+
+    # Normalize datetime
+    dt = props.get("datetime", "")
+    if not dt:
+        dt = props.get("time_start", props.get("acquisition_date", ""))
+
+    # Normalize cloud cover
+    cloud = props.get("eo:cloud_cover", props.get("cloud_cover", None))
+
+    # Normalize platform
+    platform = props.get("platform", "unknown")
+
+    # Normalize bbox
+    bbox = item.get("bbox", [])
+    if not bbox or len(bbox) != 4:
+        bbox = [0, 0, 0, 0]
+
+    # Normalize geometry
+    geometry = item.get("geometry", {})
+    if not geometry or "type" not in geometry:
+        geometry = {
+            "type": "Polygon",
+            "coordinates": [[
+                [bbox[0], bbox[1]], [bbox[2], bbox[1]],
+                [bbox[2], bbox[3]], [bbox[0], bbox[3]],
+                [bbox[0], bbox[1]],
+            ]]
+        }
+
+    # Normalize assets — ensure href is always accessible
+    norm_assets = {}
+    for key, asset in assets.items():
+        if isinstance(asset, dict):
+            norm_assets[key] = {
+                "href": asset.get("href", ""),
+                "type": asset.get("type", "application/octet-stream"),
+                "title": asset.get("title", key),
+            }
+
+    # Build normalized item
+    return {
+        "id": item.get("id", "unknown"),
+        "collection": item.get("collection", "unknown"),
+        "bbox": bbox,
+        "geometry": geometry,
+        "properties": {
+            "datetime": dt,
+            "eo:cloud_cover": cloud,
+            "platform": platform,
+            "instruments": props.get("instruments", []),
+            "title": props.get("title", item.get("id", "unknown")),
+        },
+        "assets": norm_assets,
+        "provider": provider,
+        "links": item.get("links", []),
+    }
+
+
+# ══════════════════════════════════════════════════════════════════
 # Abstract Provider Interface
 # ══════════════════════════════════════════════════════════════════
 
@@ -314,9 +393,11 @@ class PlanetaryComputerProvider(EOProvider):
 # CDSE STAC collection IDs use a different naming convention than Planetary Computer.
 # This map translates common names → CDSE collection IDs.
 CDSE_COLLECTION_MAP: dict[str, str] = {
-    "sentinel-2-l2a": "SENTINEL-2",
-    "sentinel-2-l1c": "SENTINEL-2",
-    "sentinel-1-grd": "SENTINEL-1",
+    # CDSE STAC endpoint uses CCM collection names
+    # For Sentinel-2 data, use Planetary Computer or AWS Earth Search
+    "sentinel-2-l2a": "ccm-optical",
+    "sentinel-2-l1c": "ccm-optical",
+    "sentinel-1-grd": "ccm-sar",
 }
 
 # CDSE uses different asset key naming.
@@ -494,14 +575,16 @@ class CopernicusProvider(EOProvider):
             supports_cloud_hosted=True,
             supports_signed_urls=False,
             collections=[
-                "sentinel-2-l2a", "sentinel-2-l1c",
-                "sentinel-1-grd",
+                "ccm-optical", "ccm-sar",
+                # Sentinel data available via OData API, not STAC:
+                # "sentinel-2-l2a", "sentinel-1-grd"
             ],
             max_bbox_area_deg2=100.0,
             notes=(
                 "Copernicus Data Space Ecosystem. "
-                "Free tier with rate limits. Optional Bearer token for higher limits. "
-                "STAC endpoint: stac.dataspace.copernicus.eu/v1/"
+                "STAC endpoint has CCM collections only. "
+                "Sentinel-2/1 data available via OData catalogue API. "
+                "For Sentinel data, prefer Planetary Computer or AWS Earth Search."
             ),
         )
 
@@ -989,6 +1072,401 @@ class MockProvider(EOProvider):
 
     def is_reachable(self) -> bool:
         return self._reachable
+
+
+# ══════════════════════════════════════════════════════════════════
+# AWS Earth Search Provider
+# ══════════════════════════════════════════════════════════════════
+
+# AWS Earth Search collections mapped to OrbitalQuery names
+AWS_COLLECTION_MAP: dict[str, str] = {
+    "sentinel-2-l2a": "sentinel-2-l2a",
+    "sentinel-2-l1c": "sentinel-2-l1c",
+    "sentinel-1-grd": "sentinel-1-grd",
+    "landsat-c2-l2": "landsat-c2-l2",
+    "naip": "naip",
+}
+
+
+class AWSEarthSearchProvider(EOProvider):
+    """
+    AWS Earth Search STAC API provider.
+
+    Free, no authentication required.
+    Hosts Sentinel-2, Landsat, Sentinel-1, NAIP and more.
+    Asset URLs are directly accessible (cloud-hosted on AWS S3).
+
+    Endpoint: https://earth-search.aws.element84.com/v1
+    """
+
+    STAC_API = "https://earth-search.aws.element84.com/v1"
+
+    def __init__(self, api_url: Optional[str] = None):
+        self._api_url = api_url or self.STAC_API
+        self._client = None
+
+    def _get_client(self):
+        """Lazy-init STAC client."""
+        if self._client is None:
+            from pystac_client import Client
+            self._client = Client.open(self._api_url)
+            logger.info("[AWSEarthSearch] Connected to %s", self._api_url)
+        return self._client
+
+    def _map_collection(self, collection: str) -> str:
+        """Translate OrbitalQuery collection name → AWS collection ID."""
+        return AWS_COLLECTION_MAP.get(collection, collection)
+
+    def get_name(self) -> str:
+        return "aws_earth_search"
+
+    def search(
+        self,
+        collection: str,
+        bbox: Optional[list[float]] = None,
+        datetime: Optional[str] = None,
+        max_cloud_cover: Optional[int] = None,
+        limit: int = 10,
+        query: Optional[dict[str, Any]] = None,
+    ) -> SearchResult:
+        client = self._get_client()
+        aws_collection = self._map_collection(collection)
+
+        search_kwargs: dict[str, Any] = {
+            "collections": [aws_collection],
+            "max_items": limit,
+        }
+        if bbox:
+            search_kwargs["bbox"] = bbox
+        if datetime:
+            search_kwargs["datetime"] = datetime
+        if max_cloud_cover is not None:
+            search_kwargs["query"] = query or {}
+            search_kwargs["query"]["eo:cloud_cover"] = {"lt": max_cloud_cover}
+        if query:
+            if "query" in search_kwargs:
+                search_kwargs["query"].update(query)
+            else:
+                search_kwargs["query"] = query
+
+        logger.info(
+            "[AWSEarthSearch] search: collection=%s params=%s",
+            aws_collection,
+            {k: v for k, v in search_kwargs.items()},
+        )
+
+        search_results = client.search(**search_kwargs)
+        total = search_results.matched()
+        items = [item.to_dict() for item in search_results.items()]
+
+        # Normalize collection back to OrbitalQuery name
+        for item in items:
+            item["collection"] = collection
+
+        return SearchResult(
+            items=items,
+            total=total or len(items),
+            provider="aws_earth_search",
+            collection=collection,
+            search_params=search_kwargs,
+        )
+
+    def get_item(self, collection: str, item_id: str) -> Optional[ItemDetail]:
+        client = self._get_client()
+        aws_collection = self._map_collection(collection)
+        try:
+            collection_obj = client.get_collection(aws_collection)
+            item = collection_obj.get_item(item_id)
+            if item is None:
+                return None
+            d = item.to_dict()
+            d["collection"] = collection
+            return ItemDetail(
+                item_id=d.get("id", item_id),
+                collection=collection,
+                bbox=d.get("bbox", []),
+                geometry=d.get("geometry", {}),
+                properties=d.get("properties", {}),
+                assets=d.get("assets", {}),
+                provider="aws_earth_search",
+                signed=False,
+            )
+        except Exception as e:
+            logger.error("[AWSEarthSearch] get_item failed: %s", e)
+            return None
+
+    def get_assets(self, item: dict[str, Any]) -> dict[str, dict[str, Any]]:
+        return item.get("assets", {})
+
+    def get_asset_href(self, asset: dict[str, Any]) -> str:
+        return asset.get("href", "")
+
+    def get_capabilities(self) -> ProviderCapabilities:
+        return ProviderCapabilities(
+            name="aws_earth_search",
+            supports_stac=True,
+            supports_cloud_hosted=True,
+            supports_signed_urls=False,
+            collections=[
+                "sentinel-2-l2a", "sentinel-2-l1c",
+                "sentinel-1-grd", "landsat-c2-l2",
+                "naip",
+            ],
+            max_bbox_area_deg2=100.0,
+            notes=(
+                "AWS Earth Search — free, no auth required. "
+                "Asset URLs are directly accessible on AWS S3. "
+                "Good fallback when other providers are unavailable."
+            ),
+        )
+
+    def get_metadata(self, item: dict[str, Any]) -> dict[str, Any]:
+        props = item.get("properties", {})
+        return {
+            "item_id": item.get("id", ""),
+            "collection": item.get("collection", ""),
+            "datetime": props.get("datetime", ""),
+            "cloud_cover": props.get("eo:cloud_cover"),
+            "bbox": item.get("bbox", []),
+            "platform": props.get("platform", ""),
+            "instruments": props.get("instruments", []),
+        }
+
+    def is_reachable(self) -> bool:
+        try:
+            client = self._get_client()
+            collections = list(client.get_collections())
+            logger.info("[AWSEarthSearch] reachable, %d collections", len(collections))
+            return True
+        except Exception as e:
+            logger.error("[AWSEarthSearch] unreachable: %s", e)
+            return False
+
+
+# ══════════════════════════════════════════════════════════════════
+# NASA CMR Provider
+# ══════════════════════════════════════════════════════════════════
+
+# NASA CMR collection concept IDs for key datasets
+NASA_CMR_COLLECTIONS: dict[str, dict[str, str]] = {
+    # MODIS Vegetation
+    "modis-terra-ndvi-16day-250m": {
+        "concept_id": "C1748066515-LPCLOUD",
+        "title": "MODIS/Terra Vegetation Indices 16-Day L3 Global 250m",
+        "platform": "Terra",
+        "instrument": "MODIS",
+        "gsd": 250,
+    },
+    # VIIRS Active Fire
+    "viirs-active-fire-375m": {
+        "concept_id": "C3264430167-LANCEMODIS",
+        "title": "VIIRS (NOAA-20) Active Fire 375m NRT",
+        "platform": "NOAA-20",
+        "instrument": "VIIRS",
+        "gsd": 375,
+    },
+    # MODIS Snow Cover
+    "modis-terra-snow-500m-daily": {
+        "concept_id": "C2565093311-NSIDC_CPRD",
+        "title": "MODIS/Terra Snow Cover Daily L3 Global 500m",
+        "platform": "Terra",
+        "instrument": "MODIS",
+        "gsd": 500,
+    },
+    # Landsat HLS
+    "landsat-hls": {
+        "concept_id": "C2021957657-LPCLOUD",
+        "title": "HLS Landsat Surface Reflectance",
+        "platform": "Landsat",
+        "instrument": "OLI",
+        "gsd": 30,
+    },
+}
+
+
+class NASACMRProvider(EOProvider):
+    """
+    NASA Common Metadata Repository provider.
+
+    Uses the CMR search API (not STAC) for MODIS, VIIRS, and Landsat HLS data.
+    No authentication required for search.
+
+    Endpoint: https://cmr.earthdata.nasa.gov/search
+    """
+
+    CMR_BASE = "https://cmr.earthdata.nasa.gov/search"
+
+    def __init__(self):
+        self._http = None
+
+    def _get_http(self):
+        if self._http is None:
+            import httpx
+            self._http = httpx.Client(timeout=30.0)
+        return self._http
+
+    def _map_collection(self, collection: str) -> Optional[dict[str, str]]:
+        """Map OrbitalQuery collection name to NASA CMR concept ID."""
+        return NASA_CMR_COLLECTIONS.get(collection)
+
+    def get_name(self) -> str:
+        return "nasa_cmr"
+
+    def search(
+        self,
+        collection: str,
+        bbox: Optional[list[float]] = None,
+        datetime: Optional[str] = None,
+        max_cloud_cover: Optional[int] = None,
+        limit: int = 10,
+        query: Optional[dict[str, Any]] = None,
+    ) -> SearchResult:
+        http = self._get_http()
+        cmr_info = self._map_collection(collection)
+
+        if not cmr_info:
+            logger.warning("[NASACMR] Unknown collection: %s", collection)
+            return SearchResult(items=[], total=0, provider="nasa_cmr", collection=collection, search_params={})
+
+        concept_id = cmr_info["concept_id"]
+
+        # Build CMR granule search params
+        params: dict[str, Any] = {
+            "collection_concept_id": concept_id,
+            "page_size": min(limit, 2000),
+            "sort_key": "-start_date",
+        }
+
+        if bbox and len(bbox) == 4:
+            params["bounding_box"] = f"{bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]}"
+
+        if datetime:
+            # CMR uses ISO format: start,end
+            parts = datetime.split("/")
+            if len(parts) == 2:
+                start = parts[0].rstrip("Z") if parts[0] != ".." else "1900-01-01T00:00:00Z"
+                end = parts[1].rstrip("Z") if parts[1] != ".." else "2100-01-01T00:00:00Z"
+                params["temporal"] = f"{start},{end}"
+
+        logger.info("[NASACMR] search: collection=%s concept_id=%s params=%s", collection, concept_id, params)
+
+        resp = http.get(f"{self.CMR_BASE}/granules.json", params=params)
+        resp.raise_for_status()
+        data = resp.json()
+
+        entries = data.get("feed", {}).get("entry", [])
+
+        # Convert CMR granules to STAC-like items
+        items = []
+        for entry in entries:
+            # Extract bounding box from CMR boxes field
+            cmr_bbox = None
+            boxes = entry.get("boxes", [])
+            if boxes:
+                # CMR boxes are "south west north east" strings
+                try:
+                    parts = boxes[0].split()
+                    if len(parts) == 4:
+                        cmr_bbox = [float(parts[1]), float(parts[0]), float(parts[3]), float(parts[2])]
+                except (ValueError, IndexError):
+                    pass
+
+            # Extract links
+            links = entry.get("links", [])
+            assets = {}
+            for link in links:
+                rel = link.get("rel", "")
+                href = link.get("href", "")
+                title = link.get("title", "data")
+                if href and "https" in href:
+                    key = title.replace(" ", "_").lower() if title else rel or "data"
+                    assets[key] = {"href": href, "title": title, "type": link.get("type", "application/octet-stream")}
+
+            # Build STAC-like item
+            item = {
+                "id": entry.get("id", entry.get("producer_granule_id", "unknown")),
+                "collection": collection,
+                "bbox": cmr_bbox,
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [[
+                        [cmr_bbox[0], cmr_bbox[1]],
+                        [cmr_bbox[2], cmr_bbox[1]],
+                        [cmr_bbox[2], cmr_bbox[3]],
+                        [cmr_bbox[0], cmr_bbox[3]],
+                        [cmr_bbox[0], cmr_bbox[1]],
+                    ]] if cmr_bbox else [[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]
+                },
+                "properties": {
+                    "datetime": entry.get("time_start", entry.get("temporal", {}).get("range_datetime", {}).get("begin_datetime", "")),
+                    "title": entry.get("title", ""),
+                    "platform": cmr_info["platform"].lower(),
+                    "instruments": [cmr_info["instrument"].lower()],
+                    "eo:gsd": cmr_info["gsd"],
+                },
+                "assets": assets,
+                "links": links,
+                "provider": "nasa_cmr",
+            }
+            items.append(item)
+
+        return SearchResult(
+            items=items,
+            total=data.get("feed", {}).get("hits", len(items)),
+            provider="nasa_cmr",
+            collection=collection,
+            search_params=params,
+        )
+
+    def get_item(self, collection: str, item_id: str) -> Optional[ItemDetail]:
+        # CMR doesn't have a direct single-item endpoint via granules.json
+        # Would need to search by ID — skip for now
+        return None
+
+    def get_assets(self, item: dict[str, Any]) -> dict[str, dict[str, Any]]:
+        return item.get("assets", {})
+
+    def get_asset_href(self, asset: dict[str, Any]) -> str:
+        return asset.get("href", "")
+
+    def get_capabilities(self) -> ProviderCapabilities:
+        return ProviderCapabilities(
+            name="nasa_cmr",
+            supports_stac=False,
+            supports_cloud_hosted=True,
+            supports_signed_urls=False,
+            collections=list(NASA_CMR_COLLECTIONS.keys()),
+            max_bbox_area_deg2=100.0,
+            notes=(
+                "NASA Common Metadata Repository. No auth for search. "
+                "Provides MODIS, VIIRS, and Landsat HLS data. "
+                "Uses CMR API (not STAC). Useful for fire, snow, vegetation monitoring."
+            ),
+        )
+
+    def get_metadata(self, item: dict[str, Any]) -> dict[str, Any]:
+        props = item.get("properties", {})
+        return {
+            "item_id": item.get("id", ""),
+            "collection": item.get("collection", ""),
+            "datetime": props.get("datetime", ""),
+            "cloud_cover": props.get("eo:cloud_cover"),
+            "bbox": item.get("bbox", []),
+            "platform": props.get("platform", ""),
+            "instruments": props.get("instruments", []),
+        }
+
+    def is_reachable(self) -> bool:
+        try:
+            http = self._get_http()
+            resp = http.get(f"{self.CMR_BASE}/collections.json", params={"page_size": 1})
+            ok = resp.status_code == 200
+            if ok:
+                logger.info("[NASACMR] reachable")
+            return ok
+        except Exception as e:
+            logger.error("[NASACMR] unreachable: %s", e)
+            return False
 
 
 # ══════════════════════════════════════════════════════════════════

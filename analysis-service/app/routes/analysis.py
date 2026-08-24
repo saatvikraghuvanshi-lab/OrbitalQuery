@@ -24,6 +24,7 @@ from app.services.stac_service import (
     select_best_asset,
     search_stac,
 )
+from app.security import validate_bbox, validate_date_range, validate_bands, validate_url_safe, sanitize_error_message, sanitize_stac_href
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/analysis", tags=["analysis"])
@@ -41,6 +42,11 @@ async def analysis_preview(request: AnalysisPreviewRequest):
 
     Does NOT download entire scenes — uses windowed/cloud access.
     """
+    # Security: Validate all inputs
+    validate_bbox(request.bbox)
+    validate_date_range(request.start_date.isoformat(), request.end_date.isoformat())
+    validated_bands = validate_bands(request.bands)
+
     # Validate collection
     if request.collection not in ALLOWED_COLLECTIONS:
         raise HTTPException(
@@ -86,7 +92,10 @@ async def analysis_preview(request: AnalysisPreviewRequest):
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
-    logger.info("Selected asset '%s': %s", asset_key, href[:100])
+    # Security: validate URL against SSRF
+    validate_url_safe(href)
+
+    logger.info("Selected asset '%s'", asset_key)
 
     # ── Step 4: Read raster window ───────────────────────────────
     try:
@@ -111,6 +120,8 @@ async def analysis_preview(request: AnalysisPreviewRequest):
     )
 
     # ── Step 6: Build response ───────────────────────────────────
+    # Security: strip signing tokens from href before returning
+    clean_href = sanitize_stac_href(href)
     scene = SceneInfo(
         item_id=item.get("id", "unknown"),
         collection=item.get("collection", request.collection),
@@ -119,7 +130,7 @@ async def analysis_preview(request: AnalysisPreviewRequest):
         bbox=item_bbox if item_bbox else request.bbox,
         assets_available=list(assets.keys()),
         asset_used=asset_key,
-        signed_href=href[:200] + "..." if len(href) > 200 else href,
+        signed_href=clean_href[:200] + "..." if len(clean_href) > 200 else clean_href,
     )
 
     return AnalysisPreviewResponse(
