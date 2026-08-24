@@ -6,28 +6,18 @@ import Header from '@/components/Header';
 import QueryInput from '@/components/QueryInput';
 import AnalysisPlanView from '@/components/AnalysisPlanView';
 import EvidencePanel from '@/components/EvidencePanel';
-import ResultsPanel from '@/components/ResultsPanel';
-import IntelligencePanel from '@/components/IntelligencePanel';
-import SearchBar from '@/components/SearchBar';
-import FilterPanel from '@/components/FilterPanel';
-import ResultsList from '@/components/ResultsList';
-import StatsBar from '@/components/StatsBar';
+import TemporalComparisonView from '@/components/TemporalComparisonView';
+import ShowcaseQueries from '@/components/ShowcaseQueries';
 import DatasetList, { Dataset } from '@/components/DatasetList';
+import DatasetDetailPanel from '@/components/DatasetDetailPanel';
 import { useAnalysis } from '@/hooks/useAnalysis';
+import ShaderBackground from '@/components/ShaderBackground';
 
 const MapView = dynamic(() => import('@/components/MapView'), {
   ssr: false,
   loading: () => (
-    <div style={{
-      width: '100%', height: '500px', borderRadius: '16px',
-      background: '#0d1117', border: '1px solid rgba(71,85,105,0.3)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      color: '#64748b', fontSize: '14px',
-    }}>
-      <div style={{ textAlign: 'center' }}>
-        <div style={{ fontSize: '32px', marginBottom: '8px' }}>🗺️</div>
-        <div>Loading map...</div>
-      </div>
+    <div className="w-full h-full rounded-2xl bg-slate-900 border border-slate-700/30 flex items-center justify-center text-slate-500 text-sm">
+      Loading map...
     </div>
   ),
 });
@@ -38,15 +28,9 @@ export interface BoundingBox {
   north: number; south: number; east: number; west: number;
 }
 
-export interface SearchFilters {
-  query: string;
-  bbox: BoundingBox | null;
-  startDate: string;
-  endDate: string;
-  provider: string;
-  collection: string;
-}
+type Tab = 'ask' | 'showcase' | 'discover';
 
+// Types for Dataset Discovery (preserved for backward compat)
 export interface DatasetResult {
   id: string;
   stacId: string | null;
@@ -69,6 +53,15 @@ export interface DatasetResult {
   score?: number;
 }
 
+export interface SearchFilters {
+  query: string;
+  bbox: BoundingBox | null;
+  startDate: string;
+  endDate: string;
+  provider: string;
+  collection: string;
+}
+
 export interface SearchResponse {
   results: DatasetResult[];
   total: number;
@@ -77,41 +70,91 @@ export interface SearchResponse {
   latencyMs: number;
 }
 
-type Tab = 'ask' | 'discover';
-
 // ── Page ────────────────────────────────────────────────────────
 
 function HomePageContent() {
   const [tab, setTab] = useState<Tab>('ask');
   const analysis = useAnalysis();
 
-  // Dataset discovery state (preserved from original)
-  const [filters, setFilters] = useState<SearchFilters>({
-    query: '', bbox: null, startDate: '', endDate: '', provider: '', collection: '',
-  });
-  const [lastQuery, setLastQuery] = useState('');
-  const [results, setResults] = useState<SearchResponse | null>(null);
-  const [selectedDataset, setSelectedDataset] = useState<DatasetResult | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [viewMode, setViewMode] = useState<'split' | 'map' | 'results'>('split');
-  const [comparingIds, setComparingIds] = useState<Set<string>>(new Set());
+  // Hydration guard
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  // ── All hooks declared unconditionally at the top ──
+  const step = analysis.state.step;
+
+  // Discover state (must be before any conditional returns)
   const [allDatasets, setAllDatasets] = useState<Dataset[]>([]);
   const [selectedDiscoverId, setSelectedDiscoverId] = useState<string | null>(null);
   const [datasetsLoading, setDatasetsLoading] = useState(false);
   const [discoverBbox, setDiscoverBbox] = useState<BoundingBox | null>(null);
+  const [discoverProvider, setDiscoverProvider] = useState('');
+  const [discoverCollection, setDiscoverCollection] = useState('');
+  const [bboxResults, setBboxResults] = useState<Dataset[]>([]);
+  const [bboxLoading, setBboxLoading] = useState(false);
+  const [bboxDetail, setBboxDetail] = useState<any>(null);
 
-  // Load all datasets from STAC providers on mount
+  // Search STAC when bbox is drawn
   useEffect(() => {
+    if (!discoverBbox) { setBboxResults([]); setBboxDetail(null); return; }
+    let cancelled = false;
+    async function searchBbox() {
+      setBboxLoading(true);
+      setBboxDetail(null);
+      try {
+        const bbox = [discoverBbox!.west, discoverBbox!.south, discoverBbox!.east, discoverBbox!.north];
+        const collections = ['sentinel-2-l2a', 'sentinel-1-grd', 'landsat-c2-l2'];
+        const all: Dataset[] = [];
+        await Promise.all(collections.map(async (col) => {
+          try {
+            const res = await fetch('/api/search', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ query: col, collection: col, bbox, limit: 15 }),
+            });
+            if (!res.ok) return;
+            const data = await res.json();
+            (data.results || []).forEach((r: any) => {
+              all.push({
+                id: r.id,
+                title: r.title || r.id,
+                provider: r.provider || col,
+                collection: r.collection || col,
+                date: r.startDate || r.endDate || null,
+                bbox: r.bbox,
+                cloudCover: r.cloudCover,
+                score: r.score,
+                previewUrl: r.previewUrl || null,
+              });
+            });
+          } catch {}
+        }));
+        if (!cancelled) {
+          const seen = new Set<string>();
+          setBboxResults(all.filter(d => { if (seen.has(d.id)) return false; seen.add(d.id); return true; }));
+        }
+      } catch (err) {
+        console.error('Bbox search failed:', err);
+      } finally {
+        if (!cancelled) setBboxLoading(false);
+      }
+    }
+    searchBbox();
+    return () => { cancelled = true; };
+  }, [discoverBbox]);
+
+  // Load datasets from STAC when discover tab is active
+  useEffect(() => {
+    if (tab !== 'discover') return;
+    if (allDatasets.length > 0) return;
+
     async function loadDatasets() {
       setDatasetsLoading(true);
       try {
         const collections = [
           'sentinel-2-l2a', 'sentinel-1-grd', 'landsat-c2-l2',
-          'ResourceSat-2A_AWIFS_L2', 'ResourceSat-2A_LISS3_L2',
-          'ccm-optical', 'ccm-sar',
         ];
         const all: Dataset[] = [];
-        // Fetch datasets from all providers in parallel
         const promises = collections.map(async (col) => {
           try {
             const res = await fetch('/api/search', {
@@ -126,10 +169,19 @@ function HomePageContent() {
               title: r.title || r.id,
               provider: r.provider || col,
               collection: r.collection || col,
-              date: r.startDate || r.endDate || null,
+              date: r.startDate || r.start_date || r.endDate || r.end_date || null,
               bbox: r.bbox,
-              cloudCover: r.cloudCover,
-              score: r.score,
+              cloudCover: r.cloudCover ?? r.cloud_cover_pct ?? null,
+              score: r.score ?? r.relevance_score ?? null,
+              platform: r.platform || null,
+              instrument: r.instrument || null,
+              stacLink: r.stacLink || null,
+              previewUrl: r.previewUrl || null,
+              description: r.description || null,
+              geometry: r.geometry || null,
+              endDate: r.endDate || r.end_date || null,
+              centroidLat: r.centroidLat ?? r.centroid_lat ?? null,
+              centroidLng: r.centroidLng ?? r.centroid_lng ?? null,
             }));
           } catch {
             return [];
@@ -137,7 +189,6 @@ function HomePageContent() {
         });
         const results = await Promise.all(promises);
         results.forEach(r => all.push(...r));
-        // Deduplicate by id
         const seen = new Set<string>();
         const unique = all.filter(d => { if (seen.has(d.id)) return false; seen.add(d.id); return true; });
         setAllDatasets(unique);
@@ -148,38 +199,8 @@ function HomePageContent() {
       }
     }
     loadDatasets();
-  }, []);
+  }, [tab, allDatasets.length]);
 
-  const handleSearch = useCallback(async (searchFilters: SearchFilters) => {
-    setLoading(true);
-    try {
-      const body: any = { query: searchFilters.query, limit: 50 };
-      if (searchFilters.bbox) body.bbox = [searchFilters.bbox.west, searchFilters.bbox.south, searchFilters.bbox.east, searchFilters.bbox.north];
-      if (searchFilters.startDate) body.startDate = searchFilters.startDate;
-      if (searchFilters.endDate) body.endDate = searchFilters.endDate;
-      if (searchFilters.provider) body.provider = searchFilters.provider;
-      if (searchFilters.collection) body.collection = searchFilters.collection;
-
-      const res = await fetch('/api/search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) throw new Error(`Search failed: ${res.status}`);
-      const data: SearchResponse = await res.json();
-      setLastQuery(searchFilters.query);
-      setResults(data);
-      setSelectedDataset(null);
-    } catch {
-      setResults({ results: [], total: 0, limit: 20, offset: 0, latencyMs: 0 });
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  // Hydration guard: all hooks must be called before this
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
   if (!mounted) return (
     <div className="h-screen flex items-center justify-center" style={{ background: '#0a0e1a' }}>
       <div style={{ color: '#64748b', fontSize: '14px' }}>Loading OrbitalQuery...</div>
@@ -188,11 +209,9 @@ function HomePageContent() {
 
   // ── Analysis Workflow View ──────────────────────────────────────
 
-  if (tab === 'ask') {
-    const step = analysis.state.step;
-
-    return (
-      <div className="h-screen flex flex-col overflow-hidden" style={{ background: '#0a0e1a' }}>
+  if (tab === 'ask') {  return (
+    <div className="h-screen flex flex-col overflow-hidden" style={{ background: '#0a0e1a' }}>
+        <ShaderBackground />
         <Header activeTab={tab} onNavigate={setTab} />
 
         {step === 'idle' && (
@@ -237,9 +256,9 @@ function HomePageContent() {
                 {step === 'planning' && '📋 Parsing your query...'}
                 {step === 'searching' && '🛰️ Searching satellite archives...'}
                 {step === 'ranking' && '📊 Ranking evidence quality...'}
-                {step === 'processing' && '⚙️ Running analysis pipeline...'}
-                {step === 'deciding' && '🧠 Computing impact assessment...'}
-                {step === 'explaining' && '📝 Generating explanation...'}
+                {step === 'processing' && '⚙️ Computing spectral indices...'}
+                {step === 'deciding' && '🧠 Running change detection...'}
+                {step === 'explaining' && '📝 Generating analysis...'}
               </div>
 
               {/* Partial Results — centered */}
@@ -268,7 +287,7 @@ function HomePageContent() {
 
         {step === 'complete' && analysis.state.result && (
           <div className="flex-1 overflow-y-auto">
-            <div className="max-w-6xl mx-auto px-4 py-6">
+            <div className="max-w-5xl mx-auto px-4 py-6">
               {/* Back button — centered */}
               <div className="flex justify-center mb-4">
                 <button onClick={analysis.reset} className="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-300 transition-colors">
@@ -279,64 +298,54 @@ function HomePageContent() {
                 </button>
               </div>
 
-            {/* Query summary */}
-            <div className="mb-4">
-              <h2 className="text-lg font-bold text-slate-200">
-                &quot;{analysis.state.query}&quot;
-              </h2>
-              <p className="text-xs text-slate-500 mt-1">
-                Analysis complete in {analysis.state.result.analysis_id}
-              </p>
-            </div>
-
-            {/* Main content: Map + Side Panel */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-              {/* Map — 2/3 width */}
-              <div className="lg:col-span-2">
-                <div className="glass rounded-2xl border border-blue-500/20 overflow-hidden">
-                  <MapView
-                    results={[]}
-                    selectedDataset={null}
-                    onSelectDataset={() => {}}
-                    bbox={analysis.state.plan?.bbox && Array.isArray(analysis.state.plan.bbox) && analysis.state.plan.bbox.length >= 4 ? {
-                      north: analysis.state.plan.bbox[3],
-                      south: analysis.state.plan.bbox[1],
-                      east: analysis.state.plan.bbox[2],
-                      west: analysis.state.plan.bbox[0],
-                    } : null}
-                    onBboxChange={(_bbox: any) => {}}
-                  />
-                </div>
+              {/* Query summary */}
+              <div className="mb-4 text-center">
+                <h2 className="text-lg font-bold text-slate-200">
+                  &quot;{analysis.state.query}&quot;
+                </h2>
+                <p className="text-xs text-slate-500 mt-1">
+                  Temporal comparison complete
+                </p>
               </div>
 
-              {/* Side Panel — 1/3 width */}
-              <div className="lg:col-span-1 space-y-4 max-h-[80vh] overflow-y-auto pr-1">
-                {analysis.state.plan && <AnalysisPlanView plan={analysis.state.plan} />}
-                {analysis.state.scenes.length > 0 && <EvidencePanel scenes={analysis.state.scenes} />}
-                <ResultsPanel result={analysis.state.result} />
-                <IntelligencePanel result={analysis.state.result} />
-              </div>
+              {/* The temporal comparison result */}
+              <TemporalComparisonView result={analysis.state.result} />
             </div>
-          </div>
           </div>
         )}
       </div>
     );
   }
 
+  // ── Showcase View ─────────────────────────────────────────────
+
+  if (tab === 'showcase') {
+    return (
+      <div className="h-screen flex flex-col overflow-hidden" style={{ background: '#0a0e1a' }}>
+        <Header activeTab={tab} onNavigate={setTab} />
+        <div className="flex-1 overflow-y-auto">
+          <ShowcaseQueries onSelect={(query) => {
+            setTab('ask');
+            analysis.analyze(query);
+          }} />
+        </div>
+      </div>
+    );
+  }
+
   // ── Dataset Discovery View ────────────────────────────────────
 
-  // Filter datasets by provider/collection
-  const filteredDatasets = allDatasets.filter(ds => {
-    if (filters.provider && !ds.provider?.toLowerCase().includes(filters.provider.toLowerCase())) return false;
-    if (filters.collection && !ds.collection?.toLowerCase().includes(filters.collection.toLowerCase())) return false;
+  // Filter datasets
+  // Use bbox results when a bbox is drawn, otherwise use default dataset list
+  const displayDatasets = discoverBbox ? bboxResults : allDatasets;
+  const filteredDatasets = displayDatasets.filter(ds => {
+    if (discoverProvider && !ds.provider?.toLowerCase().includes(discoverProvider.toLowerCase())) return false;
+    if (discoverCollection && !ds.collection?.toLowerCase().includes(discoverCollection.toLowerCase())) return false;
     return true;
   });
 
-  // The selected discover dataset
   const selectedDiscoverDataset = filteredDatasets.find(d => d.id === selectedDiscoverId) || null;
 
-  // Convert to MapView-compatible format
   const discoverMapViewResults: DatasetResult[] = selectedDiscoverDataset ? [{
     id: selectedDiscoverDataset.id,
     stacId: null,
@@ -354,74 +363,45 @@ function HomePageContent() {
     geometry: null,
     startDate: selectedDiscoverDataset.date,
     endDate: null,
-    previewUrl: selectedDiscoverDataset.previewUrl ?? null,
+    previewUrl: null,
     stacLink: null,
     score: selectedDiscoverDataset.score,
   }] : [];
 
   return (
     <div className="h-screen flex flex-col overflow-hidden" style={{ background: '#0a0e1a' }}>
-        <Header activeTab={tab} onNavigate={setTab} />
+      <Header activeTab={tab} onNavigate={setTab} />
 
       {/* Compact filter bar */}
-      <div className="max-w-[1800px] mx-auto px-4 mb-3">
+      <div className="max-w-[1800px] mx-auto px-4 mb-3 w-full">
         <div className="glass rounded-xl border border-slate-700/30 px-4 py-3">
           <div className="flex flex-wrap items-center gap-3">
-            {/* Provider filter */}
             <div className="flex items-center gap-2">
               <label className="text-[10px] text-slate-500 uppercase tracking-wider font-medium">Provider</label>
               <select
-                value={filters.provider}
-                onChange={(e) => setFilters(prev => ({ ...prev, provider: e.target.value }))}
+                value={discoverProvider}
+                onChange={(e) => setDiscoverProvider(e.target.value)}
                 className="bg-slate-800/50 border border-slate-700/50 rounded-lg px-3 py-1.5 text-xs text-slate-300 focus:border-blue-500/50 focus:outline-none"
               >
                 <option value="">All Providers</option>
-                <option value="ISRO">🇮🇳 ISRO / Bhoonidhi</option>
-                <option value="Copernicus">🇪🇺 Copernicus</option>
-                <option value="NASA">🇺🇸 NASA</option>
-                <option value="Planetary Computer">🌐 Planetary Computer</option>
+                <option value="Copernicus">Copernicus/ESA</option>
+                <option value="NASA">NASA</option>
+                <option value="Planetary Computer">Planetary Computer</option>
               </select>
             </div>
-
-            {/* Collection filter */}
             <div className="flex items-center gap-2">
               <label className="text-[10px] text-slate-500 uppercase tracking-wider font-medium">Collection</label>
               <select
-                value={filters.collection}
-                onChange={(e) => setFilters(prev => ({ ...prev, collection: e.target.value }))}
+                value={discoverCollection}
+                onChange={(e) => setDiscoverCollection(e.target.value)}
                 className="bg-slate-800/50 border border-slate-700/50 rounded-lg px-3 py-1.5 text-xs text-slate-300 focus:border-blue-500/50 focus:outline-none"
               >
                 <option value="">All Collections</option>
                 <option value="sentinel-2">Sentinel-2 L2A</option>
                 <option value="sentinel-1">Sentinel-1 GRD</option>
                 <option value="landsat">Landsat C2 L2</option>
-                <option value="ResourceSat">ResourceSat (ISRO)</option>
-                <option value="EOS">EOS (ISRO)</option>
-                <option value="ccm">Contributing Missions</option>
               </select>
             </div>
-
-            {/* Date range */}
-            <div className="flex items-center gap-2">
-              <label className="text-[10px] text-slate-500 uppercase tracking-wider font-medium">From</label>
-              <input
-                type="date"
-                value={filters.startDate}
-                onChange={(e) => setFilters(prev => ({ ...prev, startDate: e.target.value }))}
-                className="bg-slate-800/50 border border-slate-700/50 rounded-lg px-3 py-1.5 text-xs text-slate-300 focus:border-blue-500/50 focus:outline-none"
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <label className="text-[10px] text-slate-500 uppercase tracking-wider font-medium">To</label>
-              <input
-                type="date"
-                value={filters.endDate}
-                onChange={(e) => setFilters(prev => ({ ...prev, endDate: e.target.value }))}
-                className="bg-slate-800/50 border border-slate-700/50 rounded-lg px-3 py-1.5 text-xs text-slate-300 focus:border-blue-500/50 focus:outline-none"
-              />
-            </div>
-
-            {/* Dataset count */}
             <div className="ml-auto text-[10px] text-slate-500">
               {filteredDatasets.length} datasets
             </div>
@@ -430,8 +410,8 @@ function HomePageContent() {
       </div>
 
       {/* Main content: Map + Dataset List */}
-      <div className="max-w-[1800px] mx-auto px-4 pb-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4" style={{ height: 'calc(100vh - 200px)', minHeight: '500px' }}>
+      <div className="max-w-[1800px] mx-auto px-4 pb-8 w-full">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4" style={{ height: 'calc(100vh - 160px)', minHeight: '500px' }}>
           {/* Map — 2/3 width */}
           <div className="lg:col-span-2 rounded-2xl overflow-hidden border border-slate-700/30">
             <MapView
@@ -445,39 +425,69 @@ function HomePageContent() {
             />
           </div>
 
-          {/* Dataset List — 1/3 width */}
-          <div className="lg:col-span-1 rounded-2xl border border-slate-700/30 bg-slate-900/50 overflow-hidden">
-            <div className="px-4 py-3 border-b border-slate-700/30">
-              <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
-                Available Datasets
-              </h3>
-              <p className="text-[10px] text-slate-500 mt-0.5">
-                Click a dataset to view on map
-              </p>
-            </div>
-            <div style={{ height: 'calc(100% - 52px)' }}>
-              <DatasetList
-                datasets={filteredDatasets}
-                selectedId={selectedDiscoverId}
-                onSelect={(ds) => {
-                  setSelectedDiscoverId(ds.id);
-                  // Zoom map to bbox
-                  if (ds.bbox && ds.bbox.length === 4) {
-                    setDiscoverBbox({
-                      north: ds.bbox[3],
-                      south: ds.bbox[1],
-                      east: ds.bbox[2],
-                      west: ds.bbox[0],
-                    });
-                  }
-                }}
-                loading={datasetsLoading}
-              />
-            </div>
+          {/* Right panel — Dataset List or Detail */}
+          <div className="lg:col-span-1 rounded-2xl border border-slate-700/30 bg-slate-900/50 overflow-hidden flex flex-col">
+            {bboxDetail ? (
+              /* Detail view */
+              <>
+                {/* Back button */}
+                <div className="px-4 py-2 border-b border-slate-700/30 flex-shrink-0">
+                  <button
+                    onClick={() => { setBboxDetail(null); setSelectedDiscoverId(null); }}
+                    className="flex items-center gap-1.5 text-[11px] text-slate-400 hover:text-slate-200 transition-colors"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                    </svg>
+                    Back to list
+                  </button>
+                </div>
+                <div className="flex-1 overflow-hidden">
+                  <DatasetDetailPanel
+                    dataset={bboxDetail}
+                    onClose={() => { setBboxDetail(null); setSelectedDiscoverId(null); }}
+                    onAnalyze={(query) => {
+                      setTab('ask');
+                      analysis.analyze(query);
+                    }}
+                  />
+                </div>
+              </>
+            ) : (
+              /* List view */
+              <>
+                <div className="px-4 py-3 border-b border-slate-700/30 flex-shrink-0">
+                  <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                    {discoverBbox ? `${filteredDatasets.length} Scenes in Area` : 'Available Datasets'}
+                  </h3>
+                  <p className="text-[10px] text-slate-500 mt-0.5">
+                    {discoverBbox ? 'Draw bbox on map to search — click a result for details' : 'Click a dataset to view details + analyze'}
+                  </p>
+                </div>
+                <div className="flex-1 overflow-hidden">
+                  <DatasetList
+                    datasets={filteredDatasets}
+                    selectedId={selectedDiscoverId}
+                    onSelect={(ds) => {
+                      setSelectedDiscoverId(ds.id);
+                      setBboxDetail(ds);
+                      if (ds.bbox && ds.bbox.length === 4) {
+                        setDiscoverBbox({
+                          north: ds.bbox[3],
+                          south: ds.bbox[1],
+                          east: ds.bbox[2],
+                          west: ds.bbox[0],
+                        });
+                      }
+                    }}
+                    loading={discoverBbox ? bboxLoading : datasetsLoading}
+                  />
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>
-
     </div>
   );
 }

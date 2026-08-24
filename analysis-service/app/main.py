@@ -9,8 +9,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import HOST, PORT, STAC_API_URL
-from app.routes import analysis, change, decision, evidence, explain, flood, health, index, preprocess, providers, provenance, query, sensor, stac, timeseries
-from app.services.eo_provider import init_default_provider, register_provider, CopernicusProvider, BhoonidhiProvider
+from app.routes import analysis, change, decision, evidence, explain, flood, health, index, preprocess, providers, provenance, query, sensor, stac, timeseries, temporal_compare
+from app.services.eo_provider import init_default_provider, register_provider, CopernicusProvider, BhoonidhiProvider, AWSEarthSearchProvider, NASACMRProvider
 from app.security import RateLimitMiddleware, SecurityHeadersMiddleware, AuditMiddleware, get_cors_origins
 
 # ── Logging ──────────────────────────────────────────────────────
@@ -79,6 +79,22 @@ if bhoonidhi_user and bhoonidhi_pass:
 else:
     logger.info("Bhoonidhi skipped (set BHOONIDHI_USER + BHOONIDHI_PASS to enable)")
 
+# 4. AWS Earth Search (tertiary — free, no auth, good fallback)
+try:
+    aws_provider = AWSEarthSearchProvider()
+    register_provider(aws_provider, default=False)
+    logger.info("EO Provider registered: aws_earth_search (tertiary — free fallback)")
+except Exception as e:
+    logger.warning("AWS Earth Search registration failed: %s", e)
+
+# 5. NASA CMR (for MODIS/VIIRS/Landsat HLS — fire, snow, vegetation)
+try:
+    nasa_provider = NASACMRProvider()
+    register_provider(nasa_provider, default=False)
+    logger.info("EO Provider registered: nasa_cmr (MODIS/VIIRS fire+snow+vegetation)")
+except Exception as e:
+    logger.warning("NASA CMR registration failed: %s", e)
+
 # ── Routes ───────────────────────────────────────────────────────
 
 app.include_router(health.router)
@@ -96,6 +112,7 @@ app.include_router(query.router)
 app.include_router(providers.router)
 app.include_router(decision.router)
 app.include_router(provenance.router)
+app.include_router(temporal_compare.router)
 
 
 import os as _os

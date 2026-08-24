@@ -3,6 +3,9 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import OrbitalLogo from '@/components/OrbitalLogo';
+import dynamic from 'next/dynamic';
+
+const ShaderBackground = dynamic(() => import('@/components/ShaderBackground'), { ssr: false });
 
 type AuthMode = 'login' | 'register';
 
@@ -25,7 +28,7 @@ export default function AuthPage() {
   }, [router]);
 
   if (!mounted) return (
-    <div className="min-h-screen flex items-center justify-center" style={{ background: '#0c0e12' }}>
+    <div className="min-h-screen flex items-center justify-center" style={{ background: '#05060A' }}>
       <div className="text-sm" style={{ color: '#9f8c8a' }}>Loading...</div>
     </div>
   );
@@ -66,216 +69,200 @@ export default function AuthPage() {
     <div
       className="min-h-screen flex items-center justify-center p-6 relative overflow-hidden"
       style={{
-        background: 'radial-gradient(circle at 50% 50%, rgba(17, 19, 24, 0.8) 0%, rgba(12, 14, 18, 1) 100%)',
+        background: 'radial-gradient(circle at 50% 50%, #090C19 0%, #05060A 100%)',
       }}
     >
-      {/* Decorative orbital rings */}
-      <div
-        className="absolute rounded-full pointer-events-none"
-        style={{
-          width: 800, height: 800,
-          border: '1px solid #33353a',
-          opacity: 0.2,
-          top: -200, right: -200,
-        }}
-      />
-      <div
-        className="absolute rounded-full pointer-events-none"
-        style={{
-          width: 1200, height: 1200,
-          border: '1px solid #33353a',
-          opacity: 0.1,
-          bottom: -400, left: -400,
-        }}
-      />
+      {/* Animated shader gradient background */}
+      <ShaderBackground />
 
       {/* Main content */}
-      <div className="w-full max-w-md relative z-10 flex flex-col items-center mt-16">
-        {/* Logo */}
-        <div className="mb-10 text-center">
-          <OrbitalLogo size="lg" showText={true} />
-        </div>
-
-        {/* Login Card */}
+      <div className="w-full max-w-md relative z-10 flex flex-col items-center">
+        {/* Auth Card */}
         <div
-          className="w-full p-8 shadow-2xl flex flex-col gap-6 rounded-lg"
+          className="w-full shadow-2xl flex flex-col rounded-2xl overflow-hidden"
           style={{
-            background: '#111318',
-            border: '1px solid #33353a',
+            background: '#16171D',
+            border: '1px solid rgba(255, 255, 255, 0.06)',
+            boxShadow: '0 25px 60px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255,255,255,0.03)',
           }}
         >
-          {/* Title */}
-          <div className="text-center">
-            <h1 className="text-2xl font-semibold mb-1" style={{ color: '#e2e2e9' }}>
-              Authentication
-            </h1>
-            <p className="text-xs" style={{ color: '#d7c2bf' }}>
-              Access Research-Grade Earth Observation Platform
+          {/* Card header */}
+          <div className="px-8 pt-8 pb-5 text-center">
+            <div className="flex justify-center mb-2">
+              <OrbitalLogo size="lg" showText={true} />
+            </div>
+            <p className="text-[13px] mt-2" style={{ color: '#6B7280' }}>
+              {mode === 'login'
+                ? 'Sign in to access the EO exploration platform'
+                : 'Join the Earth observation research community'}
             </p>
           </div>
 
-          {/* Error */}
-          {error && (
-            <div
-              className="p-3 rounded-lg text-xs text-center"
-              style={{ background: 'rgba(255, 84, 78, 0.1)', border: '1px solid rgba(255, 84, 78, 0.2)', color: '#ffb4ab' }}
-            >
-              {error}
-            </div>
-          )}
+          {/* Divider */}
+          <div className="px-8">
+            <div className="h-px" style={{ background: 'rgba(255, 255, 255, 0.06)' }} />
+          </div>
 
-          {/* Form */}
-          <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-            {/* Name (register only) */}
-            {mode === 'register' && (
-              <div className="flex flex-col gap-2">
-                <label className="text-xs font-medium" style={{ color: '#e2e2e9' }}>Full Name</label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Researcher Name"
-                  className="w-full px-4 py-3 text-sm outline-none rounded-lg transition-all"
-                  style={{
-                    background: '#0c0e13',
-                    border: '1px solid #33353a',
-                    color: '#e2e2e9',
-                  }}
-                  onFocus={(e) => { e.target.style.borderColor = '#571bc1'; e.target.style.boxShadow = '0 0 0 1px #571bc1'; }}
-                  onBlur={(e) => { e.target.style.borderColor = '#33353a'; e.target.style.boxShadow = 'none'; }}
-                />
+          {/* Form area */}
+          <div className="px-8 py-6">
+            {/* Error */}
+            {error && (
+              <div
+                className="p-3 rounded-xl text-xs text-center mb-4"
+                style={{ background: 'rgba(255, 83, 83, 0.08)', border: '1px solid rgba(255, 83, 83, 0.15)', color: '#FF8A80' }}
+              >
+                {error}
               </div>
             )}
 
-            {/* Email */}
-            <div className="flex flex-col gap-2">
-              <label className="text-xs font-medium" style={{ color: '#e2e2e9' }}>Gmail ID</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="researcher@institute.edu"
-                required
-                className="w-full px-4 py-3 text-sm outline-none rounded-lg transition-all"
-                style={{
-                  background: '#0c0e13',
-                  border: '1px solid #33353a',
-                  color: '#e2e2e9',
-                }}
-                onFocus={(e) => { e.target.style.borderColor = '#571bc1'; e.target.style.boxShadow = '0 0 0 1px #571bc1'; }}
-                onBlur={(e) => { e.target.style.borderColor = '#33353a'; e.target.style.boxShadow = 'none'; }}
-              />
-            </div>
+            {/* Form */}
+            <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+              {/* Name (register only) */}
+              {mode === 'register' && (
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[11px] font-medium uppercase tracking-wider" style={{ color: '#9CA3AF' }}>Full Name</label>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Your name"
+                    className="w-full px-4 py-3 text-sm outline-none rounded-xl transition-all"
+                    style={{
+                      background: '#0D0F14',
+                      border: '1px solid rgba(255, 255, 255, 0.06)',
+                      color: '#E5E7EB',
+                    }}
+                    onFocus={(e) => { e.target.style.borderColor = 'rgba(255, 83, 83, 0.4)'; e.target.style.boxShadow = '0 0 0 3px rgba(255, 83, 83, 0.08), 0 0 16px rgba(255, 83, 83, 0.06)'; }}
+                    onBlur={(e) => { e.target.style.borderColor = 'rgba(255, 255, 255, 0.06)'; e.target.style.boxShadow = 'none'; }}
+                  />
+                </div>
+              )}
 
-            {/* Password */}
-            <div className="flex flex-col gap-2">
-              <div className="flex justify-between items-baseline">
-                <label className="text-xs font-medium" style={{ color: '#e2e2e9' }}>Password</label>
-                {mode === 'login' && (
+              {/* Email */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[11px] font-medium uppercase tracking-wider" style={{ color: '#9CA3AF' }}>Email Address</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@university.edu"
+                  required
+                  className="w-full px-4 py-3 text-sm outline-none rounded-xl transition-all"
+                  style={{
+                    background: '#0D0F14',
+                    border: '1px solid rgba(255, 255, 255, 0.06)',
+                    color: '#E5E7EB',
+                  }}
+                  onFocus={(e) => { e.target.style.borderColor = 'rgba(255, 83, 83, 0.4)'; e.target.style.boxShadow = '0 0 0 3px rgba(255, 83, 83, 0.08), 0 0 16px rgba(255, 83, 83, 0.06)'; }}
+                  onBlur={(e) => { e.target.style.borderColor = 'rgba(255, 255, 255, 0.06)'; e.target.style.boxShadow = 'none'; }}
+                />
+              </div>
+
+              {/* Password */}
+              <div className="flex flex-col gap-1.5">
+                <div className="flex justify-between items-baseline">
+                  <label className="text-[11px] font-medium uppercase tracking-wider" style={{ color: '#9CA3AF' }}>Password</label>
+                  {mode === 'login' && (
+                    <button
+                      type="button"
+                      className="text-[11px] hover:underline transition-colors"
+                      style={{ color: '#FF5353' }}
+                      onClick={() => setError('Password reset coming soon')}
+                    >
+                      Forgot password?
+                    </button>
+                  )}
+                </div>
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••••••"
+                    required
+                    minLength={6}
+                    className="w-full px-4 py-3 pr-11 text-sm outline-none rounded-xl transition-all"
+                    style={{
+                      background: '#0D0F14',
+                      border: '1px solid rgba(255, 255, 255, 0.06)',
+                      color: '#E5E7EB',
+                    }}
+                    onFocus={(e) => { e.target.style.borderColor = 'rgba(255, 83, 83, 0.4)'; e.target.style.boxShadow = '0 0 0 3px rgba(255, 83, 83, 0.08), 0 0 16px rgba(255, 83, 83, 0.06)'; }}
+                    onBlur={(e) => { e.target.style.borderColor = 'rgba(255, 255, 255, 0.06)'; e.target.style.boxShadow = 'none'; }}
+                  />
                   <button
                     type="button"
-                    className="text-[11px] hover:underline transition-colors"
-                    style={{ color: '#ffb3ac' }}
-                    onClick={() => setError('Password reset coming soon')}
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 hover:opacity-80 transition-opacity"
+                    style={{ color: '#4B5563' }}
                   >
-                    Reset Key
+                    {showPassword ? (
+                      <svg className="w-[16px] h-[16px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                      </svg>
+                    ) : (
+                      <svg className="w-[16px] h-[16px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                      </svg>
+                    )}
                   </button>
+                </div>
+              </div>
+
+              {/* Submit Button */}
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-3 rounded-xl text-sm font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed mt-1"
+                style={{
+                  background: '#FF5353',
+                  color: 'white',
+                  letterSpacing: '0.02em',
+                  boxShadow: '0 4px 14px rgba(255, 83, 83, 0.25)',
+                }}
+                onMouseEnter={(e) => { if (!loading) { (e.target as HTMLElement).style.background = '#FF6B6B'; (e.target as HTMLElement).style.boxShadow = '0 6px 20px rgba(255, 83, 83, 0.35)'; } }}
+                onMouseLeave={(e) => { (e.target as HTMLElement).style.background = '#FF5353'; (e.target as HTMLElement).style.boxShadow = '0 4px 14px rgba(255, 83, 83, 0.25)'; }}
+              >
+                {loading ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Signing in...
+                  </span>
+                ) : (
+                  mode === 'login' ? 'Sign In' : 'Create Account'
                 )}
-              </div>
-              <div className="relative">
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••••••"
-                  required
-                  minLength={6}
-                  className="w-full px-4 py-3 pr-10 text-sm outline-none rounded-lg transition-all"
-                  style={{
-                    background: '#0c0e13',
-                    border: '1px solid #33353a',
-                    color: '#e2e2e9',
-                  }}
-                  onFocus={(e) => { e.target.style.borderColor = '#571bc1'; e.target.style.boxShadow = '0 0 0 1px #571bc1'; }}
-                  onBlur={(e) => { e.target.style.borderColor = '#33353a'; e.target.style.boxShadow = 'none'; }}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 hover:opacity-80 transition-opacity"
-                  style={{ color: '#d7c2bf' }}
-                >
-                  {showPassword ? (
-                    <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-                    </svg>
-                  ) : (
-                    <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                    </svg>
-                  )}
-                </button>
-              </div>
-            </div>
+              </button>
+            </form>
 
-            {/* Submit Button */}
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-3 rounded-lg text-xs font-medium uppercase tracking-wider transition-opacity disabled:opacity-50 disabled:cursor-not-allowed mt-2"
-              style={{
-                background: '#ff544e',
-                color: 'white',
-              }}
-              onMouseEnter={(e) => { if (!loading) (e.target as HTMLElement).style.opacity = '0.9'; }}
-              onMouseLeave={(e) => { (e.target as HTMLElement).style.opacity = '1'; }}
-            >
-              {loading ? (
-                <span className="flex items-center justify-center gap-2">
-                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Authenticating...
-                </span>
+            {/* Toggle mode */}
+            <p className="text-center text-[12px] mt-5" style={{ color: '#6B7280' }}>
+              {mode === 'login' ? (
+                <>
+                  Don&apos;t have an account?{' '}
+                  <button
+                    onClick={() => { setMode('register'); setError(''); }}
+                    className="font-medium hover:underline transition-colors"
+                    style={{ color: '#D1D5DB' }}
+                  >
+                    Sign up
+                  </button>
+                </>
               ) : (
-                'Initialize Session'
+                <>
+                  Already have an account?{' '}
+                  <button
+                    onClick={() => { setMode('login'); setError(''); }}
+                    className="font-medium hover:underline transition-colors"
+                    style={{ color: '#D1D5DB' }}
+                  >
+                    Sign in
+                  </button>
+                </>
               )}
-            </button>
-          </form>
-
-          {/* Toggle mode */}
-          <p className="text-center text-xs" style={{ color: '#d7c2bf' }}>
-            {mode === 'login' ? (
-              <>
-                No active clearance?{' '}
-                <button
-                  onClick={() => { setMode('register'); setError(''); }}
-                  className="hover:underline transition-colors"
-                  style={{ color: '#e2e2e9' }}
-                >
-                  Request Access
-                </button>
-              </>
-            ) : (
-              <>
-                Already have clearance?{' '}
-                <button
-                  onClick={() => { setMode('login'); setError(''); }}
-                  className="hover:underline transition-colors"
-                  style={{ color: '#e2e2e9' }}
-                >
-                  Sign In
-                </button>
-              </>
-            )}
-          </p>
+            </p>
+          </div>
         </div>
-
-        {/* Footer */}
-        <footer className="mt-8 text-center">
-          <p className="text-xs" style={{ color: '#9f8c8a', opacity: 0.6 }}>
-            OrbitalQuery — Powered by Bhoonidhi (ISRO), Copernicus & Sentinel data. Built for researchers and decision-makers.
-          </p>
-        </footer>
       </div>
     </div>
   );

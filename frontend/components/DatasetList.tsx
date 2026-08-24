@@ -14,6 +14,14 @@ export interface Dataset {
   cloudCover?: number | null;
   previewUrl?: string | null;
   score?: number;
+  platform?: string | null;
+  instrument?: string | null;
+  stacLink?: string | null;
+  description?: string | null;
+  geometry?: any;
+  endDate?: string | null;
+  centroidLat?: number | null;
+  centroidLng?: number | null;
 }
 
 interface DatasetListProps {

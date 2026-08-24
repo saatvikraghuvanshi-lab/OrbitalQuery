@@ -1,9 +1,9 @@
 'use client';
 
-import { Scene } from '@/hooks/useAnalysis';
+import { SceneInfo } from '@/hooks/useAnalysis';
 
 interface EvidencePanelProps {
-  scenes: Scene[];
+  scenes: SceneInfo[];
 }
 
 export default function EvidencePanel({ scenes }: EvidencePanelProps) {
@@ -16,7 +16,7 @@ export default function EvidencePanel({ scenes }: EvidencePanelProps) {
     );
   }
 
-  const avgScore = Math.round(94 - scenes.reduce((sum, s) => sum + (s.cloud_cover_pct || 0), 0) / scenes.length);
+  const avgScore = Math.round(94 - scenes.reduce((sum, s) => sum + (s.cloud_cover || 0), 0) / scenes.length);
 
   return (
     <div className="glass rounded-2xl border border-blue-500/20 p-5">
@@ -30,12 +30,11 @@ export default function EvidencePanel({ scenes }: EvidencePanelProps) {
 
       <div className="space-y-2">
         {scenes.map((scene, i) => {
-          const score = Math.max(60, 100 - (scene.cloud_cover_pct || 0) * 2);
-          const roleLabel = scene.role === 'pre_event' ? 'Pre-event' :
-                           scene.role === 'post_event' ? 'Post-event' : 'Supporting';
+          const score = Math.max(60, 100 - (scene.cloud_cover || 0) * 2);
+          const roleLabel = i === 0 ? 'Period 1 (Before)' : 'Period 2 (After)';
 
           return (
-            <div key={scene.scene_id || i} className="flex items-center gap-3 p-3 rounded-xl bg-slate-800/30 border border-slate-700/20">
+            <div key={scene.item_id || i} className="flex items-center gap-3 p-3 rounded-xl bg-slate-800/30 border border-slate-700/20">
               <div className="w-8 h-8 rounded-lg bg-green-500/10 flex items-center justify-center shrink-0">
                 <svg className="w-4 h-4 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
@@ -43,22 +42,14 @@ export default function EvidencePanel({ scenes }: EvidencePanelProps) {
               </div>
               <div className="flex-1 min-w-0">
                 <div className="text-[11px] font-medium text-slate-300 truncate">
-                  {scene.satellite} — {scene.acquisition_date}
+                  {scene.platform} — {scene.datetime ? new Date(scene.datetime).toLocaleDateString() : '—'}
                 </div>
                 <div className="flex items-center gap-2 mt-0.5">
                   <span className="text-[9px] text-slate-600">
-                    ☁ {scene.cloud_cover_pct ?? '—'}%
+                    ☁ {scene.cloud_cover ?? '—'}%
                   </span>
                   <span className="text-[9px] text-slate-600">•</span>
-                  <span className="text-[9px] text-slate-600">
-                    {scene.resolution_m}m
-                  </span>
-                  {scene.role && (
-                    <>
-                      <span className="text-[9px] text-slate-600">•</span>
-                      <span className="text-[9px] text-blue-400">{roleLabel}</span>
-                    </>
-                  )}
+                  <span className="text-[9px] text-blue-400">{roleLabel}</span>
                 </div>
               </div>
               <div className="text-[10px] font-mono text-green-400 shrink-0">

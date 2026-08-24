@@ -39,6 +39,8 @@ model EODataset {
   assets      String?
   stacLink    String?  @map("stac_link")
   previewUrl  String?  @map("preview_url")
+  capabilities String?  // JSON: phenomena, analysis types, bands, indices
+  temporalRes String?  @map("temporal_res")  // e.g. "5 days", "16 days", "daily"
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
   hasEmbedding Boolean @default(false) @map("has_embedding")

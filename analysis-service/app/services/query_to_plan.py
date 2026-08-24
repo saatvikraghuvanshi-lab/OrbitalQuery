@@ -121,6 +121,16 @@ KNOWN_LOCATIONS: dict[str, dict[str, Any]] = {
         "country": "India/Nepal/China",
         "region": "Himalayan Range",
     },
+    "himalaya": {
+        "bbox": [76.0, 28.0, 82.0, 35.0],
+        "country": "India/Nepal/China",
+        "region": "Himalayan Range",
+    },
+    "himalayan": {
+        "bbox": [76.0, 28.0, 82.0, 35.0],
+        "country": "India/Nepal/China",
+        "region": "Himalayan Range",
+    },
     "kerala": {
         "bbox": [74.8, 8.0, 77.5, 12.8],
         "country": "India",
@@ -237,6 +247,147 @@ KNOWN_LOCATIONS: dict[str, dict[str, Any]] = {
         "country": "India",
         "region": "Jammu & Kashmir",
     },
+    # India — city-level
+    "nagpur": {
+        "bbox": [79.0, 21.0, 79.2, 21.2],
+        "country": "India",
+        "region": "Maharashtra",
+    },
+    "indore": {
+        "bbox": [75.7, 22.6, 76.0, 22.85],
+        "country": "India",
+        "region": "Madhya Pradesh",
+    },
+    "coimbatore": {
+        "bbox": [76.8, 10.9, 77.1, 11.15],
+        "country": "India",
+        "region": "Tamil Nadu",
+    },
+    "visakhapatnam": {
+        "bbox": [83.1, 17.6, 83.4, 17.85],
+        "country": "India",
+        "region": "Andhra Pradesh",
+    },
+    "dehradun": {
+        "bbox": [77.9, 30.2, 78.2, 30.45],
+        "country": "India",
+        "region": "Uttarakhand",
+    },
+    "shimla": {
+        "bbox": [77.05, 31.05, 77.25, 31.2],
+        "country": "India",
+        "region": "Himachal Pradesh",
+    },
+    "gangtok": {
+        "bbox": [88.55, 27.3, 88.7, 27.45],
+        "country": "India",
+        "region": "Sikkim",
+    },
+    "imphal": {
+        "bbox": [93.9, 24.75, 94.05, 24.9],
+        "country": "India",
+        "region": "Manipur",
+    },
+    # International — Asia
+    "jakarta": {
+        "bbox": [106.7, -6.3, 107.0, -6.1],
+        "country": "Indonesia",
+        "region": "Java",
+    },
+    "dhaka": {
+        "bbox": [90.3, 23.6, 90.5, 23.9],
+        "country": "Bangladesh",
+        "region": "Dhaka",
+    },
+    "kathmandu": {
+        "bbox": [85.2, 27.6, 85.5, 27.8],
+        "country": "Nepal",
+        "region": "Bagmati",
+    },
+    "bangkok": {
+        "bbox": [100.4, 13.6, 100.8, 13.95],
+        "country": "Thailand",
+        "region": "Central Thailand",
+    },
+    "ho chi minh": {
+        "bbox": [106.6, 10.7, 106.9, 10.95],
+        "country": "Vietnam",
+        "region": "Southern Vietnam",
+    },
+    "manila": {
+        "bbox": [120.9, 14.5, 121.1, 14.75],
+        "country": "Philippines",
+        "region": "Metro Manila",
+    },
+    "beijing": {
+        "bbox": [116.2, 39.7, 116.7, 40.05],
+        "country": "China",
+        "region": "Beijing",
+    },
+    "shanghai": {
+        "bbox": [121.3, 31.1, 121.7, 31.4],
+        "country": "China",
+        "region": "Shanghai",
+    },
+    # International — Americas
+    "california": {
+        "bbox": [-124.5, 32.5, -114.0, 42.0],
+        "country": "USA",
+        "region": "California",
+    },
+    "los angeles": {
+        "bbox": [-118.7, 33.7, -117.9, 34.35],
+        "country": "USA",
+        "region": "California",
+    },
+    "miami": {
+        "bbox": [-80.4, 25.6, -80.0, 25.9],
+        "country": "USA",
+        "region": "Florida",
+    },
+    "sao paulo": {
+        "bbox": [-46.8, -23.8, -46.3, -23.4],
+        "country": "Brazil",
+        "region": "São Paulo",
+    },
+    "mexico city": {
+        "bbox": [-99.4, 19.2, -99.0, 19.55],
+        "country": "Mexico",
+        "region": "Mexico City",
+    },
+    # International — Europe
+    "paris": {
+        "bbox": [2.2, 48.8, 2.5, 49.0],
+        "country": "France",
+        "region": "Île-de-France",
+    },
+    "berlin": {
+        "bbox": [13.1, 52.4, 13.6, 52.65],
+        "country": "Germany",
+        "region": "Brandenburg",
+    },
+    "rome": {
+        "bbox": [12.3, 41.8, 12.6, 42.05],
+        "country": "Italy",
+        "region": "Lazio",
+    },
+    # International — Arctic / cryosphere
+    "greenland": {
+        "bbox": [-73.0, 60.0, -12.0, 84.0],
+        "country": "Denmark",
+        "region": "Greenland",
+    },
+    "arctic": {
+        "bbox": [-180.0, 66.0, 180.0, 90.0],
+        "country": "International",
+        "region": "Arctic",
+    },
+    "antarctica": {
+        "bbox": [-180.0, -90.0, 180.0, -60.0],
+        "country": "International",
+        "region": "Antarctica",
+    },
+    # International — Africa
     "kampala": {
         "bbox": [32.5, 0.2, 32.7, 0.4],
         "country": "Uganda",
@@ -246,6 +397,43 @@ KNOWN_LOCATIONS: dict[str, dict[str, Any]] = {
         "bbox": [36.7, -1.4, 37.0, -1.2],
         "country": "Kenya",
         "region": "Nairobi",
+    },
+    "cairo": {
+        "bbox": [31.1, 29.9, 31.4, 30.2],
+        "country": "Egypt",
+        "region": "Cairo",
+    },
+    "lake chad": {
+        "bbox": [13.5, 12.5, 14.5, 14.0],
+        "country": "Chad/Nigeria",
+        "region": "Lake Chad Basin",
+    },
+    "sahel": {
+        "bbox": [-17.0, 10.0, 40.0, 20.0],
+        "country": "West Africa",
+        "region": "Sahel",
+    },
+    # International — Middle East
+    "riyadh": {
+        "bbox": [46.4, 24.5, 46.9, 24.9],
+        "country": "Saudi Arabia",
+        "region": "Riyadh",
+    },
+    "dubai": {
+        "bbox": [55.1, 25.0, 55.4, 25.35],
+        "country": "UAE",
+        "region": "Dubai",
+    },
+    # International — Oceania
+    "sydney": {
+        "bbox": [150.9, -34.0, 151.3, -33.7],
+        "country": "Australia",
+        "region": "New South Wales",
+    },
+    "great barrier reef": {
+        "bbox": [145.0, -18.5, 148.0, -16.0],
+        "country": "Australia",
+        "region": "Queensland",
     },
 }
 
