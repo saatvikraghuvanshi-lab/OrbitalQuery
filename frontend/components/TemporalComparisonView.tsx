@@ -36,14 +36,6 @@ type ViewMode = 'side-by-side' | 'swipe' | 'difference';
 const GOOGLE_TILE = 'https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}';
 
 /** Build tilejson URL from scene data if not provided in imagery response */
-function resolveTileJson(scene: SceneInfo | null | undefined, imageryTilejson?: string): string | undefined {
-  if (imageryTilejson) return imageryTilejson;
-  if (scene?.item_id) {
-    return buildTileJsonUrl(scene.collection || 'sentinel-2-l2a', scene.item_id);
-  }
-  return undefined;
-}
-
 // ── Synchronized Dual Map ────────────────────────────────────
 function SynchronizedDualMap({
   bbox, sceneT1, sceneT2, thumbnailT1, thumbnailT2, tilejsonT1, tilejsonT2, sceneBboxT1, sceneBboxT2,
@@ -92,14 +84,11 @@ function SynchronizedDualMap({
       });
       L.tileLayer(GOOGLE_TILE, { maxZoom: 22, subdomains: ['0', '1', '2', '3'] }).addTo(rightMap);
 
-      // Load satellite imagery with robust fallback
-      const tjUrlT1 = resolveTileJson(sceneT1, tilejsonT1);
-      const tjUrlT2 = resolveTileJson(sceneT2, tilejsonT2);
-
       const [leftResult, rightResult] = await Promise.all([
         loadSatelliteTiles(leftMap, {
           L,
-          tilejsonUrl: tjUrlT1,
+          sceneCollection: sceneT1?.collection,
+          sceneItemId: sceneT1?.item_id,
           thumbnailUrl: thumbnailT1,
           sceneBbox: sceneBboxT1,
           aoiBbox: bbox,
@@ -107,7 +96,8 @@ function SynchronizedDualMap({
         }),
         loadSatelliteTiles(rightMap, {
           L,
-          tilejsonUrl: tjUrlT2,
+          sceneCollection: sceneT2?.collection,
+          sceneItemId: sceneT2?.item_id,
           thumbnailUrl: thumbnailT2,
           sceneBbox: sceneBboxT2,
           aoiBbox: bbox,
@@ -258,10 +248,10 @@ function DifferenceView({
       L.tileLayer(GOOGLE_TILE, { maxZoom: 22, subdomains: ['0', '1', '2', '3'] }).addTo(map);
 
       // Load Period 2 (After) as the base satellite layer
-      const tjUrlT2 = resolveTileJson(sceneT2, tilejsonT2);
       const baseResult = await loadSatelliteTiles(map, {
         L,
-        tilejsonUrl: tjUrlT2,
+        sceneCollection: sceneT2?.collection,
+        sceneItemId: sceneT2?.item_id,
         thumbnailUrl: thumbnailT2,
         sceneBbox: sceneBboxT2,
         aoiBbox: bbox,
@@ -270,10 +260,10 @@ function DifferenceView({
       });
 
       // Load Period 1 (Before) as a semi-transparent overlay on top
-      const tjUrlT1 = resolveTileJson(sceneT1, tilejsonT1);
       const overlayResult = await loadSatelliteTiles(map, {
         L,
-        tilejsonUrl: tjUrlT1,
+        sceneCollection: sceneT1?.collection,
+        sceneItemId: sceneT1?.item_id,
         thumbnailUrl: thumbnailT1,
         sceneBbox: sceneBboxT1,
         aoiBbox: bbox,
@@ -606,8 +596,8 @@ export default function TemporalComparisonView({ result }: Props) {
               bbox={result.aoi_bbox}
               thumbnailT1={result.imagery?.period1?.thumbnail}
               thumbnailT2={result.imagery?.period2?.thumbnail}
-              tilejsonT1={result.imagery?.period1?.tilejson || (result.scene_t1?.item_id ? buildTileJsonUrl(result.scene_t1.collection || 'sentinel-2-l2a', result.scene_t1.item_id) : undefined)}
-              tilejsonT2={result.imagery?.period2?.tilejson || (result.scene_t2?.item_id ? buildTileJsonUrl(result.scene_t2.collection || 'sentinel-2-l2a', result.scene_t2.item_id) : undefined)}
+              sceneT1={result.scene_t1}
+              sceneT2={result.scene_t2}
               sceneBboxT1={result.imagery?.period1?.bbox || result.scene_t1?.bbox}
               sceneBboxT2={result.imagery?.period2?.bbox || result.scene_t2?.bbox}
             />

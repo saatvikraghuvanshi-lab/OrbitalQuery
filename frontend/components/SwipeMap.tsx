@@ -6,6 +6,7 @@ import {
   buildTileJsonUrl,
   boundsToLatLng,
 } from '@/lib/satellite-tiles';
+import type { SceneInfo } from '@/hooks/useAnalysis';
 
 const GOOGLE_TILE = 'https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}';
 
@@ -17,6 +18,8 @@ interface SwipeMapProps {
   tilejsonT2?: string;
   sceneBboxT1?: any;
   sceneBboxT2?: any;
+  sceneT1?: SceneInfo | null;
+  sceneT2?: SceneInfo | null;
 }
 
 /**
@@ -39,6 +42,8 @@ export default function SwipeMap({
   tilejsonT2,
   sceneBboxT1,
   sceneBboxT2,
+  sceneT1,
+  sceneT2,
 }: SwipeMapProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const topRef = useRef<HTMLDivElement>(null);
@@ -78,7 +83,8 @@ export default function SwipeMap({
       // Period 2 (After) → Bottom map (full, no clipping)
       const bottomResult = await loadSatelliteTiles(bottomMap, {
         L,
-        tilejsonUrl: tilejsonT2,
+        sceneCollection: sceneT2?.collection,
+        sceneItemId: sceneT2?.item_id,
         thumbnailUrl: thumbnailT2,
         sceneBbox: sceneBboxT2,
         aoiBbox: bbox,
@@ -88,7 +94,8 @@ export default function SwipeMap({
       // Period 1 (Before) → Top map (clipped via CSS clip-path)
       const topResult = await loadSatelliteTiles(topMap, {
         L,
-        tilejsonUrl: tilejsonT1,
+        sceneCollection: sceneT1?.collection,
+        sceneItemId: sceneT1?.item_id,
         thumbnailUrl: thumbnailT1,
         sceneBbox: sceneBboxT1,
         aoiBbox: bbox,
