@@ -262,6 +262,12 @@ def _get_imagery_urls(scene: SceneSelection) -> dict[str, str]:
                 urls["rendered"] = href
                 break
 
+    # TileJSON for XYZ tile rendering (zoomable satellite imagery)
+    if "tilejson" in assets:
+        href = assets["tilejson"].get("href", "")
+        if href:
+            urls["tilejson"] = href
+
     # Individual bands (for index computation)
     for key, asset in assets.items():
         if key.upper().startswith("B") or key.lower() in ("vv", "vh", "red", "green", "blue", "nir", "swir16", "swir22"):
@@ -824,12 +830,16 @@ def run_temporal_comparison(
         imagery["period1"]["date"] = scene_sel_t1.datetime
         imagery["period1"]["cloud_cover"] = scene_sel_t1.cloud_cover
         imagery["period1"]["platform"] = scene_sel_t1.platform
+        if scene_sel_t1.bbox:
+            imagery["period1"]["bbox"] = scene_sel_t1.bbox
     if scene_sel_t2:
         imagery["period2"] = _get_imagery_urls(scene_sel_t2)
         imagery["period2"]["scene_id"] = scene_sel_t2.item_id
         imagery["period2"]["date"] = scene_sel_t2.datetime
         imagery["period2"]["cloud_cover"] = scene_sel_t2.cloud_cover
         imagery["period2"]["platform"] = scene_sel_t2.platform
+        if scene_sel_t2.bbox:
+            imagery["period2"]["bbox"] = scene_sel_t2.bbox
 
     # ── Step 8: Generate explanation ──────────────────────────────
     explanation = _generate_explanation(

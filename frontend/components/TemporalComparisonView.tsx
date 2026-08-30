@@ -28,14 +28,28 @@ type ViewMode = 'side-by-side' | 'swipe' | 'difference';
 const TILE_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}';
 
 // ── Synchronized Dual Map ────────────────────────────────────
+async function fetchTileJson(url: string): Promise<{ tiles: string[]; bounds: number[]; maxzoom: number } | null> {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
 function SynchronizedDualMap({
-  bbox, sceneT1, sceneT2, thumbnailT1, thumbnailT2,
+  bbox, sceneT1, sceneT2, thumbnailT1, thumbnailT2, tilejsonT1, tilejsonT2, sceneBboxT1, sceneBboxT2,
 }: {
   bbox: number[];
   sceneT1: SceneInfo | null;
   sceneT2: SceneInfo | null;
   thumbnailT1?: string;
   thumbnailT2?: string;
+  tilejsonT1?: string;
+  tilejsonT2?: string;
+  sceneBboxT1?: any;
+  sceneBboxT2?: any;
 }) {
   const leftRef = useRef<HTMLDivElement>(null);
   const rightRef = useRef<HTMLDivElement>(null);
@@ -47,7 +61,7 @@ function SynchronizedDualMap({
     if (!leftRef.current || !rightRef.current || leftMapRef.current) return;
     let cancelled = false;
 
-    import('leaflet').then((L) => {
+    import('leaflet').then(async (L) => {
       if (cancelled || !leftRef.current || !rightRef.current) return;
 
       const [west, south, east, north] = bbox;
@@ -63,19 +77,60 @@ function SynchronizedDualMap({
       });
       L.tileLayer(TILE_URL, { maxZoom: 19 }).addTo(rightMap);
 
-      if (thumbnailT1) {
-        L.imageOverlay(thumbnailT1, [[south, west], [north, east]], { opacity: 0.85, interactive: false }).addTo(leftMap);
-      }
-      if (thumbnailT2) {
-        L.imageOverlay(thumbnailT2, [[south, west], [north, east]], { opacity: 0.85, interactive: false }).addTo(rightMap);
+      // Parse bbox from imagery (may be JSON string or array)
+      const parseBbox = (b: any): number[] | null => {
+        if (!b) return null;
+        if (Array.isArray(b) && b.length === 4) return b;
+        if (typeof b === 'string') { try { const p = JSON.parse(b); if (Array.isArray(p) && p.length === 4) return p; } catch {} }
+        return null;
+      };
+      const parsedBboxT1 = parseBbox(sceneBboxT1);
+      const parsedBboxT2 = parseBbox(sceneBboxT2);
+
+      // Try TileJSON for zoomable satellite tiles
+      let leftBounds: L.LatLngBoundsExpression = [[south, west], [north, east]];
+      let rightBounds: L.LatLngBoundsExpression = [[south, west], [north, east]];
+
+      if (tilejsonT1) {
+        const tj = await fetchTileJson(tilejsonT1);
+        if (tj && tj.tiles?.[0]) {
+          L.tileLayer(tj.tiles[0], { maxZoom: tj.maxzoom || 24, opacity: 0.9 }).addTo(leftMap);
+          if (tj.bounds && tj.bounds.length === 4) {
+            leftBounds = [[tj.bounds[1], tj.bounds[0]], [tj.bounds[3], tj.bounds[2]]];
+          }
+        } else if (thumbnailT1 && parsedBboxT1) {
+          L.imageOverlay(thumbnailT1, [[parsedBboxT1[1], parsedBboxT1[0]], [parsedBboxT1[3], parsedBboxT1[2]]], { opacity: 0.85, interactive: false }).addTo(leftMap);
+          leftBounds = [[parsedBboxT1[1], parsedBboxT1[0]], [parsedBboxT1[3], parsedBboxT1[2]]];
+        }
+      } else if (thumbnailT1 && parsedBboxT1) {
+        L.imageOverlay(thumbnailT1, [[parsedBboxT1[1], parsedBboxT1[0]], [parsedBboxT1[3], parsedBboxT1[2]]], { opacity: 0.85, interactive: false }).addTo(leftMap);
+        leftBounds = [[parsedBboxT1[1], parsedBboxT1[0]], [parsedBboxT1[3], parsedBboxT1[2]]];
       }
 
+      if (tilejsonT2) {
+        const tj = await fetchTileJson(tilejsonT2);
+        if (tj && tj.tiles?.[0]) {
+          L.tileLayer(tj.tiles[0], { maxZoom: tj.maxzoom || 24, opacity: 0.9 }).addTo(rightMap);
+          if (tj.bounds && tj.bounds.length === 4) {
+            rightBounds = [[tj.bounds[1], tj.bounds[0]], [tj.bounds[3], tj.bounds[2]]];
+          }
+        } else if (thumbnailT2 && parsedBboxT2) {
+          L.imageOverlay(thumbnailT2, [[parsedBboxT2[1], parsedBboxT2[0]], [parsedBboxT2[3], parsedBboxT2[2]]], { opacity: 0.85, interactive: false }).addTo(rightMap);
+          rightBounds = [[parsedBboxT2[1], parsedBboxT2[0]], [parsedBboxT2[3], parsedBboxT2[2]]];
+        }
+      } else if (thumbnailT2 && parsedBboxT2) {
+        L.imageOverlay(thumbnailT2, [[parsedBboxT2[1], parsedBboxT2[0]], [parsedBboxT2[3], parsedBboxT2[2]]], { opacity: 0.85, interactive: false }).addTo(rightMap);
+        rightBounds = [[parsedBboxT2[1], parsedBboxT2[0]], [parsedBboxT2[3], parsedBboxT2[2]]];
+      }
+
+      // AOI rectangle
       const aoiBounds: L.LatLngBoundsExpression = [[south, west], [north, east]];
       L.rectangle(aoiBounds, { color: '#22d3ee', weight: 1.5, fillColor: '#22d3ee', fillOpacity: 0.05, dashArray: '6 3' }).addTo(leftMap);
       L.rectangle(aoiBounds, { color: '#22d3ee', weight: 1.5, fillColor: '#22d3ee', fillOpacity: 0.05, dashArray: '6 3' }).addTo(rightMap);
 
-      leftMap.fitBounds(aoiBounds, { padding: [40, 40], maxZoom: 14 });
-      rightMap.fitBounds(aoiBounds, { padding: [40, 40], maxZoom: 14 });
+      // Fit to scene bounds so imagery fills the viewport
+      leftMap.fitBounds(leftBounds, { padding: [20, 20], maxZoom: 14 });
+      rightMap.fitBounds(rightBounds, { padding: [20, 20], maxZoom: 14 });
 
       leftMap.on('move', () => {
         if (syncingRef.current) return;
@@ -101,7 +156,7 @@ function SynchronizedDualMap({
       leftMapRef.current = null;
       rightMapRef.current = null;
     };
-  }, [bbox, thumbnailT1, thumbnailT2]);
+  }, [bbox, thumbnailT1, thumbnailT2, tilejsonT1, tilejsonT2, sceneBboxT1, sceneBboxT2]);
 
   return (
     <div className="grid grid-cols-2 gap-1" style={{ height: 'calc(70vh - 100px)', minHeight: '450px' }}>
@@ -411,6 +466,10 @@ export default function TemporalComparisonView({ result }: Props) {
               sceneT2={result.scene_t2}
               thumbnailT1={result.imagery?.period1?.thumbnail}
               thumbnailT2={result.imagery?.period2?.thumbnail}
+              tilejsonT1={result.imagery?.period1?.tilejson}
+              tilejsonT2={result.imagery?.period2?.tilejson}
+              sceneBboxT1={result.imagery?.period1?.bbox}
+              sceneBboxT2={result.imagery?.period2?.bbox}
             />
           )}
           {viewMode === 'swipe' && (
@@ -418,6 +477,10 @@ export default function TemporalComparisonView({ result }: Props) {
               bbox={result.aoi_bbox}
               thumbnailT1={result.imagery?.period1?.thumbnail}
               thumbnailT2={result.imagery?.period2?.thumbnail}
+              tilejsonT1={result.imagery?.period1?.tilejson}
+              tilejsonT2={result.imagery?.period2?.tilejson}
+              sceneBboxT1={result.imagery?.period1?.bbox}
+              sceneBboxT2={result.imagery?.period2?.bbox}
             />
           )}
           {viewMode === 'difference' && (

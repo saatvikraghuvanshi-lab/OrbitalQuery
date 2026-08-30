@@ -8,14 +8,29 @@ interface SwipeMapProps {
   bbox: number[];
   thumbnailT1?: string;
   thumbnailT2?: string;
+  tilejsonT1?: string;
+  tilejsonT2?: string;
+  sceneBboxT1?: any;
+  sceneBboxT2?: any;
+}
+
+async function fetchTileJson(url: string): Promise<{ tiles: string[]; bounds: number[]; maxzoom: number } | null> {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
 }
 
 /**
  * Swipe comparison using two stacked Leaflet maps.
  * Bottom map = Period 2 (full). Top map = Period 1 (clipped by split position).
  * Both maps sync center/zoom so they always show the same view.
+ * Uses TileJSON XYZ tiles when available for real zoomable satellite imagery.
  */
-export default function SwipeMap({ bbox, thumbnailT1, thumbnailT2 }: SwipeMapProps) {
+export default function SwipeMap({ bbox, thumbnailT1, thumbnailT2, tilejsonT1, tilejsonT2, sceneBboxT1, sceneBboxT2 }: SwipeMapProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const topRef = useRef<HTMLDivElement>(null);
   const bottomMapRef = useRef<any>(null);
@@ -28,12 +43,11 @@ export default function SwipeMap({ bbox, thumbnailT1, thumbnailT2 }: SwipeMapPro
     if (!bottomRef.current || !topRef.current || bottomMapRef.current) return;
     let cancelled = false;
 
-    import('leaflet').then((L) => {
+    import('leaflet').then(async (L) => {
       if (cancelled || !bottomRef.current || !topRef.current) return;
 
       const [west, south, east, north] = bbox;
       const center: [number, number] = [(south + north) / 2, (west + east) / 2];
-      const bounds: L.LatLngBoundsExpression = [[south, west], [north, east]];
 
       // Bottom map = Period 2
       const bottomMap = L.map(bottomRef.current, {
@@ -41,23 +55,54 @@ export default function SwipeMap({ bbox, thumbnailT1, thumbnailT2 }: SwipeMapPro
         zoomSnap: 0.25, zoomDelta: 0.5,
       });
       L.tileLayer(TILE_URL, { maxZoom: 19 }).addTo(bottomMap);
-      if (thumbnailT2) {
-        L.imageOverlay(thumbnailT2, bounds, { opacity: 0.9, interactive: false }).addTo(bottomMap);
-      }
-      bottomMap.fitBounds(bounds, { padding: [20, 20], maxZoom: 14 });
 
       // Top map = Period 1
       const topMap = L.map(topRef.current, {
-        center: bottomMap.getCenter(),
-        zoom: bottomMap.getZoom(),
-        zoomControl: false, attributionControl: false,
+        center, zoom: 10, zoomControl: false, attributionControl: false,
         zoomSnap: 0.25, zoomDelta: 0.5,
       });
       L.tileLayer(TILE_URL, { maxZoom: 19 }).addTo(topMap);
-      if (thumbnailT1) {
-        L.imageOverlay(thumbnailT1, bounds, { opacity: 0.9, interactive: false }).addTo(topMap);
+
+      let fitBounds = [[south, west], [north, east]] as L.LatLngBoundsExpression;
+
+      // Period 2 — try TileJSON first
+      if (tilejsonT2) {
+        const tj = await fetchTileJson(tilejsonT2);
+        if (tj && tj.tiles?.[0]) {
+          L.tileLayer(tj.tiles[0], { maxZoom: tj.maxzoom || 24, opacity: 0.9 }).addTo(bottomMap);
+          if (tj.bounds?.length === 4) {
+            fitBounds = [[tj.bounds[1], tj.bounds[0]], [tj.bounds[3], tj.bounds[2]]] as L.LatLngBoundsExpression;
+          }
+        } else if (thumbnailT2 && sceneBboxT2) {
+          L.imageOverlay(thumbnailT2, [[sceneBboxT2[1], sceneBboxT2[0]], [sceneBboxT2[3], sceneBboxT2[2]]], { opacity: 0.9, interactive: false }).addTo(bottomMap);
+          fitBounds = [[sceneBboxT2[1], sceneBboxT2[0]], [sceneBboxT2[3], sceneBboxT2[2]]] as L.LatLngBoundsExpression;
+        }
+      } else if (thumbnailT2 && sceneBboxT2) {
+        L.imageOverlay(thumbnailT2, [[sceneBboxT2[1], sceneBboxT2[0]], [sceneBboxT2[3], sceneBboxT2[2]]], { opacity: 0.9, interactive: false }).addTo(bottomMap);
+        fitBounds = [[sceneBboxT2[1], sceneBboxT2[0]], [sceneBboxT2[3], sceneBboxT2[2]]] as L.LatLngBoundsExpression;
       }
-      topMap.fitBounds(bounds, { padding: [20, 20], maxZoom: 14 });
+
+      // Period 1 — try TileJSON first
+      let topBounds = fitBounds;
+      if (tilejsonT1) {
+        const tj = await fetchTileJson(tilejsonT1);
+        if (tj && tj.tiles?.[0]) {
+          L.tileLayer(tj.tiles[0], { maxZoom: tj.maxzoom || 24, opacity: 0.9 }).addTo(topMap);
+          if (tj.bounds?.length === 4) {
+            topBounds = [[tj.bounds[1], tj.bounds[0]], [tj.bounds[3], tj.bounds[2]]] as L.LatLngBoundsExpression;
+          }
+        } else if (thumbnailT1 && sceneBboxT1) {
+          L.imageOverlay(thumbnailT1, [[sceneBboxT1[1], sceneBboxT1[0]], [sceneBboxT1[3], sceneBboxT1[2]]], { opacity: 0.9, interactive: false }).addTo(topMap);
+          topBounds = [[sceneBboxT1[1], sceneBboxT1[0]], [sceneBboxT1[3], sceneBboxT1[2]]] as L.LatLngBoundsExpression;
+        }
+      } else if (thumbnailT1 && sceneBboxT1) {
+        L.imageOverlay(thumbnailT1, [[sceneBboxT1[1], sceneBboxT1[0]], [sceneBboxT1[3], sceneBboxT1[2]]], { opacity: 0.9, interactive: false }).addTo(topMap);
+        topBounds = [[sceneBboxT1[1], sceneBboxT1[0]], [sceneBboxT1[3], sceneBboxT1[2]]] as L.LatLngBoundsExpression;
+      }
+
+      // Fit both maps to imagery bounds
+      bottomMap.fitBounds(fitBounds, { padding: [20, 20], maxZoom: 14 });
+      topMap.fitBounds(topBounds, { padding: [20, 20], maxZoom: 14 });
 
       // Sync: bottom → top
       bottomMap.on('move', () => {
@@ -98,7 +143,7 @@ export default function SwipeMap({ bbox, thumbnailT1, thumbnailT2 }: SwipeMapPro
       bottomMapRef.current = null;
       topMapRef.current = null;
     };
-  }, [bbox, thumbnailT1, thumbnailT2]);
+  }, [bbox, thumbnailT1, thumbnailT2, tilejsonT1, tilejsonT2, sceneBboxT1, sceneBboxT2]);
 
   const handleMouseDown = useCallback((e: React.MouseEvent | React.TouchEvent) => {
     e.preventDefault();
@@ -116,7 +161,6 @@ export default function SwipeMap({ bbox, thumbnailT1, thumbnailT2 }: SwipeMapPro
     draggingRef.current = false;
   }, []);
 
-  // Touch support
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
     if (!bottomRef.current) return;
     const rect = bottomRef.current.getBoundingClientRect();
@@ -152,7 +196,6 @@ export default function SwipeMap({ bbox, thumbnailT1, thumbnailT2 }: SwipeMapPro
         onMouseDown={handleMouseDown}
         onTouchStart={handleMouseDown}
       >
-        {/* Handle grip */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-white shadow-xl flex items-center justify-center">
           <svg className="w-3.5 h-3.5 text-slate-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M8 9l4-4 4 4m0 6l-4 4-4-4" />
@@ -161,14 +204,10 @@ export default function SwipeMap({ bbox, thumbnailT1, thumbnailT2 }: SwipeMapPro
       </div>
 
       {/* Labels */}
-      <div className="absolute top-3 left-3 z-[1000] px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-blue-500/80 text-white backdrop-blur-sm">
-        Before
-      </div>
-      <div className="absolute top-3 right-3 z-[1000] px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-orange-500/80 text-white backdrop-blur-sm">
-        After
-      </div>
+      <div className="absolute top-3 left-3 z-[1000] px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-blue-500/80 text-white backdrop-blur-sm">Before</div>
+      <div className="absolute top-3 right-3 z-[1000] px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-orange-500/80 text-white backdrop-blur-sm">After</div>
 
-      {/* Zoom controls — operate on bottom map */}
+      {/* Zoom controls */}
       <div className="absolute bottom-3 right-3 z-[1000] flex flex-col rounded-lg overflow-hidden border border-white/10 shadow-lg">
         <button onClick={() => bottomMapRef.current?.zoomIn()} className="w-8 h-8 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-colors text-sm font-bold bg-black/50 backdrop-blur-sm">+</button>
         <div className="h-px bg-white/10" />
