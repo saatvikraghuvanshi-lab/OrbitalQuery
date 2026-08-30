@@ -304,9 +304,20 @@ function HomePageContent() {
                   &quot;{analysis.state.query}&quot;
                 </h2>
                 <p className="text-xs text-slate-500 mt-1">
-                  Temporal comparison complete
+                  {(analysis.state.result as any)?.metrics?.fallbackMode ? 'Dataset search complete — full analysis engine is waking up' : 'Temporal comparison complete'}
                 </p>
               </div>
+
+              {/* Fallback notice */}
+              {(analysis.state.result as any)?.metrics?.fallbackMode && (
+                <div className="mb-4 mx-auto max-w-2xl">
+                  <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-4 py-3 text-center">
+                    <p className="text-xs text-amber-300">
+                      ⚡ Running in quick-search mode — the full analysis engine is starting up. You can try the full analysis again in 30-60 seconds.
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {/* The temporal comparison result */}
               <TemporalComparisonView result={analysis.state.result} />

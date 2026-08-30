@@ -150,13 +150,13 @@ export function useAnalysis() {
       if (!res.ok) {
         const errMsg = data?.detail || data?.message || data?.error || `Analysis failed (${res.status})`;
         // Make cold-start errors user-friendly
-        if (errMsg.includes('starting up') || errMsg.includes('unavailable') || errMsg.includes('invalid response')) {
+        if (errMsg.includes('starting up') || errMsg.includes('unavailable') || errMsg.includes('invalid response') || errMsg.includes('PYTHON_UNAVAILABLE')) {
           throw new Error('🛰️ The analysis engine is waking up from sleep (Render free tier). Please try again in 30-60 seconds.');
         }
         throw new Error(errMsg);
       }
 
-      if (data.status === 'error') {
+      if (data.status === 'error' && !data.plan) {
         throw new Error(data.message || (data.errors?.[0]) || 'Query could not be processed. Please describe what you want to analyze.');
       }
 
@@ -191,6 +191,11 @@ export function useAnalysis() {
         scenes,
         result,
       }));
+
+      // If this was a fallback response, show a toast-like message
+      if (data.fallback) {
+        console.warn('[OrbitalQuery] Running in degraded mode — Python analysis engine unavailable. Showing local database matches.');
+      }
 
     } catch (err: any) {
       setState(prev => ({

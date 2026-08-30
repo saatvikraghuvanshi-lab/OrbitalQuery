@@ -22,7 +22,7 @@ export const prisma = new PrismaClient({
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:3000';
+const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
 
 // ─── Security ─────────────────────────────────────────────────────────
 app.use(helmet({

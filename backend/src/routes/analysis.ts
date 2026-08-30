@@ -1297,17 +1297,162 @@ router.post('/temporal-compare', optionalAuth, async (req: AuthRequest, res: Res
   if (analysis_type) pythonBody.analysis_type = analysis_type;
   if (cloud_threshold !== undefined) pythonBody.cloud_threshold = cloud_threshold;
 
-  const result = await callPythonService('POST', '/analysis/temporal-compare', pythonBody, 'temporal-compare');
-  if (!result.ok) {
-    res.status(result.status || 502).json({ error: result.error, code: result.code, requestId: result.requestId });
+  // Try Python service first with a reasonable timeout (60s)
+  const PYTHON_TIMEOUT = 60000;
+  const result = await callPythonService('POST', '/analysis/temporal-compare', pythonBody, 'temporal-compare', PYTHON_TIMEOUT);
+
+  if (result.ok) {
+    res.json({
+      requestId: result.requestId,
+      ...result.data,
+      latencyMs: result.upstreamLatencyMs,
+    });
     return;
   }
 
-  res.json({
-    requestId: result.requestId,
-    ...result.data,
-    latencyMs: result.upstreamLatencyMs,
-  });
+  // ── LOCAL FALLBACK when Python is down ─────────────────────
+  // Generate a plan from the query text + search SQLite for matching datasets
+  console.log(`[temporal-compare] Python unavailable (${result.code}), using local fallback`);
+
+  try {
+    const { SemanticSearchEngine } = await import('../services/search-engine');
+    const { prisma } = await import('../index');
+
+    const searchEngine = new SemanticSearchEngine();
+
+    // Parse query to extract location info
+    const q = query.toLowerCase();
+    const locations: Record<string, number[]> = {
+      'mumbai': [72.75, 18.85, 73.05, 19.15], 'delhi': [77.0, 28.4, 77.4, 28.75],
+      'jaipur': [75.7, 26.8, 75.95, 27.05], 'assam': [89.5, 24.0, 96.0, 28.0],
+      'himalaya': [77.0, 28.0, 80.0, 35.0], 'thar desert': [69.0, 24.0, 74.0, 28.0],
+      'sundarbans': [88.5, 21.6, 89.2, 22.1], 'kashmir': [73.5, 33.0, 77.5, 36.5],
+      'kerala': [74.8, 8.0, 77.5, 12.8], 'bangalore': [77.4, 12.85, 77.75, 13.1],
+      'chennai': [80.05, 12.9, 80.35, 13.15], 'kolkata': [88.25, 22.45, 88.45, 22.65],
+      'flood': [89.5, 24.0, 96.0, 28.0], 'glacier': [74.0, 35.0, 77.5, 37.5],
+    };
+    let fallbackBbox = bbox;
+    let aoiName = aoi || 'Unknown';
+    if (!fallbackBbox) {
+      for (const [loc, lbbox] of Object.entries(locations)) {
+        if (q.includes(loc)) { fallbackBbox = lbbox; aoiName = loc.charAt(0).toUpperCase() + loc.slice(1); break; }
+      }
+    }
+    if (!fallbackBbox) fallbackBbox = [68.0, 6.0, 97.5, 37.5];
+
+    // Determine phenomenon from query
+    const phenomena = ['flood', 'deforestation', 'urbanization', 'glacier', 'erosion', 'agriculture', 'drought', 'fire', 'snow', 'mining', 'wetland'];
+    const detectedPhenomenon = phenomena.find(p => q.includes(p)) || 'land cover change';
+
+    // Determine dates
+    const defaultStart = start_date || '2023-01-01';
+    const defaultEnd = end_date || new Date().toISOString().split('T')[0];
+
+    // Search SQLite for matching datasets
+    const allDatasets = await prisma.eODataset.findMany({ take: 500 });
+    const parsed = allDatasets.map((d: any) => ({
+      ...d,
+      geometry: d.geometry ? JSON.parse(d.geometry) : null,
+      bbox: d.bbox ? JSON.parse(d.bbox) : null,
+    }));
+    const searchResults = await searchEngine.search(query, parsed, 10);
+
+    // Build a plan
+    const plan = {
+      plan_id: `local-${Date.now()}`,
+      phenomenon: detectedPhenomenon,
+      phenomenon_description: `Analyzing ${detectedPhenomenon} in ${aoiName}`,
+      analysis_type: analysis_type || 'temporal-comparison',
+      sensor: sensor || 'sentinel-2-l2a',
+      bands: ['B04', 'B03', 'B02', 'B08'],
+      aoi: aoiName,
+      bbox: fallbackBbox,
+      start_date: defaultStart,
+      end_date: defaultEnd,
+      cloud_threshold: cloud_threshold || 30,
+      comparison_strategy: 'before-after',
+      min_scenes: 2,
+      max_scenes: 20,
+      output_requirements: ['metrics', 'imagery', 'methodology'],
+      required_indices: detectedPhenomenon === 'flood' ? ['NDWI', 'MNDWI'] : ['NDVI', 'NDWI'],
+      validation: {
+        status: 'local-fallback',
+        phenomenon: detectedPhenomenon,
+        analysis_type: analysis_type || 'temporal-comparison',
+        sensor: sensor || 'sentinel-2-l2a',
+        bands: ['B04', 'B03', 'B02', 'B08'],
+        dates_provided: !!(start_date || end_date),
+        bbox_provided: !!bbox,
+      },
+    };
+
+    // Build scenes from search results
+    const scenes = searchResults.map((r: any) => ({
+      item_id: r.stacId || r.id,
+      collection: r.collection || 'sentinel-2-l2a',
+      datetime: r.startDate || defaultStart,
+      cloud_cover: r.cloudCover ?? null,
+      bbox: r.bbox || fallbackBbox,
+      provider: r.provider || 'local',
+      platform: r.platform || 'Sentinel-2',
+    }));
+
+    // Build a meaningful result
+    const result = {
+      plan_id: plan.plan_id,
+      phenomenon: plan.phenomenon,
+      analysis_type: plan.analysis_type,
+      aoi_name: plan.aoi,
+      aoi_bbox: plan.bbox,
+      period1: { start: defaultStart, end: defaultEnd },
+      period2: { start: defaultStart, end: defaultEnd },
+      scene_t1: scenes[0] || null,
+      scene_t2: scenes[1] || null,
+      index_t1: null,
+      index_t2: null,
+      change_detection: null,
+      metrics: {
+        totalDatasets: searchResults.length,
+        matchedQuery: query,
+        fallbackMode: true,
+      },
+      imagery: { period1: {}, period2: {} },
+      processing_steps: [
+        { step: 'Query parsing', detail: `Detected phenomenon: ${detectedPhenomenon}` },
+        { step: 'Dataset search', detail: `Found ${searchResults.length} matching datasets in local database` },
+        { step: 'Note', detail: 'Full analysis requires the Python analysis engine. Showing dataset matches from local database.' },
+      ],
+      sensor_info: { name: plan.sensor, resolution: '10m' },
+      explanation: {
+        title: `${detectedPhenomenon.charAt(0).toUpperCase() + detectedPhenomenon.slice(1)} Analysis — ${aoiName}`,
+        summary: `Found ${searchResults.length} datasets matching your query. The full temporal comparison analysis requires the Python analysis engine which is currently unavailable. Showing matched datasets from the local database.`,
+        methodology: 'TF-IDF semantic search against local dataset catalog. Full analysis (spectral indices, change detection) requires the Python service.',
+        key_findings: searchResults.slice(0, 3).map((r: any) => `${r.title} (${r.provider || 'Unknown'})`),
+        key_indices: plan.required_indices,
+        sensors_used: [plan.sensor],
+        confidence: 'Local database match only — not a full EO analysis',
+        limitations: ['Python analysis engine unavailable — no raster processing performed', 'Results are database matches, not computed analysis', 'For full analysis, try again when the analysis engine is online'],
+      },
+    };
+
+    res.json({
+      requestId: result.plan_id,
+      status: 'partial',
+      plan,
+      result,
+      fallback: true,
+      message: 'Analysis engine is currently unavailable. Showing dataset matches from local database.',
+      latencyMs: 0,
+    });
+  } catch (fallbackErr: any) {
+    console.error('[temporal-compare] Local fallback also failed:', fallbackErr.message);
+    res.status(502).json({
+      error: 'Analysis engine is currently unavailable',
+      code: 'PYTHON_UNAVAILABLE',
+      requestId: result.requestId,
+      message: 'The analysis engine is starting up. Please try again in 30-60 seconds.',
+    });
+  }
 });
 
 export default router;

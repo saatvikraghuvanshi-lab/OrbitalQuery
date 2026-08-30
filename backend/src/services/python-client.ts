@@ -49,10 +49,12 @@ export async function callPythonService<T = any>(
   path: string,
   body?: Record<string, any>,
   caller: string = 'unknown',
+  timeoutMs?: number,
 ): Promise<PythonServiceResponse<T>> {
   const requestId = randomUUID();
   const url = `${PYTHON_SERVICE_URL}${path}`;
   const start = Date.now();
+  const effectiveTimeout = timeoutMs || PYTHON_SERVICE_TIMEOUT_MS;
 
   console.log(
     `[python-client] → ${method} ${path} | requestId=${requestId} caller=${caller}`,
@@ -66,7 +68,7 @@ export async function callPythonService<T = any>(
         'X-Request-ID': requestId,
       },
       body: body ? JSON.stringify(body) : undefined,
-      signal: AbortSignal.timeout(PYTHON_SERVICE_TIMEOUT_MS),
+      signal: AbortSignal.timeout(effectiveTimeout),
     });
 
     // Retry once on 503 (Render cold-start)
@@ -80,7 +82,7 @@ export async function callPythonService<T = any>(
           'X-Request-ID': requestId,
         },
         body: body ? JSON.stringify(body) : undefined,
-        signal: AbortSignal.timeout(PYTHON_SERVICE_TIMEOUT_MS),
+        signal: AbortSignal.timeout(effectiveTimeout),
       });
     }
 
@@ -137,7 +139,7 @@ export async function callPythonService<T = any>(
     // Timeout
     if (err.name === 'TimeoutError' || err.code === 'ABORT_ERR') {
       console.error(
-        `[python-client] ← TIMEOUT after ${PYTHON_SERVICE_TIMEOUT_MS}ms | requestId=${requestId}`,
+        `[python-client] ← TIMEOUT after ${effectiveTimeout}ms | requestId=${requestId}`,
       );
       return {
         ok: false,
@@ -195,7 +197,7 @@ function mapStatusCode(status: number): string {
 }
 
 /**
- * Check if the Python service is reachable.
+ * Check if the Python service is reachable (fast, 5s timeout).
  */
 export async function checkPythonServiceHealth(): Promise<boolean> {
   try {
@@ -204,6 +206,25 @@ export async function checkPythonServiceHealth(): Promise<boolean> {
     });
     return res.ok;
   } catch {
+    return false;
+  }
+}
+
+/**
+ * Quick check with even shorter timeout (3s) — used to decide fallback paths.
+ */
+let _pythonStatusCache: { ok: boolean; at: number } = { ok: false, at: 0 };
+export async function isPythonServiceUp(): Promise<boolean> {
+  // Cache result for 30 seconds to avoid hammering
+  if (Date.now() - _pythonStatusCache.at < 30_000) return _pythonStatusCache.ok;
+  try {
+    const res = await fetch(`${PYTHON_SERVICE_URL}/health`, {
+      signal: AbortSignal.timeout(3000),
+    });
+    _pythonStatusCache = { ok: res.ok, at: Date.now() };
+    return res.ok;
+  } catch {
+    _pythonStatusCache = { ok: false, at: Date.now() };
     return false;
   }
 }

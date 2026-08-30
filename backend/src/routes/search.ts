@@ -139,6 +139,8 @@ router.post('/', searchLimiter, sanitizeSearchQuery, optionalAuth, async (req: A
     let sqliteResults = await searchEngine.search(query, parsed, Math.min(limit, 100));
 
     // ── STAC provider search (real data from Bhoonidhi/Copernicus) ──
+    // Use a SHORT timeout so we never block the user for more than 15s.
+    // If Python is down, SQLite results still return immediately.
     let stacResults: any[] = [];
     try {
       // Determine bbox for STAC search
@@ -174,14 +176,16 @@ router.post('/', searchLimiter, sanitizeSearchQuery, optionalAuth, async (req: A
       };
       if (max_cloud_cover !== undefined) stacBody.max_cloud_cover = max_cloud_cover;
 
+      const STAC_TIMEOUT_MS = 15000; // 15s — never block search for more than 15s
+
       // Try default provider first, then fallback to Planetary Computer
-      let stacResult = await callPythonService('POST', '/stac/search', stacBody, 'search-stac');
+      let stacResult = await callPythonService('POST', '/stac/search', stacBody, 'search-stac', STAC_TIMEOUT_MS);
 
       // If default provider failed (e.g. collection not available), try Planetary Computer
       if (!stacResult.ok && stacBody.collection === 'sentinel-2-l2a') {
         console.log('[search] Default provider failed for sentinel-2-l2a, trying Planetary Computer...');
         const pcBody = { ...stacBody, provider: 'planetary_computer' };
-        stacResult = await callPythonService('POST', '/stac/search', pcBody, 'search-stac-pc');
+        stacResult = await callPythonService('POST', '/stac/search', pcBody, 'search-stac-pc', STAC_TIMEOUT_MS);
       }
 
       if (stacResult.ok && stacResult.data?.items) {
@@ -252,10 +256,10 @@ router.get('/providers', async (_req: Request, res: Response) => {
     });
     const sqliteProviders = dbProviders.map(p => p.provider);
 
-    // Get STAC providers from Python service
+    // Get STAC providers from Python service (short timeout — don't block)
     let stacProviders: string[] = [];
     try {
-      const result = await callPythonService('GET', '/analysis/providers', undefined, 'providers');
+      const result = await callPythonService('GET', '/analysis/providers', undefined, 'providers', 5000);
       if (result.ok && result.data?.providers) {
         stacProviders = result.data.providers.map((p: any) => p.name);
       }
