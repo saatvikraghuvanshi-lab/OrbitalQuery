@@ -1441,7 +1441,7 @@ router.post('/temporal-compare', optionalAuth, async (req: AuthRequest, res: Res
       min_scenes: 2,
       max_scenes: 20,
       output_requirements: ['metrics', 'imagery', 'methodology'],
-      required_indices: detectedPhenomenon === 'flood' ? ['NDWI', 'MNDWI'] : ['NDVI', 'NDWI'],
+      required_indices: detectedPhenomenon === 'flood' ? ['NDWI', 'MNDWI'] : detectedPhenomenon === 'urban_expansion' ? ['NDBI'] : detectedPhenomenon === 'burn_severity' ? ['NBR'] : detectedPhenomenon === 'snow_cover' || detectedPhenomenon === 'glacier_retreat' ? ['NDSI'] : ['NDVI', 'NDWI'],
       validation: {
         status: 'local-fallback',
         phenomenon: detectedPhenomenon,

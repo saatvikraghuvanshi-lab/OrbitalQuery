@@ -531,21 +531,9 @@ export default function TemporalComparisonView({ result }: Props) {
       const changedPct = metrics.changed_pct || 0;
       cards.push({ label: 'Estimated Change', value: changedArea, unit: 'km²', color: config.color, subtitle: `~${typeof changedPct === 'number' ? changedPct.toFixed(1) : changedPct}% of area · from scene metadata` });
 
-      if (result.phenomenon === 'urban_expansion') {
-        cards.push({ label: 'Index Change', value: metrics.delta_index || 0, unit: 'NDBI units', color: '#c084fc', subtitle: 'Estimated from scene metadata' });
-        cards.push({ label: 'Direction', value: metrics.direction || 'N/A', color: '#a855f7' });
-      } else if (result.phenomenon === 'vegetation_change' || result.phenomenon === 'deforestation') {
-        cards.push({ label: 'Index Change', value: metrics.delta_index || 0, unit: 'NDVI units', color: metrics.delta_index > 0 ? '#22c55e' : '#ef4444', subtitle: 'Estimated from scene metadata' });
-        cards.push({ label: 'Direction', value: metrics.direction || 'N/A', color: '#8b5cf6' });
-      } else if (result.phenomenon === 'flood_impact') {
-        cards.push({ label: 'Index Change', value: metrics.delta_index || 0, unit: 'NDWI units', color: '#3b82f6', subtitle: 'Estimated from scene metadata' });
-        cards.push({ label: 'Direction', value: metrics.direction || 'N/A', color: '#06b6d4' });
-      } else if (result.phenomenon === 'water_change') {
-        cards.push({ label: 'Index Change', value: metrics.delta_index || 0, unit: 'NDWI units', color: '#06b6d4', subtitle: 'Estimated from scene metadata' });
-      } else if (result.phenomenon === 'coastal_erosion') {
-        cards.push({ label: 'Index Change', value: metrics.delta_index || 0, unit: 'NDWI units', color: '#0ea5e9', subtitle: 'Estimated from scene metadata' });
-      } else {
-        cards.push({ label: 'Index Change', value: metrics.delta_index || 0, unit: 'units', color: '#8b5cf6', subtitle: `Estimated · Direction: ${metrics.direction || 'N/A'}` });
+      cards.push({ label: `Index Change (${config.indexLabel})`, value: metrics.delta_index || 0, unit: `${config.indexLabel} units`, color: config.color, subtitle: 'Estimated from scene metadata' });
+      if (metrics.direction && metrics.direction !== 'N/A') {
+        cards.push({ label: 'Direction', value: metrics.direction, color: '#8b5cf6' });
       }
     }
     return cards;
