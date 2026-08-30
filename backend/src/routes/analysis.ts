@@ -1297,11 +1297,15 @@ router.post('/temporal-compare', optionalAuth, async (req: AuthRequest, res: Res
   if (analysis_type) pythonBody.analysis_type = analysis_type;
   if (cloud_threshold !== undefined) pythonBody.cloud_threshold = cloud_threshold;
 
-  // Try Python service first with a reasonable timeout (60s)
-  const PYTHON_TIMEOUT = 60000;
-  const result = await callPythonService('POST', '/analysis/temporal-compare', pythonBody, 'temporal-compare', PYTHON_TIMEOUT);
+  // Quick check: is Python service alive?
+  const { isPythonServiceUp, callPythonService } = await import('../services/python-client');
+  const pythonUp = await isPythonServiceUp();
 
-  if (result.ok) {
+  if (pythonUp) {
+    const PYTHON_TIMEOUT = 60000;
+    const result = await callPythonService('POST', '/analysis/temporal-compare', pythonBody, 'temporal-compare', PYTHON_TIMEOUT);
+
+    if (result.ok) {
     // Post-process: ensure tilejson URLs and bbox are in imagery response
     const data = result.data?.result || result.data;
     if (data?.imagery) {
@@ -1320,17 +1324,21 @@ router.post('/temporal-compare', optionalAuth, async (req: AuthRequest, res: Res
         }
       }
     }
-    res.json({
-      requestId: result.requestId,
-      ...result.data,
-      latencyMs: result.upstreamLatencyMs,
-    });
-    return;
+      res.json({
+        requestId: result.requestId,
+        ...result.data,
+        latencyMs: result.upstreamLatencyMs,
+      });
+      return;
+    }
+    console.log(`[temporal-compare] Python returned error (${result.code}), using local fallback`);
+  } else {
+    console.log('[temporal-compare] Python service is down, using local fallback');
   }
 
   // ── LOCAL FALLBACK when Python is down ─────────────────────
   // Generate a plan from the query text + search SQLite for matching datasets
-  console.log(`[temporal-compare] Python unavailable (${result.code}), using local fallback`);
+  console.log('[temporal-compare] Python unavailable, using local fallback');
 
   try {
     const { SemanticSearchEngine } = await import('../services/search-engine');
@@ -1467,7 +1475,7 @@ router.post('/temporal-compare', optionalAuth, async (req: AuthRequest, res: Res
     res.status(502).json({
       error: 'Analysis engine is currently unavailable',
       code: 'PYTHON_UNAVAILABLE',
-      requestId: result.requestId,
+      requestId: undefined,
       message: 'The analysis engine is starting up. Please try again in 30-60 seconds.',
     });
   }
