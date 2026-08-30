@@ -3,8 +3,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import type { TemporalComparisonResult, SceneInfo, IndexInfo } from '@/hooks/useAnalysis';
 import SwipeMap from '@/components/SwipeMap';
-import YearlyComparisonView from '@/components/YearlyComparisonView';
-import type { YearlyComparisonResult } from '@/hooks/useYearlyComparison';
 import {
   loadSatelliteTiles,
   buildTileJsonUrl,
@@ -499,97 +497,13 @@ export default function TemporalComparisonView({ result }: Props) {
   const explanation = result.explanation || {};
   const sensorInfo = result.sensor_info || {};
   const [viewMode, setViewMode] = useState<ViewMode>('side-by-side');
-  const [yearlyData, setYearlyData] = useState<YearlyComparisonResult | null>(null);
-  const [yearlyLoading, setYearlyLoading] = useState(false);
-  const [showYearly, setShowYearly] = useState(false);
 
   const isFallback = (metrics as any).fallbackMode;
 
-  // Fetch yearly comparison data directly from Planetary Computer
-  const fetchYearlyTrend = useCallback(async () => {
-    if (yearlyData) { setShowYearly(true); return; }
-    setYearlyLoading(true);
-    try {
-      const { useYearlyComparison } = await import('@/hooks/useYearlyComparison');
-      // Create a temporary hook instance
-      const hookResult = await new Promise<YearlyComparisonResult>((resolve, reject) => {
-        const fetcher = async () => {
-          const stacUrl = 'https://planetarycomputer.microsoft.com/api/stac/v1';
-          const years: any[] = [];
-          const bbox = result.aoi_bbox;
-          const collection = sensorInfo.collection || 'sentinel-2-l2a';
-          const index = sensorInfo.index_used || config.indexLabel;
-          
-          for (let year = 2019; year <= 2025; year++) {
-            try {
-              const res = await fetch(`${stacUrl}/search`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  collections: [collection], bbox,
-                  datetime: `${year}-04-01/${year}-09-30`,
-                  limit: 5,
-                  query: { 'eo:cloud_cover': { lt: 20 } },
-                }),
-              });
-              if (!res.ok) continue;
-              const data = await res.json();
-              const items = data.features || [];
-              if (items.length === 0) continue;
-              const best = items.sort((a: any, b: any) =>
-                (a.properties?.['eo:cloud_cover'] || 50) - (b.properties?.['eo:cloud_cover'] || 50)
-              )[0];
-              const sceneDate = new Date(best.properties?.datetime || '');
-              const doy = Math.floor((sceneDate.getTime() - new Date(sceneDate.getFullYear(), 0, 0).getTime()) / 86400000);
-              // Deterministic NDVI estimate: seasonal cycle + year trend + scene-id hash
-              const seasonal = 0.1 * Math.sin(2 * Math.PI * doy / 365);
-              const yearTrend = (year - 2019) * 0.008; // slight upward trend for vegetation
-              const hash = best.id.split('').reduce((a: number, c: string) => ((a << 5) - a + c.charCodeAt(0)) | 0, 0);
-              const sceneOffset = (hash % 100) / 1000; // deterministic per-scene variation
-              const cloudPenalty = Math.max(0, ((best.properties?.['eo:cloud_cover'] || 0) - 10) * 0.005);
-              const ndvi = +(0.38 + seasonal + yearTrend + sceneOffset - cloudPenalty).toFixed(4);
-              years.push({
-                year, date: best.properties?.datetime || '',
-                scene_id: best.id, cloud_cover: best.properties?.['eo:cloud_cover'] || 0,
-                index_mean: ndvi, index_std: 0.15, index_min: +(ndvi - 0.3).toFixed(4), index_max: +(ndvi + 0.3).toFixed(4),
-                thumbnail: best.assets?.visual?.href || '',
-                tilejson: `${stacUrl.replace('/stac/v1', '/data/v1/item/tilejson.json')}?collection=${collection}&item=${best.id}&assets=visual&asset_bidx=visual%7C1%2C2%2C3`,
-                bbox: best.bbox || [], collection,
-              });
-            } catch {}
-          }
-          // Compute trend
-          const vals = years.map(y => y.index_mean);
-          const slope = vals.length > 1 ? (vals[vals.length - 1] - vals[0]) / (years[years.length - 1].year - years[0].year) : 0;
-          resolve({
-            status: years.length > 0 ? 'ok' : 'no_data',
-            aoi_name: result.aoi_name, aoi_bbox: bbox, index_name: index, collection,
-            years, trend: {
-              direction: slope > 0.01 ? 'increasing' : slope < -0.01 ? 'decreasing' : 'stable',
-              slope_per_year: +slope.toFixed(4), r_squared: 0.8, start_value: vals[0] || 0, end_value: vals[vals.length - 1] || 0,
-              total_change: +((vals[vals.length - 1] || 0) - (vals[0] || 0)).toFixed(4),
-              total_change_pct: +(((vals[vals.length - 1] || 0) - (vals[0] || 0)) / Math.abs(vals[0] || 0.001) * 100).toFixed(2),
-              year_over_year: years.slice(1).map((y, i) => ({
-                from_year: years[i].year, to_year: y.year,
-                change: +(y.index_mean - years[i].index_mean).toFixed(4),
-                pct_change: +((y.index_mean - years[i].index_mean) / Math.abs(years[i].index_mean || 0.001) * 100).toFixed(2),
-              })),
-              mean: +(vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(4),
-              std: 0.15,
-            },
-            processing_steps: years.map(y => ({ step: `search_${y.year}`, detail: y.scene_id.slice(0, 40) })),
-          });
-        };
-        fetcher().catch(reject);
-      });
-      setYearlyData(hookResult);
-      setShowYearly(true);
-    } catch (e) {
-      console.error('Yearly comparison failed:', e);
-    } finally {
-      setYearlyLoading(false);
-    }
-  }, [result, sensorInfo, config.indexLabel, yearlyData]);
+  // ── Yearly trend removed ──
+  // The previous implementation used deterministic estimates (seasonal model + hash-based offsets)
+  // NOT actual raster pixel computation. Multi-year trend analysis requires pixel-level
+  // raster computation which is not currently available in this architecture.
 
   const getMetricCards = () => {
     const cards: Array<{ label: string; value: string | number; unit?: string; color?: string; subtitle?: string }> = [];
@@ -601,23 +515,23 @@ export default function TemporalComparisonView({ result }: Props) {
       cards.push({ label: 'Total Study Area', value: metrics.total_area_km2 || 0, unit: 'km²', color: '#94a3b8' });
       const changedArea = metrics.changed_area_km2 || 0;
       const changedPct = metrics.changed_pct || 0;
-      cards.push({ label: 'Changed Area', value: changedArea, unit: 'km²', color: config.color, subtitle: `${typeof changedPct === 'number' ? changedPct.toFixed(1) : changedPct}% of total area` });
+      cards.push({ label: 'Estimated Change', value: changedArea, unit: 'km²', color: config.color, subtitle: `~${typeof changedPct === 'number' ? changedPct.toFixed(1) : changedPct}% of area · from scene metadata` });
 
       if (result.phenomenon === 'urban_expansion') {
-        cards.push({ label: 'Urban Expansion', value: metrics.urban_expansion_km2 || 0, unit: 'km²', color: '#a855f7', subtitle: `+${metrics.urban_expansion_pct || 0}% growth` });
-        cards.push({ label: 'NDBI Change', value: metrics.ndbi_change || 0, unit: 'units', color: '#c084fc' });
+        cards.push({ label: 'Index Change', value: metrics.delta_index || 0, unit: 'NDBI units', color: '#c084fc', subtitle: 'Estimated from scene metadata' });
+        cards.push({ label: 'Direction', value: metrics.direction || 'N/A', color: '#a855f7' });
       } else if (result.phenomenon === 'vegetation_change' || result.phenomenon === 'deforestation') {
-        cards.push({ label: 'Vegetation Loss', value: metrics.vegetation_loss_km2 || 0, unit: 'km²', color: '#ef4444' });
-        cards.push({ label: 'NDVI Change', value: metrics.ndvi_change || 0, unit: 'units', color: metrics.ndvi_change > 0 ? '#22c55e' : '#ef4444' });
+        cards.push({ label: 'Index Change', value: metrics.delta_index || 0, unit: 'NDVI units', color: metrics.delta_index > 0 ? '#22c55e' : '#ef4444', subtitle: 'Estimated from scene metadata' });
+        cards.push({ label: 'Direction', value: metrics.direction || 'N/A', color: '#8b5cf6' });
       } else if (result.phenomenon === 'flood_impact') {
-        cards.push({ label: 'Flood Extent', value: metrics.flood_extent_km2 || 0, unit: 'km²', color: '#3b82f6', subtitle: `${metrics.flood_pct || 0}% of area` });
-        cards.push({ label: 'Severity', value: metrics.severity || 'N/A', color: metrics.severity === 'HIGH' ? '#ef4444' : '#f59e0b' });
+        cards.push({ label: 'Index Change', value: metrics.delta_index || 0, unit: 'NDWI units', color: '#3b82f6', subtitle: 'Estimated from scene metadata' });
+        cards.push({ label: 'Direction', value: metrics.direction || 'N/A', color: '#06b6d4' });
       } else if (result.phenomenon === 'water_change') {
-        cards.push({ label: 'Water Change', value: metrics.water_area_change_km2 || 0, unit: 'km²', color: '#06b6d4' });
+        cards.push({ label: 'Index Change', value: metrics.delta_index || 0, unit: 'NDWI units', color: '#06b6d4', subtitle: 'Estimated from scene metadata' });
       } else if (result.phenomenon === 'coastal_erosion') {
-        cards.push({ label: 'Shoreline Change', value: metrics.shoreline_change_km2 || 0, unit: 'km²', color: '#0ea5e9' });
+        cards.push({ label: 'Index Change', value: metrics.delta_index || 0, unit: 'NDWI units', color: '#0ea5e9', subtitle: 'Estimated from scene metadata' });
       } else {
-        cards.push({ label: 'Index Change', value: metrics.delta_index || 0, unit: 'units', color: '#8b5cf6', subtitle: `Direction: ${metrics.direction || 'N/A'}` });
+        cards.push({ label: 'Index Change', value: metrics.delta_index || 0, unit: 'units', color: '#8b5cf6', subtitle: `Estimated · Direction: ${metrics.direction || 'N/A'}` });
       }
     }
     return cards;
@@ -826,46 +740,11 @@ export default function TemporalComparisonView({ result }: Props) {
         </details>
       )}
 
-      {/* ── 7. YEARLY TREND ────────────────────────────────── */}
-      {!isFallback && !showYearly && (
-        <div className="flex justify-center">
-          <button
-            onClick={fetchYearlyTrend}
-            disabled={yearlyLoading}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium transition-all bg-slate-800/50 border border-slate-700/30 text-slate-300 hover:text-white hover:bg-slate-700/50 hover:border-slate-600/50 disabled:opacity-50"
-          >
-            {yearlyLoading ? (
-              <>
-                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
-                Loading yearly trend...
-              </>
-            ) : (
-              <>
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                </svg>
-View Yearly Trend
-              </>
-            )}
-          </button>
-        </div>
-      )}
-
-      {/* Yearly Comparison View */}
-      {showYearly && yearlyData && (
-        <div className="mt-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-slate-200">Multi-Year Trend Analysis</h3>
-            <button
-              onClick={() => setShowYearly(false)}
-              className="text-xs text-slate-400 hover:text-white transition-colors"
-            >
-              Hide trend
-            </button>
-          </div>
-          <YearlyComparisonView result={yearlyData} />
-        </div>
-      )}
+      {/* ── 7. YEARLY TREND — REMOVED ────────────────────── */}
+      {/* Multi-year trend analysis requires pixel-level raster computation.
+          The previous implementation used deterministic estimates (seasonal model + hash offsets)
+          that were NOT computed from actual satellite observations.
+          This feature will be reimplemented when raster-based index computation is available. */}
     </div>
   );
 }

@@ -422,122 +422,16 @@ def _compute_comparison_metrics(
         "resolution_m": index_t1.resolution_m,
     }
 
-    # Phenomenon-specific metrics
-    if phenomenon == "urban_expansion":
-        # NDBI: positive delta = more built-up
-        expansion_pct = max(0, delta * 100) if delta > 0 else 0
-        built_up_km2 = area_km2 * (t2_mean + 1) / 2  # Rough NDBI → built-up fraction
-        metrics.update({
-            "urban_expansion_km2": round(changed_km2 if delta > 0 else 0, 2),
-            "urban_expansion_pct": round(expansion_pct, 2),
-            "built_up_area_km2": round(built_up_km2, 2),
-            "ndbi_change": round(delta, 4),
-            "vegetation_impact": f"{'Decreased' if delta > 0 else 'Stable'} ({round(abs(delta) * 50, 1)}% estimated vegetation change)",
-            "direction": "expansion" if delta > 0 else "stable",
-        })
-
-    elif phenomenon == "vegetation_change" or phenomenon == "deforestation":
-        # NDVI: negative delta = vegetation loss
-        if delta < -0.1:
-            direction = "loss"
-            impact = "Significant vegetation loss detected"
-        elif delta < -0.05:
-            direction = "degradation"
-            impact = "Moderate vegetation degradation"
-        elif delta > 0.1:
-            direction = "gain"
-            impact = "Vegetation recovery/growth detected"
-        else:
-            direction = "stable"
-            impact = "Vegetation relatively stable"
-        metrics.update({
-            "vegetation_loss_km2": round(changed_km2 if delta < 0 else 0, 2),
-            "vegetation_gain_km2": round(changed_km2 if delta > 0 else 0, 2),
-            "ndvi_change": round(delta, 4),
-            "direction": direction,
-            "impact_statement": impact,
-        })
-
-    elif phenomenon == "flood_impact":
-        # NDWI/SAR: positive delta = more water = flooding
-        flood_km2 = changed_km2 if delta > 0.1 else area_km2 * 0.05
-        metrics.update({
-            "flood_extent_km2": round(flood_km2, 2),
-            "flood_pct": round(flood_km2 / area_km2 * 100, 2) if area_km2 > 0 else 0,
-            "water_increase_km2": round(flood_km2 if delta > 0 else 0, 2),
-            "ndwi_change": round(delta, 4),
-            "direction": "flooding" if delta > 0.1 else "normal",
-            "severity": "HIGH" if flood_km2 / area_km2 > 0.15 else "MEDIUM" if flood_km2 / area_km2 > 0.05 else "LOW",
-        })
-
-    elif phenomenon == "water_change":
-        metrics.update({
-            "water_area_change_km2": round(changed_km2, 2),
-            "ndwi_change": round(delta, 4),
-            "direction": "expansion" if delta > 0 else "shrinking",
-            "water_body_status": "Growing" if delta > 0.05 else "Shrinking" if delta < -0.05 else "Stable",
-        })
-
-    elif phenomenon == "burn_severity":
-        # NBR: large negative delta = high severity burn
-        severity_pct = min(100, abs(delta) * 200)
-        if delta < -0.4:
-            severity = "HIGH"
-        elif delta < -0.2:
-            severity = "MEDIUM"
-        elif delta < -0.1:
-            severity = "LOW"
-        else:
-            severity = "UNBURNED"
-        metrics.update({
-            "burned_area_km2": round(changed_km2 if delta < 0 else 0, 2),
-            "dnbr_change": round(delta, 4),
-            "burn_severity": severity,
-            "severity_pct": round(severity_pct, 2),
-            "direction": "burned" if delta < -0.1 else "unaffected",
-        })
-
-    elif phenomenon == "snow_cover" or phenomenon == "glacier_retreat":
-        # NDSI: negative delta = snow/ice loss
-        metrics.update({
-            "snow_ice_loss_km2": round(changed_km2 if delta < 0 else 0, 2),
-            "snow_ice_gain_km2": round(changed_km2 if delta > 0 else 0, 2),
-            "ndsi_change": round(delta, 4),
-            "direction": "retreat" if delta < -0.05 else "advance" if delta > 0.05 else "stable",
-            "retreat_status": "Glacier retreating" if delta < -0.1 else "Relatively stable" if abs(delta) < 0.05 else "Ice gain detected",
-        })
-
-    elif phenomenon == "coastal_erosion":
-        # NDWI change along coast
-        metrics.update({
-            "shoreline_change_km2": round(changed_km2, 2),
-            "ndwi_change": round(delta, 4),
-            "direction": "erosion" if delta > 0.05 else "accretion" if delta < -0.05 else "stable",
-            "erosion_status": "Active erosion detected" if delta > 0.1 else "Minor changes" if abs(delta) < 0.05 else "Land accretion",
-        })
-
-    elif phenomenon == "soil_moisture":
-        metrics.update({
-            "moisture_change": round(delta, 4),
-            "direction": "drier" if delta < -0.05 else "wetter" if delta > 0.05 else "stable",
-            "soil_status": "Drought stress" if delta < -0.15 else "Moderate dryness" if delta < -0.05 else "Adequate moisture",
-        })
-
+    # Direction indicator (derived from simulated delta — see limitations)
+    if delta > 0.05:
+        direction = "increase"
+    elif delta < -0.05:
+        direction = "decrease"
     else:
-        metrics.update({
-            "direction": "increase" if delta > 0.05 else "decrease" if delta < -0.05 else "stable",
-            "change_magnitude": round(abs(delta), 4),
-        })
-
-    # Add change detection metrics if available
-    if change_result:
-        metrics["change_detection"] = {
-            "algorithm": change_result.get("algorithm", "difference_threshold"),
-            "changed_pixels": change_result.get("changed_pixels", 0),
-            "total_pixels": change_result.get("total_pixels", 0),
-            "num_regions": change_result.get("num_regions", 0),
-            "changed_area_sq_meters": change_result.get("changed_area_sq_meters", 0),
-        }
+        direction = "stable"
+    metrics["direction"] = direction
+    metrics["estimated"] = True
+    metrics["estimation_method"] = "scene_metadata_hash_based"
 
     return metrics
 

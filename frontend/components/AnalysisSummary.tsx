@@ -94,21 +94,21 @@ function buildFindings(result: TemporalComparisonResult): StructuredFinding {
 
   if (isAvailable(changedArea) && changedArea > 0) {
     primaryMetric = {
-      value: `${typeof changedArea === 'number' ? changedArea.toLocaleString(undefined, { maximumFractionDigits: 2 }) : changedArea}`,
-      label: 'km² affected area',
+      value: `~${typeof changedArea === 'number' ? changedArea.toLocaleString(undefined, { maximumFractionDigits: 2 }) : changedArea}`,
+      label: 'km² estimated change area',
       available: true,
     };
   } else if (isAvailable(changedPct) && changedPct > 0) {
     primaryMetric = {
-      value: `${typeof changedPct === 'number' ? changedPct.toFixed(1) : changedPct}%`,
-      label: 'of study area shows change',
+      value: `~${typeof changedPct === 'number' ? changedPct.toFixed(1) : changedPct}%`,
+      label: 'estimated change · from scene metadata',
       available: true,
     };
   } else if (isAvailable(metrics.delta_index)) {
     const delta = metrics.delta_index;
     primaryMetric = {
-      value: `${delta > 0 ? '+' : ''}${typeof delta === 'number' ? delta.toFixed(4) : delta}`,
-      label: `${config.indexLabel} index change`,
+      value: `~${delta > 0 ? '+' : ''}${typeof delta === 'number' ? delta.toFixed(4) : delta}`,
+      label: `estimated ${config.indexLabel} change · from scene metadata`,
       available: true,
     };
   }
