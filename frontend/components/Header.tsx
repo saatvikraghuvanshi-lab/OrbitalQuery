@@ -1,9 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Separator } from '@/components/ui/separator';
+
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -72,17 +70,11 @@ function NavIcon({ type }: { type: 'ask' | 'showcase' | 'discover' }) {
 }
 
 export default function Header({ activeTab = 'ask', onNavigate, onSettingsChange }: HeaderProps) {
-  const router = useRouter();
-  const [userName, setUserName] = useState('');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
 
   useEffect(() => {
     setSettings(loadSettings());
-    try {
-      const user = JSON.parse(localStorage.getItem('oq_user') || '{}');
-      setUserName(user.name || user.email || 'User');
-    } catch {}
   }, []);
 
   const updateSetting = <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => {
@@ -90,12 +82,6 @@ export default function Header({ activeTab = 'ask', onNavigate, onSettingsChange
     setSettings(next);
     saveSettings(next);
     onSettingsChange?.(next);
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem('oq_token');
-    localStorage.removeItem('oq_user');
-    router.push('/auth');
   };
 
   const navItems: { tab: 'ask' | 'showcase' | 'discover'; label: string }[] = [
@@ -148,8 +134,8 @@ export default function Header({ activeTab = 'ask', onNavigate, onSettingsChange
               ))}
             </div>
 
-            {/* Right side: Settings + Avatar */}
-            <div className="flex items-center gap-3">
+            {/* Right side: Settings */}
+            <div className="flex items-center gap-3 w-[240px] justify-end">
               <button
                 onClick={() => setSettingsOpen(true)}
                 className="p-2 rounded-lg hover:bg-white/5 transition-colors text-gray-400 hover:text-white"
@@ -160,38 +146,6 @@ export default function Header({ activeTab = 'ask', onNavigate, onSettingsChange
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
               </button>
-
-              <Separator orientation="vertical" className="h-6 bg-white/10" />
-
-              <DropdownMenu>
-                <DropdownMenuTrigger className="flex items-center gap-2 rounded-full hover:bg-white/5 transition-colors px-2 py-1 outline-none">
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#571bc1] to-[#dc2626] flex items-center justify-center text-white text-xs font-bold">
-                    {userName.charAt(0).toUpperCase()}
-                  </div>
-                  <span className="text-xs text-gray-400 hidden sm:block">{userName}</span>
-                  <svg className="w-3 h-3 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                  </svg>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48" style={{ background: '#1e2024', border: '1px solid #33353a' }}>
-                  <DropdownMenuItem className="text-xs text-gray-300 cursor-default">
-                    <div className="flex flex-col">
-                      <span className="font-medium text-white">{userName}</span>
-                      <span className="text-gray-500">Researcher</span>
-                    </div>
-                  </DropdownMenuItem>
-                  <Separator className="my-1 bg-white/10" />
-                  <DropdownMenuItem
-                    onClick={handleLogout}
-                    className="text-xs text-red-400 cursor-pointer focus:text-red-300 focus:bg-red-500/10"
-                  >
-                    <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                    </svg>
-                    Sign Out
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
             </div>
           </div>
         </div>
