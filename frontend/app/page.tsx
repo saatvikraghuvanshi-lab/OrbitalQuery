@@ -266,15 +266,43 @@ function HomePageContent() {
                 })}
               </div>
 
-              {/* Active step label */}
-              <div className="text-sm text-slate-300 mb-8 font-medium">
-                {step === 'planning' && 'Parsing your query...'}
-                {step === 'searching' && 'Searching satellite archives...'}
-                {step === 'ranking' && 'Ranking evidence quality...'}
-                {step === 'processing' && 'Computing spectral indices...'}
-                {step === 'deciding' && 'Running change detection...'}
-                {step === 'explaining' && 'Generating analysis...'}
+              {/* Active step label — shows real backend data */}
+              <div className="text-center mb-8">
+                <div className="text-sm text-slate-300 font-medium">
+                  {step === 'planning' && 'Understanding your query'}
+                  {step === 'searching' && 'Discovering satellite data'}
+                  {step === 'ranking' && 'Ranking candidate datasets'}
+                  {step === 'processing' && 'Analyzing observations'}
+                  {step === 'deciding' && 'Detecting changes'}
+                  {step === 'explaining' && 'Generating insights'}
+                </div>
+                {/* Real detail from backend */}
+                {analysis.state.detail && (
+                  <div className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
+                    {analysis.state.detail}
+                  </div>
+                )}
               </div>
+
+              {/* Real backend processing steps — shown when available */}
+              {analysis.state.processingSteps.length > 0 && (
+                <div className="w-full max-w-lg mb-6">
+                  <div className="bg-slate-800/30 rounded-xl border border-slate-700/30 px-4 py-3">
+                    <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-2 font-medium">Processing log</div>
+                    <div className="space-y-1">
+                      {analysis.state.processingSteps.map((ps, i) => (
+                        <div key={i} className="flex items-start gap-2 text-[10px]">
+                          <span className="text-green-400/60 mt-0.5 flex-shrink-0">✓</span>
+                          <span className="text-slate-400">
+                            <span className="text-slate-300 font-medium">{ps.step.replace(/_/g, ' ')}</span>
+                            {ps.detail && <span className="text-slate-600 ml-1.5">{ps.detail}</span>}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Partial Results — centered, balanced layout */}
               <div className="w-full grid grid-cols-1 lg:grid-cols-3 gap-4">

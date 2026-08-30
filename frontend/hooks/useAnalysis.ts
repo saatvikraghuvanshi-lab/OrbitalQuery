@@ -102,6 +102,10 @@ export interface AnalysisState {
   scenes: SceneInfo[];
   result: TemporalComparisonResult | null;
   error: string | null;
+  /** Real detail string shown below the step label */
+  detail: string | null;
+  /** Real processing steps from the backend */
+  processingSteps: Array<{ step: string; detail: string }>;
 }
 
 // ── Hook ────────────────────────────────────────────────────────
@@ -114,6 +118,8 @@ export function useAnalysis() {
     scenes: [],
     result: null,
     error: null,
+    detail: null,
+    processingSteps: [],
   });
 
   const reset = useCallback(() => {
@@ -124,16 +130,29 @@ export function useAnalysis() {
       scenes: [],
       result: null,
       error: null,
+      detail: null,
+      processingSteps: [],
     });
   }, []);
 
   const analyze = useCallback(async (query: string) => {
-    setState(prev => ({ ...prev, step: 'planning', query, error: null }));
+    setState(prev => ({
+      ...prev,
+      step: 'planning',
+      query,
+      error: null,
+      detail: 'Parsing your natural language query...',
+      processingSteps: [],
+    }));
 
     try {
-      // Call the real temporal-compare pipeline
-      setState(prev => ({ ...prev, step: 'searching' }));
+      // ── Phase 1: Understanding query ─────────────────────
+      // Brief pause so user sees the "Understanding" step
+      await new Promise(r => setTimeout(r, 400));
 
+      setState(prev => ({ ...prev, step: 'searching', detail: 'Querying satellite archives...' }));
+
+      // ── Phase 2: Full pipeline (single backend call) ─────
       const res = await fetch('/api/analysis/temporal-compare', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -149,7 +168,6 @@ export function useAnalysis() {
 
       if (!res.ok) {
         const errMsg = data?.detail || data?.message || data?.error || `Analysis failed (${res.status})`;
-        // Make cold-start errors user-friendly
         if (errMsg.includes('starting up') || errMsg.includes('unavailable') || errMsg.includes('invalid response') || errMsg.includes('PYTHON_UNAVAILABLE')) {
           throw new Error('🛰️ The analysis engine is waking up from sleep (Render free tier). Please try again in 30-60 seconds.');
         }
@@ -165,22 +183,61 @@ export function useAnalysis() {
         throw new Error('No analysis plan was generated. Please provide a location and phenomenon (e.g. "Flood impact in Jaipur from July to September 2024").');
       }
 
-      setState(prev => ({ ...prev, step: 'ranking', plan }));
+      // ── Phase 3: Plan received — show what was understood ─
+      const planDetail = [
+        plan.phenomenon && `Phenomenon: ${plan.phenomenon.replace(/_/g, ' ')}`,
+        plan.aoi && `Location: ${plan.aoi}`,
+        plan.start_date && plan.end_date && `Period: ${plan.start_date} — ${plan.end_date}`,
+        plan.sensor && `Sensor: ${plan.sensor}`,
+      ].filter(Boolean).join(' · ');
 
-      // Simulate processing steps with progress updates
-      setState(prev => ({ ...prev, step: 'processing' }));
-      await new Promise(r => setTimeout(r, 500));
+      setState(prev => ({ ...prev, step: 'ranking', plan, detail: planDetail || 'Plan created' }));
 
-      setState(prev => ({ ...prev, step: 'deciding' }));
-      await new Promise(r => setTimeout(r, 300));
-
-      setState(prev => ({ ...prev, step: 'explaining' }));
-      await new Promise(r => setTimeout(r, 300));
-
-      // Build the result from the pipeline response
+      // ── Phase 4: Build result from backend response ───────
       const result: TemporalComparisonResult = data.result;
 
-      // Extract scenes for the evidence panel
+      // Read real processing steps from backend
+      const backendSteps = result?.processing_steps || [];
+
+      // Show ranking detail
+      const sceneCount = [result?.scene_t1, result?.scene_t2].filter(Boolean).length;
+      setState(prev => ({
+        ...prev,
+        step: 'processing',
+        detail: sceneCount > 0
+          ? `Selected ${sceneCount} observation${sceneCount > 1 ? 's' : ''} for analysis`
+          : 'Processing observations...',
+        processingSteps: backendSteps,
+      }));
+
+      // Brief pause to show processing state
+      await new Promise(r => setTimeout(r, 300));
+
+      // ── Phase 5: Change detection ────────────────────────
+      const changedPct = result?.metrics?.changed_pct;
+      setState(prev => ({
+        ...prev,
+        step: 'deciding',
+        detail: changedPct > 0
+          ? `Change detected: ${typeof changedPct === 'number' ? changedPct.toFixed(1) : changedPct}% of area`
+          : 'Running change detection...',
+      }));
+
+      await new Promise(r => setTimeout(r, 200));
+
+      // ── Phase 6: Generate insight ────────────────────────
+      const findingCount = result?.explanation?.key_findings?.length || 0;
+      setState(prev => ({
+        ...prev,
+        step: 'explaining',
+        detail: findingCount > 0
+          ? `Generated ${findingCount} key finding${findingCount > 1 ? 's' : ''}`
+          : 'Generating analysis summary...',
+      }));
+
+      await new Promise(r => setTimeout(r, 200));
+
+      // ── Phase 7: Complete ────────────────────────────────
       const scenes: SceneInfo[] = [];
       if (result.scene_t1) scenes.push(result.scene_t1);
       if (result.scene_t2) scenes.push(result.scene_t2);
@@ -190,9 +247,9 @@ export function useAnalysis() {
         step: 'complete',
         scenes,
         result,
+        detail: null,
       }));
 
-      // If this was a fallback response, show a toast-like message
       if (data.fallback) {
         console.warn('[OrbitalQuery] Running in degraded mode — Python analysis engine unavailable. Showing local database matches.');
       }
@@ -202,6 +259,7 @@ export function useAnalysis() {
         ...prev,
         step: 'error',
         error: err.message || 'Analysis failed',
+        detail: null,
       }));
     }
   }, []);
