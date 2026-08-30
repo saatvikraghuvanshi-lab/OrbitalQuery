@@ -1,8 +1,10 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import type { TemporalComparisonResult, SceneInfo, IndexInfo } from '@/hooks/useAnalysis';
 import SwipeMap from '@/components/SwipeMap';
+import YearlyComparisonView from '@/components/YearlyComparisonView';
+import type { YearlyComparisonResult } from '@/hooks/useYearlyComparison';
 
 interface Props {
   result: TemporalComparisonResult;
@@ -380,8 +382,41 @@ export default function TemporalComparisonView({ result }: Props) {
   const explanation = result.explanation || {};
   const sensorInfo = result.sensor_info || {};
   const [viewMode, setViewMode] = useState<ViewMode>('side-by-side');
+  const [yearlyData, setYearlyData] = useState<YearlyComparisonResult | null>(null);
+  const [yearlyLoading, setYearlyLoading] = useState(false);
+  const [showYearly, setShowYearly] = useState(false);
 
   const isFallback = (metrics as any).fallbackMode;
+
+  // Fetch yearly comparison data
+  const fetchYearlyTrend = useCallback(async () => {
+    if (yearlyData) { setShowYearly(true); return; }
+    setYearlyLoading(true);
+    try {
+      const res = await fetch('/api/analysis/yearly-comparison', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bbox: result.aoi_bbox,
+          start_year: 2019,
+          end_year: 2025,
+          collection: sensorInfo.collection || 'sentinel-2-l2a',
+          index: sensorInfo.index_used || config.indexLabel,
+          max_cloud_cover: 20,
+          aoi_name: result.aoi_name,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setYearlyData(data);
+        setShowYearly(true);
+      }
+    } catch (e) {
+      console.error('Yearly comparison failed:', e);
+    } finally {
+      setYearlyLoading(false);
+    }
+  }, [result, sensorInfo, config.indexLabel, yearlyData]);
 
   const getMetricCards = () => {
     const cards: Array<{ label: string; value: string | number; unit?: string; color?: string; subtitle?: string }> = [];
@@ -610,6 +645,47 @@ export default function TemporalComparisonView({ result }: Props) {
             <ProcessingTimeline steps={result.processing_steps} />
           </div>
         </details>
+      )}
+
+      {/* Yearly Trend Button */}
+      {!isFallback && !showYearly && (
+        <div className="flex justify-center">
+          <button
+            onClick={fetchYearlyTrend}
+            disabled={yearlyLoading}
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium transition-all bg-slate-800/50 border border-slate-700/30 text-slate-300 hover:text-white hover:bg-slate-700/50 hover:border-slate-600/50 disabled:opacity-50"
+          >
+            {yearlyLoading ? (
+              <>
+                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                Loading yearly trend...
+              </>
+            ) : (
+              <>
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+                View Yearly {sensorInfo.index_used || config.indexLabel} Trend (2019-2025)
+              </>
+            )}
+          </button>
+        </div>
+      )}
+
+      {/* Yearly Comparison View */}
+      {showYearly && yearlyData && (
+        <div className="mt-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold text-slate-200">Multi-Year Trend Analysis</h3>
+            <button
+              onClick={() => setShowYearly(false)}
+              className="text-xs text-slate-400 hover:text-white transition-colors"
+            >
+              Hide trend
+            </button>
+          </div>
+          <YearlyComparisonView result={yearlyData} />
+        </div>
       )}
     </div>
   );

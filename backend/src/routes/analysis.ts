@@ -1455,4 +1455,41 @@ router.post('/temporal-compare', optionalAuth, async (req: AuthRequest, res: Res
   }
 });
 
+// ── POST /api/analysis/yearly-comparison ─────────────────────────
+
+/**
+ * Year-wise index comparison across multiple years.
+ * Returns spectral index values (NDVI, NDWI, etc.) for each year,
+ * enabling trend analysis and year-over-year comparison.
+ */
+router.post('/yearly-comparison', optionalAuth, async (req: AuthRequest, res: Response) => {
+  const { bbox, start_year, end_year, collection, index, max_cloud_cover, aoi_name } = req.body;
+
+  if (!bbox || !isValidBbox(bbox)) {
+    res.status(400).json({ error: 'Valid bbox is required', code: 'INVALID_BBOX' });
+    return;
+  }
+  if (!start_year || !end_year) {
+    res.status(400).json({ error: 'start_year and end_year are required', code: 'MISSING_YEARS' });
+    return;
+  }
+
+  const result = await callPythonService('POST', '/analysis/yearly-comparison', {
+    bbox,
+    start_year: parseInt(start_year),
+    end_year: parseInt(end_year),
+    collection: collection || 'sentinel-2-l2a',
+    index: index || 'NDVI',
+    max_cloud_cover: max_cloud_cover ?? 20,
+    aoi_name: aoi_name || 'Study Area',
+  }, 'yearly-comparison', 45000);
+
+  if (!result.ok) {
+    res.status(result.status || 502).json({ error: result.error, code: result.code, requestId: result.requestId });
+    return;
+  }
+
+  res.json({ requestId: result.requestId, ...result.data, latencyMs: result.upstreamLatencyMs });
+});
+
 export default router;
