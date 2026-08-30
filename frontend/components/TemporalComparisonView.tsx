@@ -501,10 +501,10 @@ export default function TemporalComparisonView({ result }: Props) {
               sceneT2={result.scene_t2}
               thumbnailT1={result.imagery?.period1?.thumbnail}
               thumbnailT2={result.imagery?.period2?.thumbnail}
-              tilejsonT1={result.imagery?.period1?.tilejson}
-              tilejsonT2={result.imagery?.period2?.tilejson}
-              sceneBboxT1={result.imagery?.period1?.bbox}
-              sceneBboxT2={result.imagery?.period2?.bbox}
+              tilejsonT1={result.imagery?.period1?.tilejson || (result.scene_t1?.item_id ? `https://planetarycomputer.microsoft.com/api/data/v1/item/tilejson.json?collection=${result.scene_t1.collection || 'sentinel-2-l2a'}&item=${result.scene_t1.item_id}&assets=visual&asset_bidx=visual%7C1%2C2%2C3` : undefined)}
+              tilejsonT2={result.imagery?.period2?.tilejson || (result.scene_t2?.item_id ? `https://planetarycomputer.microsoft.com/api/data/v1/item/tilejson.json?collection=${result.scene_t2.collection || 'sentinel-2-l2a'}&item=${result.scene_t2.item_id}&assets=visual&asset_bidx=visual%7C1%2C2%2C3` : undefined)}
+              sceneBboxT1={result.imagery?.period1?.bbox || result.scene_t1?.bbox}
+              sceneBboxT2={result.imagery?.period2?.bbox || result.scene_t2?.bbox}
             />
           )}
           {viewMode === 'swipe' && (
@@ -512,10 +512,10 @@ export default function TemporalComparisonView({ result }: Props) {
               bbox={result.aoi_bbox}
               thumbnailT1={result.imagery?.period1?.thumbnail}
               thumbnailT2={result.imagery?.period2?.thumbnail}
-              tilejsonT1={result.imagery?.period1?.tilejson}
-              tilejsonT2={result.imagery?.period2?.tilejson}
-              sceneBboxT1={result.imagery?.period1?.bbox}
-              sceneBboxT2={result.imagery?.period2?.bbox}
+              tilejsonT1={result.imagery?.period1?.tilejson || (result.scene_t1?.item_id ? `https://planetarycomputer.microsoft.com/api/data/v1/item/tilejson.json?collection=${result.scene_t1.collection || 'sentinel-2-l2a'}&item=${result.scene_t1.item_id}&assets=visual&asset_bidx=visual%7C1%2C2%2C3` : undefined)}
+              tilejsonT2={result.imagery?.period2?.tilejson || (result.scene_t2?.item_id ? `https://planetarycomputer.microsoft.com/api/data/v1/item/tilejson.json?collection=${result.scene_t2.collection || 'sentinel-2-l2a'}&item=${result.scene_t2.item_id}&assets=visual&asset_bidx=visual%7C1%2C2%2C3` : undefined)}
+              sceneBboxT1={result.imagery?.period1?.bbox || result.scene_t1?.bbox}
+              sceneBboxT2={result.imagery?.period2?.bbox || result.scene_t2?.bbox}
             />
           )}
           {viewMode === 'difference' && (
