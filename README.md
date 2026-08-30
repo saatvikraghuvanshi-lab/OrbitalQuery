@@ -296,14 +296,15 @@ curl -X GET http://localhost:3001/api/auth/me \
 
 ### ✅ Trusted Data Sources (Used in OrbitalQuery)
 
-All dataset metadata is ingested exclusively from these verified, trusted sources:
+| Source | API | Role in OrbitalQuery | Status |
+|--------|-----|---------------------|--------|
+| **Microsoft Planetary Computer** | STAC + TileJSON | Temporal analysis, satellite imagery, tile rendering | ✅ Active — primary |
+| **AWS Earth Search** | STAC API v1 | Dataset discovery, fallback provider | ✅ Implemented — fallback |
+| **NASA Earthdata** | CMR STAC | MODIS/VIIRS/Landsat HLS data | ✅ Implemented — registered |
+| **Copernicus CDSE** | STAC + OData | Sentinel family data | ✅ Implemented — registered |
+| **ISRO Bhoonidhi** | WMS/WFS | Indian EO data | 🔧 Registered — partial |
 
-| Source | API | Auth Required | Status |
-|--------|-----|---------------|--------|
-| **AWS Earth Search** | STAC API v1 | ❌ No key needed | ✅ Active — primary source |
-| **NASA Earthdata** | CMR STAC | ❌ (optional token) | ✅ Available |
-| **Copernicus Open Access Hub** | OData API | ❌ (free registration) | ✅ Available |
-| **ISRO Bhuvan** | WMS/WFS | ❌ | ✅ Available |
+> **Note:** Temporal analysis and satellite tile rendering currently use Planetary Computer exclusively. The other providers are implemented as registered fallback sources for dataset discovery.
 
 ### STAC API References
 - **STAC Specification** — https://stacspec.org
