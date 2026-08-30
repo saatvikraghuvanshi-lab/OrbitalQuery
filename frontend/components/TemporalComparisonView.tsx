@@ -70,6 +70,9 @@ function SynchronizedDualMap({
 
   useEffect(() => {
     if (!leftRef.current || !rightRef.current || leftMapRef.current) return;
+    // Wait for container to have dimensions (flex/grid layout may not be ready)
+    const leftRect = leftRef.current.getBoundingClientRect();
+    if (leftRect.width < 10 || leftRect.height < 10) return;
     let cancelled = false;
 
     import('leaflet').then(async (L) => {
@@ -159,8 +162,8 @@ function SynchronizedDualMap({
   }, [bbox, thumbnailT1, thumbnailT2, tilejsonT1, tilejsonT2, sceneBboxT1, sceneBboxT2]);
 
   return (
-    <div className="w-full flex gap-2" style={{ height: '520px' }}>
-      <div className="relative flex-1 rounded-xl overflow-hidden border border-slate-700/30">
+    <div className="w-full grid grid-cols-2 gap-2" style={{ height: '520px' }}>
+      <div className="relative rounded-xl overflow-hidden border border-slate-700/30">
         <div ref={leftRef} className="absolute inset-0" />
         <div className="absolute top-3 left-3 z-[1000] px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-blue-500/80 text-white backdrop-blur-sm">Period 1 — Before</div>
         {leftLoading && (
@@ -180,7 +183,7 @@ function SynchronizedDualMap({
           <button onClick={() => leftMapRef.current?.zoomOut()} className="w-8 h-8 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-colors text-sm font-bold bg-black/50 backdrop-blur-sm">−</button>
         </div>
       </div>
-      <div className="relative flex-1 rounded-xl overflow-hidden border border-slate-700/30">
+      <div className="relative rounded-xl overflow-hidden border border-slate-700/30">
         <div ref={rightRef} className="absolute inset-0" />
         <div className="absolute top-3 left-3 z-[1000] px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-orange-500/80 text-white backdrop-blur-sm">Period 2 — After</div>
         {rightLoading && (
