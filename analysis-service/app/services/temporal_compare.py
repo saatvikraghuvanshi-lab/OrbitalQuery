@@ -636,8 +636,9 @@ def _generate_explanation(
         "key_findings": _generate_findings(phenomenon, metrics),
         "key_indices": info.get("key_indices", [index_name]),
         "sensors_used": info.get("sensors_used", ["Sentinel-2"]),
-        "confidence": "Medium — based on spectral index change detection. Ground truth validation recommended.",
+        "confidence": "Preliminary — based on scene metadata analysis. Quantitative metrics are estimated from scene-level statistics, not computed from pixel-level raster analysis.",
         "limitations": [
+            "Index statistics are estimated from scene metadata, not computed from actual raster pixel analysis",
             "Cloud cover may affect optical imagery quality",
             "Single pair comparison (not time series) — seasonal effects possible",
             "Resolution limits detection of small-scale changes",

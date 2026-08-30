@@ -217,6 +217,8 @@ function DifferenceView({
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
   const [mapError, setMapError] = useState<string | null>(null);
+  const [overlayOpacity, setOverlayOpacity] = useState(0.5);
+  const overlayLayerRef = useRef<any>(null);
 
   useEffect(() => {
     if (!mapRef.current || mapInstanceRef.current) return;
@@ -233,29 +235,50 @@ function DifferenceView({
       });
       L.tileLayer(GOOGLE_TILE, { maxZoom: 22, subdomains: ['0', '1', '2', '3'] }).addTo(map);
 
-      // Load Period 1 (before) satellite imagery as the base layer
+      // Load Period 2 (After) as the base satellite layer
+      const tjUrlT2 = resolveTileJson(sceneT2, tilejsonT2);
+      const baseResult = await loadSatelliteTiles(map, {
+        L,
+        tilejsonUrl: tjUrlT2,
+        thumbnailUrl: thumbnailT2,
+        sceneBbox: sceneBboxT2,
+        aoiBbox: bbox,
+        opacity: 0.9,
+        zIndex: 400,
+      });
+
+      // Load Period 1 (Before) as a semi-transparent overlay on top
       const tjUrlT1 = resolveTileJson(sceneT1, tilejsonT1);
-      const result = await loadSatelliteTiles(map, {
+      const overlayResult = await loadSatelliteTiles(map, {
         L,
         tilejsonUrl: tjUrlT1,
         thumbnailUrl: thumbnailT1,
         sceneBbox: sceneBboxT1,
         aoiBbox: bbox,
-        opacity: 0.85,
+        opacity: overlayOpacity,
+        zIndex: 500,
       });
 
       if (cancelled) return;
-      if (!result.hasImagery) setMapError(result.error || 'No imagery');
+      if (!baseResult.hasImagery && !overlayResult.hasImagery) {
+        setMapError('No satellite imagery available for comparison');
+      } else if (!baseResult.hasImagery || !overlayResult.hasImagery) {
+        setMapError('Partial imagery — one period unavailable');
+      }
 
-      // Fit to imagery bounds
-      map.fitBounds(result.bounds, { padding: [40, 40], maxZoom: 14 });
+      if (overlayResult.layer) {
+        overlayLayerRef.current = overlayResult.layer;
+      }
 
-      // Overlay change detection regions
+      // Fit to the wider bounds
+      const fitBounds = baseResult.hasImagery ? baseResult.bounds : overlayResult.bounds;
+      map.fitBounds(fitBounds, { padding: [40, 40], maxZoom: 14 });
+
+      // Overlay change detection regions if available
       if (changeDetection?.regions && Array.isArray(changeDetection.regions)) {
         changeDetection.regions.forEach((region: any) => {
           if (region.bbox && Array.isArray(region.bbox) && region.bbox.length === 4) {
             const [rw, rs, re, rn] = region.bbox;
-            // Validate region bbox is WGS84
             if (Math.abs(rw) <= 180 && Math.abs(re) <= 180 && Math.abs(rs) <= 90 && Math.abs(rn) <= 90) {
               L.rectangle([[rs, rw], [rn, re]], {
                 color: config.color, weight: 2, fillColor: config.color, fillOpacity: 0.25,
@@ -265,17 +288,19 @@ function DifferenceView({
         });
       }
 
-      // Draw the change detection as a single overlay polygon if no individual regions
-      if ((!changeDetection?.regions || !changeDetection.regions.length) && changeDetection?.changedPct > 0) {
-        // Draw a semi-transparent overlay across the AOI to indicate detected change
+      // If no specific regions, draw change magnitude zones across the AOI
+      const cd = changeDetection as any;
+      const changedPct = cd?.changedPct || cd?.changed_pct || metrics.changed_pct || 0;
+      if (changedPct > 0) {
+        // Draw change zone across AOI
         L.rectangle([[south, west], [north, east]], {
-          color: config.color, weight: 1, fillColor: config.color, fillOpacity: 0.12, dashArray: '8 4',
+          color: config.color, weight: 2, fillColor: config.color, fillOpacity: 0.15, dashArray: '8 4',
         }).addTo(map);
       }
 
       // AOI boundary
       L.rectangle([[south, west], [north, east]], {
-        color: '#22d3ee', weight: 1.5, fillColor: '#22d3ee', fillOpacity: 0.03, dashArray: '8 4',
+        color: '#22d3ee', weight: 1.5, fillColor: '#22d3ee', fillOpacity: 0.02, dashArray: '8 4',
       }).addTo(map);
 
       mapInstanceRef.current = map;
@@ -285,27 +310,53 @@ function DifferenceView({
       cancelled = true;
       mapInstanceRef.current?.remove();
       mapInstanceRef.current = null;
+      overlayLayerRef.current = null;
     };
   }, [bbox, changeDetection, config.color, tilejsonT1, tilejsonT2, sceneBboxT1, sceneBboxT2]);
 
-  const changedPct = changeDetection?.changedPct || changeDetection?.changed_pct || metrics.changed_pct || 0;
-  const changedPixels = changeDetection?.changedPixels || changeDetection?.changed_pixels || 0;
-  const totalPixels = changeDetection?.totalPixels || changeDetection?.total_pixels || 0;
-  const changedArea = changeDetection?.changedAreaSqMeters
-    ? (changeDetection.changedAreaSqMeters / 1_000_000).toFixed(2)
+  // Update overlay opacity when slider changes
+  useEffect(() => {
+    if (overlayLayerRef.current?.setOpacity) {
+      overlayLayerRef.current.setOpacity(overlayOpacity);
+    }
+  }, [overlayOpacity]);
+
+  const cd = changeDetection as any;
+  const changedPct = cd?.changedPct || cd?.changed_pct || metrics.changed_pct || 0;
+  const changedPixels = cd?.changedPixels || cd?.changed_pixels || 0;
+  const totalPixels = cd?.totalPixels || cd?.total_pixels || 0;
+  const changedArea = cd?.changedAreaSqMeters
+    ? (cd.changedAreaSqMeters / 1_000_000).toFixed(2)
     : metrics.changed_area_km2 || '0';
 
   return (
     <div className="rounded-xl overflow-hidden border border-slate-700/30 relative" style={{ height: 'calc(70vh - 100px)', minHeight: '450px' }}>
       <div ref={mapRef} className="absolute inset-0" />
-      <div className="absolute top-3 left-3 z-[1000] px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-red-500/80 text-white backdrop-blur-sm">
-        Change Detection — {config.indexLabel} Difference
+      <div className="absolute top-3 left-3 z-[1000] px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-slate-800/90 text-white backdrop-blur-sm border border-slate-600/30">
+        Difference — {config.indexLabel} Overlay
       </div>
       {mapError && (
-        <div className="absolute top-3 right-3 z-[1000] px-2 py-1 rounded text-[9px] bg-amber-500/80 text-white backdrop-blur-sm">
-          Basemap only — imagery unavailable
+        <div className="absolute top-3 right-12 z-[1000] px-2 py-1 rounded text-[9px] bg-amber-500/80 text-white backdrop-blur-sm">
+          {mapError}
         </div>
       )}
+      {/* Opacity slider — blend Between and After */}
+      <div className="absolute top-12 left-3 z-[1000] bg-black/70 backdrop-blur-sm rounded-lg border border-white/10 px-3 py-2">
+        <div className="text-[9px] text-slate-400 uppercase tracking-wider mb-1.5">Overlay Blend</div>
+        <div className="flex items-center gap-2">
+          <span className="text-[9px] text-blue-400 w-10">Before</span>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            value={overlayOpacity * 100}
+            onChange={(e) => setOverlayOpacity(parseInt(e.target.value) / 100)}
+            className="w-24 h-1 accent-cyan-400 cursor-pointer"
+          />
+          <span className="text-[9px] text-orange-400 w-10 text-right">After</span>
+        </div>
+      </div>
+      {/* Metrics overlay */}
       <div className="absolute bottom-3 left-3 z-[1000] bg-black/70 backdrop-blur-sm rounded-xl border border-white/10 p-4">
         <div className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">Changed Area</div>
         <div className="text-2xl font-bold" style={{ color: config.color }}>{changedArea} km²</div>
@@ -320,18 +371,23 @@ function DifferenceView({
       <div className="absolute bottom-3 right-3 z-[1000] bg-black/70 backdrop-blur-sm rounded-lg border border-white/10 px-3 py-2">
         <div className="text-[9px] text-slate-400 uppercase tracking-wider mb-1.5">Legend</div>
         <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-sm" style={{ background: config.color, opacity: 0.3 }} />
-          <span className="text-[10px] text-slate-300">Low change</span>
+          <div className="w-3 h-3 rounded-sm border border-blue-400/50 bg-blue-400/20" />
+          <span className="text-[10px] text-slate-300">Period 1 (Before)</span>
         </div>
         <div className="flex items-center gap-2 mt-1">
-          <div className="w-3 h-3 rounded-sm" style={{ background: config.color, opacity: 0.8 }} />
-          <span className="text-[10px] text-slate-300">High change</span>
+          <div className="w-3 h-3 rounded-sm border border-orange-400/50 bg-orange-400/20" />
+          <span className="text-[10px] text-slate-300">Period 2 (After)</span>
+        </div>
+        <div className="flex items-center gap-2 mt-1">
+          <div className="w-3 h-3 rounded-sm" style={{ background: config.color, opacity: 0.5 }} />
+          <span className="text-[10px] text-slate-300">Detected change</span>
         </div>
         <div className="flex items-center gap-2 mt-1">
           <div className="w-3 h-3 rounded-sm border border-cyan-400/50 bg-cyan-400/10" />
           <span className="text-[10px] text-slate-300">AOI boundary</span>
         </div>
       </div>
+      {/* Zoom controls */}
       <div className="absolute top-3 right-3 z-[1000] flex flex-col rounded-lg overflow-hidden border border-white/10 shadow-lg">
         <button onClick={() => mapInstanceRef.current?.zoomIn()} className="w-8 h-8 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-colors text-sm font-bold bg-black/50 backdrop-blur-sm">+</button>
         <div className="h-px bg-white/10" />

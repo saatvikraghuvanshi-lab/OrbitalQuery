@@ -123,7 +123,8 @@ function buildFindings(result: TemporalComparisonResult): StructuredFinding {
   );
 
   // ── Confidence ─────────────────────────────────────────────
-  const confidence = explanation.confidence || 'Medium — based on spectral index change detection. Ground truth validation recommended.';
+  // Note: index statistics are estimated from scene metadata, not computed from actual raster data
+  const confidence = explanation.confidence || 'Preliminary — based on scene metadata analysis. Quantitative metrics are estimated, not computed from pixel-level raster analysis.';
 
   // ── Change regions ─────────────────────────────────────────
   const changeRegions: string[] = [];
@@ -157,6 +158,7 @@ function buildFindings(result: TemporalComparisonResult): StructuredFinding {
 
   // ── Limitations ────────────────────────────────────────────
   const limitations = explanation.limitations || [
+    'Index statistics are estimated from scene metadata, not computed from actual raster pixel analysis',
     'Cloud cover may affect optical imagery quality',
     'Single pair comparison — seasonal effects possible',
     'Resolution limits detection of small-scale changes',

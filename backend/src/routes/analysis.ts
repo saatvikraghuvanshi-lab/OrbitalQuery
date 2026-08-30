@@ -1353,13 +1353,35 @@ router.post('/temporal-compare', optionalAuth, async (req: AuthRequest, res: Res
     // Parse query to extract location info
     const q = query.toLowerCase();
     const locations: Record<string, number[]> = {
+      // Major Indian cities
       'mumbai': [72.75, 18.85, 73.05, 19.15], 'delhi': [77.0, 28.4, 77.4, 28.75],
-      'jaipur': [75.7, 26.8, 75.95, 27.05], 'assam': [89.5, 24.0, 96.0, 28.0],
-      'himalaya': [77.0, 28.0, 80.0, 35.0], 'thar desert': [69.0, 24.0, 74.0, 28.0],
-      'sundarbans': [88.5, 21.6, 89.2, 22.1], 'kashmir': [73.5, 33.0, 77.5, 36.5],
-      'kerala': [74.8, 8.0, 77.5, 12.8], 'bangalore': [77.4, 12.85, 77.75, 13.1],
+      'new delhi': [77.0, 28.4, 77.4, 28.75], 'jaipur': [75.7, 26.8, 75.95, 27.05],
+      'bangalore': [77.4, 12.85, 77.75, 13.1], 'bengaluru': [77.4, 12.85, 77.75, 13.1],
       'chennai': [80.05, 12.9, 80.35, 13.15], 'kolkata': [88.25, 22.45, 88.45, 22.65],
-      'flood': [89.5, 24.0, 96.0, 28.0], 'glacier': [74.0, 35.0, 77.5, 37.5],
+      'hyderabad': [78.3, 17.3, 78.6, 17.55], 'ahmedabad': [72.5, 22.95, 72.75, 23.15],
+      'pune': [73.75, 18.45, 74.0, 18.65], 'lucknow': [80.85, 26.75, 81.1, 26.95],
+      'bhopal': [77.35, 23.2, 77.55, 23.4], 'patna': [85.05, 25.55, 85.25, 25.7],
+      'guwahati': [91.65, 26.1, 91.8, 26.25], 'nagpur': [79.0, 21.0, 79.2, 21.2],
+      'indore': [75.7, 22.6, 76.0, 22.85], 'coimbatore': [76.8, 10.9, 77.1, 11.15],
+      'visakhapatnam': [83.1, 17.6, 83.4, 17.85], 'dehradun': [77.9, 30.2, 78.2, 30.45],
+      'shimla': [77.05, 31.05, 77.25, 31.2], 'gangtok': [88.55, 27.3, 88.7, 27.45],
+      // Indian states/regions
+      'assam': [89.5, 24.0, 96.0, 28.0], 'himalaya': [77.0, 28.0, 80.0, 35.0],
+      'himalayas': [77.0, 28.0, 80.0, 35.0], 'thar desert': [69.0, 24.0, 74.0, 28.0],
+      'sundarbans': [88.5, 21.6, 89.2, 22.1], 'kashmir': [73.5, 33.0, 77.5, 36.5],
+      'kerala': [74.8, 8.0, 77.5, 12.8], 'rajasthan': [69.5, 23.0, 76.5, 30.5],
+      'uttarakhand': [77.5, 28.5, 81.0, 31.5], 'karnataka': [74.0, 11.5, 78.5, 18.5],
+      'tamil nadu': [76.0, 7.5, 80.5, 13.5], 'odisha': [81.0, 17.5, 87.5, 22.5],
+      'madhya pradesh': [74.0, 21.0, 82.5, 26.5], 'maharashtra': [72.5, 15.5, 80.5, 22.0],
+      'andhra pradesh': [77.0, 12.5, 84.5, 19.5],
+      // International
+      'amazon': [-75.0, -15.0, -45.0, 5.0], 'tokyo': [139.5, 35.4, 140.0, 35.9],
+      'london': [-0.5, 51.3, 0.3, 51.7], 'cairo': [31.0, 29.8, 31.5, 30.2],
+      'sydney': [150.5, -34.2, 151.5, -33.6], 'new york': [-74.1, 40.6, -73.7, 40.9],
+      'california': [-124.5, 32.5, -114.0, 42.0], 'los angeles': [-118.7, 33.7, -117.9, 34.35],
+      'rio de janeiro': [-43.5, -23.1, -43.0, -22.7], 'dhaka': [90.3, 23.6, 90.5, 23.9],
+      'kathmandu': [85.2, 27.6, 85.5, 27.8], 'jakarta': [106.7, -6.3, 107.0, -6.1],
+      'bangkok': [100.4, 13.6, 100.8, 13.95], 'beijing': [116.2, 39.7, 116.7, 40.05],
     };
     let fallbackBbox = bbox;
     let aoiName = aoi || 'Unknown';
@@ -1371,8 +1393,23 @@ router.post('/temporal-compare', optionalAuth, async (req: AuthRequest, res: Res
     if (!fallbackBbox) fallbackBbox = [68.0, 6.0, 97.5, 37.5];
 
     // Determine phenomenon from query
-    const phenomena = ['flood', 'deforestation', 'urbanization', 'glacier', 'erosion', 'agriculture', 'drought', 'fire', 'snow', 'mining', 'wetland'];
-    const detectedPhenomenon = phenomena.find(p => q.includes(p)) || 'land cover change';
+    const phenomena: Record<string, string[]> = {
+      'urban_expansion': ['urban', 'urbanization', 'expansion', 'city growth', 'built-up', 'built up', 'construction', 'infrastructure'],
+      'vegetation_change': ['vegetation', 'greenery', 'ndvi', 'greenness', 'foliage', 'plant'],
+      'deforestation': ['deforest', 'forest loss', 'tree loss', 'logging', 'clearing'],
+      'flood_impact': ['flood', 'flooding', 'inundat', 'deluge', 'monsoon', 'cyclone', 'tsunami', 'storm surge'],
+      'water_change': ['water', 'lake', 'river', 'reservoir', 'water body', 'shoreline'],
+      'burn_severity': ['fire', 'burn', 'wildfire', 'blaze', 'smoke'],
+      'glacier_retreat': ['glacier', 'ice melt', 'snow melt', 'cryosphere', 'permafrost'],
+      'coastal_erosion': ['erosion', 'coastal', 'shoreline', 'beach', 'sea level', 'coast'],
+      'snow_cover': ['snow', 'snowfall', 'ice cover', 'snowline'],
+      'soil_moisture': ['soil', 'drought', 'moisture', 'dry', 'aridity'],
+      'land_cover_change': ['land cover', 'land use', 'lulc', 'land type'],
+    };
+    let detectedPhenomenon = 'land_cover_change';
+    for (const [phenomenon, keywords] of Object.entries(phenomena)) {
+      if (keywords.some(k => q.includes(k))) { detectedPhenomenon = phenomenon; break; }
+    }
 
     // Determine dates
     const defaultStart = start_date || '2023-01-01';
