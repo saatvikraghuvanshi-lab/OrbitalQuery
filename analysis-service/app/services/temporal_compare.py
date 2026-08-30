@@ -356,12 +356,16 @@ def _compute_index_stats(
     except (ValueError, AttributeError):
         seasonal_offset = 0.0
 
+    # Deterministic offset derived from scene ID (same scene → same stats)
+    scene_hash = hash(scene.item_id) % 10000 / 10000.0  # 0.0 to 0.9999
+    deterministic_offset = (scene_hash - 0.5) * 0.06  # ±0.03 range
+
     stats = {
-        "min": round(max(-1.0, base["min"] + np.random.uniform(-0.05, 0.05)), 4),
-        "max": round(min(1.0, base["max"] + np.random.uniform(-0.05, 0.05)), 4),
-        "mean": round(max(-1.0, min(1.0, base["mean"] + seasonal_offset + np.random.uniform(-0.03, 0.03))), 4),
-        "std": round(max(0.01, base["std"] + np.random.uniform(-0.02, 0.02)), 4),
-        "median": round(max(-1.0, min(1.0, base["mean"] + seasonal_offset + np.random.uniform(-0.02, 0.02))), 4),
+        "min": round(max(-1.0, base["min"] + deterministic_offset * 0.5), 4),
+        "max": round(min(1.0, base["max"] + deterministic_offset * 0.5), 4),
+        "mean": round(max(-1.0, min(1.0, base["mean"] + seasonal_offset + deterministic_offset)), 4),
+        "std": round(max(0.01, base["std"] + deterministic_offset * 0.3), 4),
+        "median": round(max(-1.0, min(1.0, base["mean"] + seasonal_offset + deterministic_offset * 0.8)), 4),
     }
     stats["p5"] = round(max(-1.0, stats["mean"] - 1.645 * stats["std"]), 4)
     stats["p95"] = round(min(1.0, stats["mean"] + 1.645 * stats["std"]), 4)

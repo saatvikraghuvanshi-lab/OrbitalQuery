@@ -172,9 +172,12 @@ def _compute_index_stats_from_scene(
     except (ValueError, AttributeError):
         seasonal_offset = 0.0
 
-    # Add random variation for realism
-    mean_val = base["mean"] + seasonal_offset + np.random.uniform(-0.03, 0.03)
-    std_val = max(0.01, base["std"] + np.random.uniform(-0.02, 0.02))
+    # Deterministic offset derived from scene ID
+    scene_id = scene.get("id", "unknown")
+    scene_hash = hash(scene_id) % 10000 / 10000.0
+    det_offset = (scene_hash - 0.5) * 0.06
+    mean_val = base["mean"] + seasonal_offset + det_offset
+    std_val = max(0.01, base["std"] + det_offset * 0.3)
 
     return {
         "mean": round(max(-1.0, min(1.0, mean_val)), 4),

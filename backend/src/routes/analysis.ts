@@ -1306,22 +1306,30 @@ router.post('/temporal-compare', optionalAuth, async (req: AuthRequest, res: Res
     const result = await callPythonService('POST', '/analysis/temporal-compare', pythonBody, 'temporal-compare', PYTHON_TIMEOUT);
 
     if (result.ok) {
-      // Inject tilejson URLs and bbox into imagery before sending
+      // ── Enrich imagery with tilejson URLs and bbox ─────────
+      // Python returns imagery without tilejson/bbox. We inject them here
+      // so the frontend can render zoomable Planetary Computer tiles.
       const rd = result.data?.result || result.data;
-      const imagery = rd?.imagery || {};
-      for (const period of ['period1', 'period2'] as const) {
-        const img = imagery[period] || {};
-        const scene = period === 'period1' ? rd?.scene_t1 : rd?.scene_t2;
-        if (scene?.bbox && (!img.bbox || img.bbox.length === 0)) img.bbox = scene.bbox;
-        if (!img.tilejson && scene?.item_id) {
-          const col = scene.collection || 'sentinel-2-l2a';
-          img.tilejson = `https://planetarycomputer.microsoft.com/api/data/v1/item/tilejson.json?collection=${col}&item=${scene.item_id}&assets=visual&asset_bidx=visual%7C1%2C2%2C3`;
+      if (rd?.imagery) {
+        for (const period of ['period1', 'period2'] as const) {
+          const img = rd.imagery[period];
+          if (!img) continue;
+          const scene = period === 'period1' ? rd.scene_t1 : rd.scene_t2;
+          // Inject bbox from scene data if missing
+          if (scene?.bbox && Array.isArray(scene.bbox) && scene.bbox.length === 4) {
+            if (!img.bbox || !Array.isArray(img.bbox) || img.bbox.length === 0) {
+              img.bbox = scene.bbox;
+            }
+          }
+          // Inject tilejson URL from scene metadata if missing
+          if (!img.tilejson && scene?.item_id && scene?.collection) {
+            img.tilejson = `https://planetarycomputer.microsoft.com/api/data/v1/item/tilejson.json?collection=${encodeURIComponent(scene.collection)}&item=${encodeURIComponent(scene.item_id)}&assets=visual&asset_bidx=visual%7C1%2C2%2C3`;
+          }
         }
-        imagery[period] = img;
       }
-      // Send response with enriched imagery
+      // Build response — preserve all original fields plus enriched imagery
       const resp: any = { ...result.data };
-      if (rd) resp.result = { ...rd, imagery };
+      if (rd) resp.result = { ...rd };
       resp.requestId = result.requestId;
       resp.latencyMs = result.upstreamLatencyMs;
       res.json(resp);

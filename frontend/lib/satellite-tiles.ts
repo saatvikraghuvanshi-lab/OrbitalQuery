@@ -182,14 +182,17 @@ export async function loadSatelliteTiles(
 ): Promise<SatelliteLayerResult> {
   const { tilejsonUrl, thumbnailUrl, sceneBbox, aoiBbox, opacity = 0.9, zIndex = 400 } = opts;
   const L = opts.L; // Leaflet instance from dynamic import
+  console.log('[satellite-tiles] loadSatelliteTiles called:', { tilejsonUrl: tilejsonUrl?.slice(0, 80), thumbnailUrl: thumbnailUrl?.slice(0, 80), sceneBbox: !!sceneBbox, aoiBbox });
 
   // ── Attempt 1: TileJSON tiles ───────────────────────────────
   if (tilejsonUrl) {
     try {
+      console.log('[satellite-tiles] Fetching TileJSON:', tilejsonUrl.slice(0, 100));
       const tj = await fetchTileJson(tilejsonUrl);
       if (tj?.tiles?.[0]) {
         const tileUrl = tj.tiles[0].replace('@1x', '');
         const bounds = getBestBounds(sceneBbox, tj.bounds, aoiBbox);
+        console.log('[satellite-tiles] TileJSON loaded, creating tile layer:', { tileUrl: tileUrl.slice(0, 100), bounds });
         const tileLayer = L.tileLayer(tileUrl, {
           maxZoom: tj.maxzoom || 24,
           opacity,
@@ -205,6 +208,7 @@ export async function loadSatelliteTiles(
           }
         });
         tileLayer.addTo(map);
+        console.log('[satellite-tiles] Tile layer added to map successfully');
         return { hasImagery: true, layer: tileLayer, bounds, usedTileJson: true, tileUrl };
       }
     } catch (err: any) {
@@ -217,6 +221,7 @@ export async function loadSatelliteTiles(
     const bbox = parseBbox(sceneBbox);
     if (bbox) {
       try {
+        console.log('[satellite-tiles] Falling back to thumbnail overlay');
         const bounds = boundsToLatLng(bbox);
         const imgOverlay = L.imageOverlay(thumbnailUrl, bounds, {
           opacity: Math.min(opacity, 0.85),
@@ -224,6 +229,7 @@ export async function loadSatelliteTiles(
           zIndex,
         });
         imgOverlay.addTo(map);
+        console.log('[satellite-tiles] Thumbnail overlay added to map');
         return {
           hasImagery: true,
           layer: imgOverlay,
@@ -238,6 +244,7 @@ export async function loadSatelliteTiles(
 
   // ── Fallback: No imagery ────────────────────────────────────
   const fallbackBounds = getBestBounds(sceneBbox, undefined, aoiBbox);
+  console.warn('[satellite-tiles] No imagery loaded — fallback to basemap only');
   return {
     hasImagery: false,
     bounds: fallbackBounds,
