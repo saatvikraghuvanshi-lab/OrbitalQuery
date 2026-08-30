@@ -65,6 +65,8 @@ function SynchronizedDualMap({
   const syncingRef = useRef(false);
   const [leftError, setLeftError] = useState<string | null>(null);
   const [rightError, setRightError] = useState<string | null>(null);
+  const [leftLoading, setLeftLoading] = useState(true);
+  const [rightLoading, setRightLoading] = useState(true);
 
   useEffect(() => {
     if (!leftRef.current || !rightRef.current || leftMapRef.current) return;
@@ -112,8 +114,13 @@ function SynchronizedDualMap({
 
       if (cancelled) return;
 
+      setLeftLoading(false);
+      setRightLoading(false);
       if (!leftResult.hasImagery) setLeftError(leftResult.error || 'No imagery');
       if (!rightResult.hasImagery) setRightError(rightResult.error || 'No imagery');
+
+      console.log('[SynchronizedDualMap] Left:', leftResult.usedTileJson ? 'TileJSON' : leftResult.hasImagery ? 'thumbnail' : 'no imagery');
+      console.log('[SynchronizedDualMap] Right:', rightResult.usedTileJson ? 'TileJSON' : rightResult.hasImagery ? 'thumbnail' : 'no imagery');
 
       // AOI rectangle on both maps
       const aoiBounds = boundsToLatLng(bbox);
@@ -152,13 +159,19 @@ function SynchronizedDualMap({
   }, [bbox, thumbnailT1, thumbnailT2, tilejsonT1, tilejsonT2, sceneBboxT1, sceneBboxT2]);
 
   return (
-    <div className="grid grid-cols-2 gap-1" style={{ height: 'calc(70vh - 100px)', minHeight: '450px' }}>
+    <div className="grid grid-cols-2 gap-1" style={{ height: 'calc(80vh - 120px)', minHeight: '500px' }}>
       <div className="relative rounded-l-xl overflow-hidden border border-slate-700/30">
         <div ref={leftRef} className="absolute inset-0" />
         <div className="absolute top-3 left-3 z-[1000] px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-blue-500/80 text-white backdrop-blur-sm">Period 1 — Before</div>
+        {leftLoading && (
+          <div className="absolute top-3 right-3 z-[1000] px-2 py-1 rounded text-[9px] bg-slate-600/80 text-white backdrop-blur-sm flex items-center gap-1.5">
+            <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+            Loading imagery...
+          </div>
+        )}
         {leftError && (
           <div className="absolute top-3 right-3 z-[1000] px-2 py-1 rounded text-[9px] bg-amber-500/80 text-white backdrop-blur-sm">
-            Basemap only — imagery unavailable
+            {leftError}
           </div>
         )}
         <div className="absolute bottom-3 right-3 z-[1000] flex flex-col rounded-lg overflow-hidden border border-white/10 shadow-lg">
@@ -170,9 +183,15 @@ function SynchronizedDualMap({
       <div className="relative rounded-r-xl overflow-hidden border border-slate-700/30">
         <div ref={rightRef} className="absolute inset-0" />
         <div className="absolute top-3 left-3 z-[1000] px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-orange-500/80 text-white backdrop-blur-sm">Period 2 — After</div>
+        {rightLoading && (
+          <div className="absolute top-3 right-3 z-[1000] px-2 py-1 rounded text-[9px] bg-slate-600/80 text-white backdrop-blur-sm flex items-center gap-1.5">
+            <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+            Loading imagery...
+          </div>
+        )}
         {rightError && (
           <div className="absolute top-3 right-3 z-[1000] px-2 py-1 rounded text-[9px] bg-amber-500/80 text-white backdrop-blur-sm">
-            Basemap only — imagery unavailable
+            {rightError}
           </div>
         )}
         <div className="absolute bottom-3 right-3 z-[1000] flex flex-col rounded-lg overflow-hidden border border-white/10 shadow-lg">
@@ -328,7 +347,7 @@ function DifferenceView({
     : metrics.changed_area_km2 || '0';
 
   return (
-    <div className="rounded-xl overflow-hidden border border-slate-700/30 relative" style={{ height: 'calc(70vh - 100px)', minHeight: '450px' }}>
+    <div className="rounded-xl overflow-hidden border border-slate-700/30 relative" style={{ height: 'calc(80vh - 120px)', minHeight: '500px' }}>
       <div ref={mapRef} className="absolute inset-0" />
       <div className="absolute top-3 left-3 z-[1000] px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-slate-800/90 text-white backdrop-blur-sm border border-slate-600/30">
         Difference — {config.indexLabel} Overlay

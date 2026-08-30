@@ -210,8 +210,8 @@ export function useAnalysis() {
         processingSteps: backendSteps,
       }));
 
-      // Brief pause to show processing state
-      await new Promise(r => setTimeout(r, 300));
+      // Pause to show processing state and log
+      await new Promise(r => setTimeout(r, 1500));
 
       // ── Phase 5: Change detection ────────────────────────
       const changedPct = result?.metrics?.changed_pct;
@@ -223,7 +223,7 @@ export function useAnalysis() {
           : 'Running change detection...',
       }));
 
-      await new Promise(r => setTimeout(r, 200));
+      await new Promise(r => setTimeout(r, 1000));
 
       // ── Phase 6: Generate insight ────────────────────────
       const findingCount = result?.explanation?.key_findings?.length || 0;
@@ -235,7 +235,7 @@ export function useAnalysis() {
           : 'Generating analysis summary...',
       }));
 
-      await new Promise(r => setTimeout(r, 200));
+      await new Promise(r => setTimeout(r, 1000));
 
       // ── Phase 7: Complete ────────────────────────────────
       const scenes: SceneInfo[] = [];

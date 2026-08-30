@@ -38,27 +38,34 @@ export interface SatelliteLayerResult {
 
 export async function fetchTileJson(
   url: string,
-  timeoutMs = 8000
+  timeoutMs = 12000,
+  retries = 2
 ): Promise<TileJsonResponse | null> {
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-    const res = await fetch(url, { signal: controller.signal });
-    clearTimeout(timer);
-    if (!res.ok) {
-      console.warn(`[satellite-tiles] TileJSON ${res.status} for ${url.slice(0, 80)}...`);
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      const res = await fetch(url, { signal: controller.signal });
+      clearTimeout(timer);
+      if (!res.ok) {
+        console.warn(`[satellite-tiles] TileJSON ${res.status} (attempt ${attempt + 1}) for ${url.slice(0, 80)}...`);
+        if (attempt < retries) { await new Promise(r => setTimeout(r, 1000)); continue; }
+        return null;
+      }
+      const data = await res.json();
+      if (!data?.tiles?.length) {
+        console.warn('[satellite-tiles] TileJSON has no tiles');
+        return null;
+      }
+      console.log('[satellite-tiles] TileJSON loaded successfully on attempt', attempt + 1);
+      return data;
+    } catch (err: any) {
+      console.warn('[satellite-tiles] TileJSON fetch failed (attempt', attempt + 1, '):', err?.message || err);
+      if (attempt < retries) { await new Promise(r => setTimeout(r, 1000)); continue; }
       return null;
     }
-    const data = await res.json();
-    if (!data?.tiles?.length) {
-      console.warn('[satellite-tiles] TileJSON has no tiles');
-      return null;
-    }
-    return data;
-  } catch (err: any) {
-    console.warn('[satellite-tiles] TileJSON fetch failed:', err?.message || err);
-    return null;
   }
+  return null;
 }
 
 // ── Bounds validation ────────────────────────────────────────────

@@ -288,16 +288,16 @@ function HomePageContent() {
 
               {/* Real backend processing steps — shown when available */}
               {analysis.state.processingSteps.length > 0 && (
-                <div className="w-full max-w-lg mb-6">
+                <div className="w-full max-w-2xl mb-6">
                   <div className="bg-slate-800/30 rounded-xl border border-slate-700/30 px-4 py-3">
                     <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-2 font-medium">Processing log</div>
                     <div className="space-y-1">
                       {analysis.state.processingSteps.map((ps, i) => (
                         <div key={i} className="flex items-start gap-2 text-[10px]">
                           <span className="text-green-400/60 mt-0.5 flex-shrink-0">✓</span>
-                          <span className="text-slate-400">
+                          <span className="text-slate-400 min-w-0">
                             <span className="text-slate-300 font-medium">{ps.step.replace(/_/g, ' ')}</span>
-                            {ps.detail && <span className="text-slate-600 ml-1.5">{ps.detail}</span>}
+                            {ps.detail && <span className="text-slate-600 ml-1.5 block sm:inline">{ps.detail.length > 80 ? ps.detail.slice(0, 80) + '...' : ps.detail}</span>}
                           </span>
                         </div>
                       ))}
@@ -334,7 +334,7 @@ function HomePageContent() {
 
         {step === 'complete' && analysis.state.result && (
           <div className="flex-1 overflow-y-auto">
-            <div className="max-w-7xl mx-auto px-4 py-6">
+            <div className="w-full max-w-[95vw] mx-auto px-4 py-6">
               {/* Back button — centered */}
               <div className="flex justify-center mb-4">
                 <button onClick={analysis.reset} className="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-300 transition-colors">

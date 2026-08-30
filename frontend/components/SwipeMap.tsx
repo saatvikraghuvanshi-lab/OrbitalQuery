@@ -184,7 +184,7 @@ export default function SwipeMap({
   return (
     <div
       className="relative rounded-xl overflow-hidden border border-slate-700/30 select-none"
-      style={{ height: 'calc(70vh - 100px)', minHeight: '450px' }}
+      style={{ height: 'calc(80vh - 120px)', minHeight: '500px' }}
       onMouseMove={handleMouseMove}
       onMouseUp={handlePointerUp}
       onMouseLeave={handlePointerUp}
