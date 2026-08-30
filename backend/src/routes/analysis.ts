@@ -1320,9 +1320,11 @@ router.post('/temporal-compare', optionalAuth, async (req: AuthRequest, res: Res
           }
         }
       }
+      const responseData = { ...result.data };
+      if (rdata?.imagery) responseData.result = { ...rdata };
       res.json({
         requestId: result.requestId,
-        ...result.data,
+        ...responseData,
         latencyMs: result.upstreamLatencyMs,
       });
       return;
