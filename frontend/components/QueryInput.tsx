@@ -114,33 +114,32 @@ export default function QueryInput({ onAnalyze, loading }: QueryInputProps) {
           </button>
         </div>
 
-        {/* Suggestion chips — glassmorphic with icons */}
-        <div className="w-full max-w-3xl flex flex-wrap justify-center items-center gap-2.5 mb-8">
+        {/* Suggestion chips — clean, sharp borders */}
+        <div className="w-full max-w-3xl flex flex-wrap justify-center items-center gap-2 mb-8">
           {visibleSuggestions.map((s) => (
             <button
               key={`${shuffleKey}-${s.text}`}
               onClick={() => { setQuery(s.text); onAnalyze(s.text); }}
               disabled={loading}
-              className="group px-3.5 py-2 rounded-full text-[12px] font-medium text-slate-300
-                border border-white/8
-                hover:border-blue-400/30 hover:text-white
-                transition-all duration-200 disabled:opacity-40 flex items-center gap-1.5"
+              className="group px-4 py-2 rounded-full text-[12px] font-medium text-slate-400
+                hover:text-white hover:bg-white/[0.06]
+                transition-all duration-150 disabled:opacity-40 flex items-center gap-2"
               style={{
-                background: 'rgba(255, 255, 255, 0.04)',
-                backdropFilter: 'blur(8px)',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+                background: 'rgba(255, 255, 255, 0.03)',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
               }}
             >
-              <span className="text-sm">{s.icon}</span>
+              <span className="text-xs opacity-60">{s.icon}</span>
               <span>{s.text}</span>
             </button>
           ))}
           <button
             onClick={handleShuffle}
             disabled={loading}
-            className="p-2 rounded-full border border-white/8
-              hover:border-white/15 hover:bg-white/5
-              transition-all duration-200 text-slate-500 hover:text-slate-300"
+            className="p-2 rounded-full
+              hover:bg-white/[0.06]
+              transition-all duration-150 text-slate-500 hover:text-slate-300"
+            style={{ border: '1px solid rgba(255, 255, 255, 0.1)' }}
             title="Refresh suggestions"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

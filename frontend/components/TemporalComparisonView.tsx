@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { TemporalComparisonResult, SceneInfo, IndexInfo } from '@/hooks/useAnalysis';
+import SwipeMap from '@/components/SwipeMap';
 
 interface Props {
   result: TemporalComparisonResult;
@@ -25,7 +26,6 @@ const PHENOMENON_CONFIG: Record<string, { emoji: string; color: string; label: s
 type ViewMode = 'side-by-side' | 'swipe' | 'difference';
 
 const TILE_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}';
-const SATELLITE_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
 
 // ── Synchronized Dual Map ────────────────────────────────────
 function SynchronizedDualMap({
@@ -47,28 +47,22 @@ function SynchronizedDualMap({
     if (!leftRef.current || !rightRef.current || leftMapRef.current) return;
     let cancelled = false;
 
-    Promise.all([
-      import('leaflet'),
-      import('react-leaflet'),
-    ]).then(([L, _]) => {
+    import('leaflet').then((L) => {
       if (cancelled || !leftRef.current || !rightRef.current) return;
 
       const [west, south, east, north] = bbox;
       const center: [number, number] = [(south + north) / 2, (west + east) / 2];
 
-      // Create left map
       const leftMap = L.map(leftRef.current, {
         center, zoom: 10, zoomControl: false, attributionControl: false,
       });
       L.tileLayer(TILE_URL, { maxZoom: 19 }).addTo(leftMap);
 
-      // Create right map
       const rightMap = L.map(rightRef.current, {
         center, zoom: 10, zoomControl: false, attributionControl: false,
       });
       L.tileLayer(TILE_URL, { maxZoom: 19 }).addTo(rightMap);
 
-      // Add imagery overlays
       if (thumbnailT1) {
         L.imageOverlay(thumbnailT1, [[south, west], [north, east]], { opacity: 0.85, interactive: false }).addTo(leftMap);
       }
@@ -76,24 +70,19 @@ function SynchronizedDualMap({
         L.imageOverlay(thumbnailT2, [[south, west], [north, east]], { opacity: 0.85, interactive: false }).addTo(rightMap);
       }
 
-      // Add AOI rectangle
       const aoiBounds: L.LatLngBoundsExpression = [[south, west], [north, east]];
       L.rectangle(aoiBounds, { color: '#22d3ee', weight: 1.5, fillColor: '#22d3ee', fillOpacity: 0.05, dashArray: '6 3' }).addTo(leftMap);
       L.rectangle(aoiBounds, { color: '#22d3ee', weight: 1.5, fillColor: '#22d3ee', fillOpacity: 0.05, dashArray: '6 3' }).addTo(rightMap);
 
-      // Fit both maps to AOI
       leftMap.fitBounds(aoiBounds, { padding: [40, 40], maxZoom: 14 });
       rightMap.fitBounds(aoiBounds, { padding: [40, 40], maxZoom: 14 });
 
-      // Synchronize: left → right
       leftMap.on('move', () => {
         if (syncingRef.current) return;
         syncingRef.current = true;
         rightMap.setView(leftMap.getCenter(), leftMap.getZoom(), { animate: false });
         syncingRef.current = false;
       });
-
-      // Synchronize: right → left
       rightMap.on('move', () => {
         if (syncingRef.current) return;
         syncingRef.current = true;
@@ -118,11 +107,7 @@ function SynchronizedDualMap({
     <div className="grid grid-cols-2 gap-1" style={{ height: 'calc(70vh - 100px)', minHeight: '450px' }}>
       <div className="relative rounded-l-xl overflow-hidden border border-slate-700/30">
         <div ref={leftRef} className="absolute inset-0" />
-        {/* Period badge */}
-        <div className="absolute top-3 left-3 z-[1000] px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-blue-500/80 text-white backdrop-blur-sm">
-          Period 1 — Before
-        </div>
-        {/* Zoom controls */}
+        <div className="absolute top-3 left-3 z-[1000] px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-blue-500/80 text-white backdrop-blur-sm">Period 1 — Before</div>
         <div className="absolute bottom-3 right-3 z-[1000] flex flex-col rounded-lg overflow-hidden border border-white/10 shadow-lg">
           <button onClick={() => leftMapRef.current?.zoomIn()} className="w-8 h-8 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-colors text-sm font-bold bg-black/50 backdrop-blur-sm">+</button>
           <div className="h-px bg-white/10" />
@@ -131,137 +116,12 @@ function SynchronizedDualMap({
       </div>
       <div className="relative rounded-r-xl overflow-hidden border border-slate-700/30">
         <div ref={rightRef} className="absolute inset-0" />
-        {/* Period badge */}
-        <div className="absolute top-3 left-3 z-[1000] px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-orange-500/80 text-white backdrop-blur-sm">
-          Period 2 — After
-        </div>
-        {/* Zoom controls */}
+        <div className="absolute top-3 left-3 z-[1000] px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-orange-500/80 text-white backdrop-blur-sm">Period 2 — After</div>
         <div className="absolute bottom-3 right-3 z-[1000] flex flex-col rounded-lg overflow-hidden border border-white/10 shadow-lg">
           <button onClick={() => rightMapRef.current?.zoomIn()} className="w-8 h-8 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-colors text-sm font-bold bg-black/50 backdrop-blur-sm">+</button>
           <div className="h-px bg-white/10" />
           <button onClick={() => rightMapRef.current?.zoomOut()} className="w-8 h-8 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-colors text-sm font-bold bg-black/50 backdrop-blur-sm">−</button>
         </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Swipe Map ────────────────────────────────────────────────
-function SwipeMap({
-  bbox, thumbnailT1, thumbnailT2,
-}: {
-  bbox: number[];
-  thumbnailT1?: string;
-  thumbnailT2?: string;
-}) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<any>(null);
-  const [splitPos, setSplitPos] = useState(50);
-  const draggingRef = useRef(false);
-
-  useEffect(() => {
-    if (!containerRef.current || mapRef.current) return;
-    let cancelled = false;
-
-    import('leaflet').then((L) => {
-      if (cancelled || !containerRef.current) return;
-
-      const [west, south, east, north] = bbox;
-      const center: [number, number] = [(south + north) / 2, (west + east) / 2];
-
-      const map = L.map(containerRef.current, {
-        center, zoom: 10, zoomControl: false, attributionControl: false,
-      });
-      L.tileLayer(TILE_URL, { maxZoom: 19 }).addTo(map);
-
-      // Period 1 imagery (left side via clip)
-      if (thumbnailT1) {
-        const overlay1 = L.imageOverlay(thumbnailT1, [[south, west], [north, east]], { opacity: 0.85, interactive: false }).addTo(map);
-        (overlay1 as any)._clipSide = 'left';
-      }
-      // Period 2 imagery (right side via clip)
-      if (thumbnailT2) {
-        const overlay2 = L.imageOverlay(thumbnailT2, [[south, west], [north, east]], { opacity: 0.85, interactive: false }).addTo(map);
-        (overlay2 as any)._clipSide = 'right';
-      }
-
-      map.fitBounds([[south, west], [north, east]], { padding: [40, 40], maxZoom: 14 });
-      mapRef.current = map;
-    });
-
-    return () => {
-      cancelled = true;
-      mapRef.current?.remove();
-      mapRef.current = null;
-    };
-  }, [bbox, thumbnailT1, thumbnailT2]);
-
-  const handleMouseDown = useCallback(() => { draggingRef.current = true; }, []);
-  const handleMouseMove = useCallback((e: React.MouseEvent) => {
-    if (!draggingRef.current || !containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    const pct = ((e.clientX - rect.left) / rect.width) * 100;
-    setSplitPos(Math.max(5, Math.min(95, pct)));
-  }, []);
-  const handleMouseUp = useCallback(() => { draggingRef.current = false; }, []);
-
-  return (
-    <div
-      className="relative rounded-xl overflow-hidden border border-slate-700/30 select-none"
-      style={{ height: 'calc(70vh - 100px)', minHeight: '450px', cursor: draggingRef.current ? 'col-resize' : 'default' }}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseUp}
-    >
-      <div ref={containerRef} className="absolute inset-0" />
-
-      {/* Period 1 overlay (clipped left) */}
-      {thumbnailT1 && (
-        <div
-          className="absolute inset-0 z-[500] pointer-events-none overflow-hidden"
-          style={{ clipPath: `inset(0 ${100 - splitPos}% 0 0)` }}
-        >
-          <img src={thumbnailT1} alt="Period 1" className="w-full h-full object-cover" style={{ filter: 'brightness(0.9)' }} />
-        </div>
-      )}
-
-      {/* Period 2 overlay (clipped right) */}
-      {thumbnailT2 && (
-        <div
-          className="absolute inset-0 z-[500] pointer-events-none overflow-hidden"
-          style={{ clipPath: `inset(0 0 0 ${splitPos}%)` }}
-        >
-          <img src={thumbnailT2} alt="Period 2" className="w-full h-full object-cover" style={{ filter: 'brightness(0.9)' }} />
-        </div>
-      )}
-
-      {/* Draggable divider */}
-      <div
-        className="absolute top-0 bottom-0 z-[600] w-1 bg-white/80 cursor-col-resize hover:bg-white transition-colors"
-        style={{ left: `${splitPos}%`, transform: 'translateX(-50%)' }}
-        onMouseDown={handleMouseDown}
-      >
-        {/* Handle */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/90 shadow-lg flex items-center justify-center cursor-col-resize">
-          <svg className="w-4 h-4 text-slate-800" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M8 9l4-4 4 4m0 6l-4 4-4-4" />
-          </svg>
-        </div>
-      </div>
-
-      {/* Labels */}
-      <div className="absolute top-3 left-3 z-[700] px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-blue-500/80 text-white backdrop-blur-sm">
-        Before
-      </div>
-      <div className="absolute top-3 right-3 z-[700] px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-orange-500/80 text-white backdrop-blur-sm">
-        After
-      </div>
-
-      {/* Zoom controls */}
-      <div className="absolute bottom-3 right-3 z-[700] flex flex-col rounded-lg overflow-hidden border border-white/10 shadow-lg">
-        <button onClick={() => mapRef.current?.zoomIn()} className="w-8 h-8 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-colors text-sm font-bold bg-black/50 backdrop-blur-sm">+</button>
-        <div className="h-px bg-white/10" />
-        <button onClick={() => mapRef.current?.zoomOut()} className="w-8 h-8 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-colors text-sm font-bold bg-black/50 backdrop-blur-sm">−</button>
       </div>
     </div>
   );
@@ -294,22 +154,17 @@ function DifferenceView({
       });
       L.tileLayer(TILE_URL, { maxZoom: 19 }).addTo(map);
 
-      // Draw changed regions if available
       if (changeDetection?.regions && Array.isArray(changeDetection.regions)) {
         changeDetection.regions.forEach((region: any) => {
           if (region.bbox && Array.isArray(region.bbox) && region.bbox.length === 4) {
             const [rw, rs, re, rn] = region.bbox;
             L.rectangle([[rs, rw], [rn, re]], {
-              color: config.color,
-              weight: 2,
-              fillColor: config.color,
-              fillOpacity: 0.25,
+              color: config.color, weight: 2, fillColor: config.color, fillOpacity: 0.25,
             }).addTo(map);
           }
         });
       }
 
-      // AOI rectangle
       L.rectangle([[south, west], [north, east]], {
         color: '#22d3ee', weight: 2, fillColor: '#22d3ee', fillOpacity: 0.05, dashArray: '8 4',
       }).addTo(map);
@@ -333,13 +188,11 @@ function DifferenceView({
     : metrics.changed_area_km2 || '0';
 
   return (
-    <div className="rounded-xl overflow-hidden border border-slate-700/30" style={{ height: 'calc(70vh - 100px)', minHeight: '450px' }}>
+    <div className="rounded-xl overflow-hidden border border-slate-700/30 relative" style={{ height: 'calc(70vh - 100px)', minHeight: '450px' }}>
       <div ref={mapRef} className="absolute inset-0" />
-      {/* Difference overlay info */}
       <div className="absolute top-3 left-3 z-[1000] px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-red-500/80 text-white backdrop-blur-sm">
         Change Detection — {config.indexLabel} Difference
       </div>
-      {/* Change stats overlay */}
       <div className="absolute bottom-3 left-3 z-[1000] bg-black/70 backdrop-blur-sm rounded-xl border border-white/10 p-4">
         <div className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">Changed Area</div>
         <div className="text-2xl font-bold" style={{ color: config.color }}>{changedArea} km²</div>
@@ -350,7 +203,6 @@ function DifferenceView({
           </div>
         )}
       </div>
-      {/* Legend */}
       <div className="absolute bottom-3 right-3 z-[1000] bg-black/70 backdrop-blur-sm rounded-lg border border-white/10 px-3 py-2">
         <div className="text-[9px] text-slate-400 uppercase tracking-wider mb-1.5">Legend</div>
         <div className="flex items-center gap-2">
@@ -362,7 +214,6 @@ function DifferenceView({
           <span className="text-[10px] text-slate-300">High change</span>
         </div>
       </div>
-      {/* Zoom controls */}
       <div className="absolute top-3 right-3 z-[1000] flex flex-col rounded-lg overflow-hidden border border-white/10 shadow-lg">
         <button onClick={() => mapInstanceRef.current?.zoomIn()} className="w-8 h-8 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-colors text-sm font-bold bg-black/50 backdrop-blur-sm">+</button>
         <div className="h-px bg-white/10" />
@@ -475,26 +326,20 @@ export default function TemporalComparisonView({ result }: Props) {
   const sensorInfo = result.sensor_info || {};
   const [viewMode, setViewMode] = useState<ViewMode>('side-by-side');
 
-  // Check if this is a fallback/degraded response
   const isFallback = (metrics as any).fallbackMode;
 
-  // Get metric cards based on phenomenon
   const getMetricCards = () => {
     const cards: Array<{ label: string; value: string | number; unit?: string; color?: string; subtitle?: string }> = [];
 
-    // Always show changed area prominently
-    const changedArea = metrics.changed_area_km2 || metrics.totalDatasets || 0;
-    const changedPct = metrics.changed_pct || 0;
-
     if (isFallback) {
-      // Fallback mode: show dataset match count
       cards.push({ label: 'Datasets Found', value: metrics.totalDatasets || 0, color: config.color });
       cards.push({ label: 'Query Matched', value: (metrics.matchedQuery as string) || '—', color: '#94a3b8' });
     } else {
       cards.push({ label: 'Total Study Area', value: metrics.total_area_km2 || 0, unit: 'km²', color: '#94a3b8' });
+      const changedArea = metrics.changed_area_km2 || 0;
+      const changedPct = metrics.changed_pct || 0;
       cards.push({ label: 'Changed Area', value: changedArea, unit: 'km²', color: config.color, subtitle: `${typeof changedPct === 'number' ? changedPct.toFixed(1) : changedPct}% of total area` });
 
-      // Phenomenon-specific metrics
       if (result.phenomenon === 'urban_expansion') {
         cards.push({ label: 'Urban Expansion', value: metrics.urban_expansion_km2 || 0, unit: 'km²', color: '#a855f7', subtitle: `+${metrics.urban_expansion_pct || 0}% growth` });
         cards.push({ label: 'NDBI Change', value: metrics.ndbi_change || 0, unit: 'units', color: '#c084fc' });
@@ -512,13 +357,12 @@ export default function TemporalComparisonView({ result }: Props) {
         cards.push({ label: 'Index Change', value: metrics.delta_index || 0, unit: 'units', color: '#8b5cf6', subtitle: `Direction: ${metrics.direction || 'N/A'}` });
       }
     }
-
     return cards;
   };
 
   return (
     <div className="space-y-5">
-      {/* ── Header ─────────────────────────────────────────────── */}
+      {/* Header */}
       <div className="text-center">
         <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[11px] font-medium mb-3"
           style={{ background: `${config.color}20`, color: config.color, border: `1px solid ${config.color}30` }}>
@@ -536,7 +380,7 @@ export default function TemporalComparisonView({ result }: Props) {
         </p>
       </div>
 
-      {/* ── View Mode Switcher ────────────────────────────────── */}
+      {/* View Mode Switcher */}
       {!isFallback && (
         <div className="flex justify-center">
           <div className="inline-flex bg-slate-800/50 rounded-xl border border-slate-700/30 p-1">
@@ -545,9 +389,7 @@ export default function TemporalComparisonView({ result }: Props) {
                 key={mode}
                 onClick={() => setViewMode(mode)}
                 className={`px-4 py-2 rounded-lg text-[11px] font-medium transition-all ${
-                  viewMode === mode
-                    ? 'bg-slate-700/50 text-white shadow-sm'
-                    : 'text-slate-400 hover:text-slate-200'
+                  viewMode === mode ? 'bg-slate-700/50 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
                 {mode === 'side-by-side' && '⊞ Side by Side'}
@@ -559,7 +401,7 @@ export default function TemporalComparisonView({ result }: Props) {
         </div>
       )}
 
-      {/* ── Map Area (dominant) ───────────────────────────────── */}
+      {/* Map Area */}
       {!isFallback && result.aoi_bbox && result.aoi_bbox.length === 4 && (
         <div className="relative">
           {viewMode === 'side-by-side' && (
@@ -589,7 +431,7 @@ export default function TemporalComparisonView({ result }: Props) {
         </div>
       )}
 
-      {/* ── Scene Metadata Strip ──────────────────────────────── */}
+      {/* Scene Metadata Strip */}
       {!isFallback && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <SceneMetadataStrip scene={result.scene_t1} indexStats={result.index_t1} label="Period 1 — Before" color="#3b82f6" />
@@ -597,7 +439,7 @@ export default function TemporalComparisonView({ result }: Props) {
         </div>
       )}
 
-      {/* ── Key Metrics (prominent) ──────────────────────────── */}
+      {/* Key Metrics */}
       <div>
         <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-3 flex items-center gap-2">
           <span className="w-2 h-2 rounded-full" style={{ background: config.color }} />
@@ -610,7 +452,7 @@ export default function TemporalComparisonView({ result }: Props) {
         </div>
       </div>
 
-      {/* ── Change Detection Details ──────────────────────────── */}
+      {/* Change Detection Details */}
       {!isFallback && result.change_detection && (
         <div className="bg-slate-800/30 rounded-xl border border-slate-700/30 p-5">
           <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-3 flex items-center gap-2">
@@ -638,7 +480,7 @@ export default function TemporalComparisonView({ result }: Props) {
         </div>
       )}
 
-      {/* ── Analysis Summary + Methodology ────────────────────── */}
+      {/* Analysis Summary + Methodology */}
       {explanation.summary && (
         <div className="bg-slate-800/30 rounded-xl border border-slate-700/30 p-5">
           <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-3 flex items-center gap-2">
@@ -661,7 +503,6 @@ export default function TemporalComparisonView({ result }: Props) {
             </div>
           )}
 
-          {/* Methodology + Evidence */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-slate-700/30">
             <div>
               <h4 className="text-[10px] text-slate-400 uppercase tracking-wider font-medium mb-1.5">Methodology</h4>
@@ -693,7 +534,7 @@ export default function TemporalComparisonView({ result }: Props) {
         </div>
       )}
 
-      {/* ── Processing Pipeline (collapsible card) ────────────── */}
+      {/* Processing Pipeline (collapsible card) */}
       {result.processing_steps && result.processing_steps.length > 0 && (
         <details className="bg-slate-800/30 rounded-xl border border-slate-700/30 overflow-hidden group">
           <summary className="px-5 py-3.5 text-xs font-semibold text-slate-200 uppercase tracking-wider cursor-pointer hover:text-white transition-colors flex items-center justify-between">
