@@ -9,17 +9,17 @@ type MapStyle = 'dark' | 'light' | 'streets' | 'satellite' | 'terrain';
 
 const MAP_STYLES: Record<MapStyle, { url: string; attribution: string; name: string }> = {
   dark: {
-    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-    attribution: '&copy; <a href="https://carto.com/">CARTO</a>',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+    attribution: '&copy; Esri, HERE, Garmin',
     name: '🌑 Dark',
   },
   light: {
-    url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-    attribution: '&copy; <a href="https://carto.com/">CARTO</a>',
-    name: '🗺️ Voyager',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+    attribution: '&copy; Esri, HERE, Garmin',
+    name: '🗺️ Light',
   },
   streets: {
-    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
     attribution: '&copy; <a href="https://openstreetmap.org/copyright">OpenStreetMap</a>',
     name: '🌍 Streets',
   },
@@ -29,9 +29,9 @@ const MAP_STYLES: Record<MapStyle, { url: string; attribution: string; name: str
     name: '🛰️ Satellite',
   },
   terrain: {
-    url: 'https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png',
-    attribution: '&copy; <a href="https://carto.com/">CARTO</a>',
-    name: '🌑 Dark Lite',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
+    attribution: '&copy; Esri, HERE, Garmin',
+    name: '🏔️ Terrain',
   },
 };
 

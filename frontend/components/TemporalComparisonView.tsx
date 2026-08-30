@@ -74,8 +74,7 @@ function ZoomableSceneMap({ bbox, thumbnailUrl, period, platform, cloudCover }: 
       });
 
       // Dark basemap
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        subdomains: 'abcd',
+      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
         maxZoom: 19,
       }).addTo(map);
 
@@ -254,8 +253,7 @@ function StudyAreaMap({ bbox, aoiName }: { bbox: number[]; aoiName: string }) {
         doubleClickZoom: false,
       });
 
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        subdomains: 'abcd',
+      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
       }).addTo(map);
 
       L.rectangle([[south, west], [north, east]], {
