@@ -1306,27 +1306,28 @@ router.post('/temporal-compare', optionalAuth, async (req: AuthRequest, res: Res
     const result = await callPythonService('POST', '/analysis/temporal-compare', pythonBody, 'temporal-compare', PYTHON_TIMEOUT);
 
     if (result.ok) {
-      // Post-process: ensure tilejson URLs and bbox in imagery
-      const rdata = result.data?.result || result.data;
-      if (rdata?.imagery) {
+      // Post-process: inject tilejson URLs and bbox into imagery
+      const rd = result.data?.result || result.data;
+      if (rd?.imagery) {
         for (const period of ['period1', 'period2']) {
-          const img = rdata.imagery[period];
+          const img = rd.imagery[period];
           if (!img) continue;
-          const scene = period === 'period1' ? rdata.scene_t1 : rdata.scene_t2;
-          if ((!img.bbox || img.bbox.length === 0) && scene?.bbox) img.bbox = scene.bbox;
+          const scene = period === 'period1' ? rd.scene_t1 : rd.scene_t2;
+          if (scene?.bbox && (!img.bbox || img.bbox.length === 0)) {
+            img.bbox = scene.bbox;
+          }
           if (!img.tilejson && scene?.item_id) {
-            const col = scene.collection || img.collection || 'sentinel-2-l2a';
+            const col = scene.collection || 'sentinel-2-l2a';
             img.tilejson = `https://planetarycomputer.microsoft.com/api/data/v1/item/tilejson.json?collection=${col}&item=${scene.item_id}&assets=visual&asset_bidx=visual%7C1%2C2%2C3`;
           }
         }
       }
-      const responseData = { ...result.data };
-      if (rdata?.imagery) responseData.result = { ...rdata };
-      res.json({
-        requestId: result.requestId,
-        ...responseData,
-        latencyMs: result.upstreamLatencyMs,
-      });
+      // Rebuild response to include mutations
+      const resp: any = { requestId: result.requestId, ...result.data, latencyMs: result.upstreamLatencyMs };
+      if (rd?.imagery) {
+        resp.result = { ...resp.result, imagery: rd.imagery };
+      }
+      res.json(resp);
       return;
     }
     console.log(`[temporal-compare] Python returned error (${result.code}), using local fallback`);
