@@ -222,7 +222,7 @@ function HomePageContent() {
 
         {step !== 'idle' && step !== 'complete' && step !== 'error' && (
           <div className="flex-1 overflow-y-auto">
-            <div className="max-w-4xl mx-auto px-4 py-8 flex flex-col items-center">
+            <div className="max-w-4xl mx-auto px-4 py-8 flex flex-col items-center w-full">
               {/* Back button — centered */}
               <button onClick={analysis.reset} className="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-300 transition-colors mb-8">
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
