@@ -207,11 +207,17 @@ export default function SwipeMap({ bbox, thumbnailT1, thumbnailT2, tilejsonT1, t
       <div className="absolute top-3 left-3 z-[1000] px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-blue-500/80 text-white backdrop-blur-sm">Before</div>
       <div className="absolute top-3 right-3 z-[1000] px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-orange-500/80 text-white backdrop-blur-sm">After</div>
 
-      {/* Zoom controls */}
+      {/* Zoom controls — sync both maps */}
       <div className="absolute bottom-3 right-3 z-[1000] flex flex-col rounded-lg overflow-hidden border border-white/10 shadow-lg">
-        <button onClick={() => bottomMapRef.current?.zoomIn()} className="w-8 h-8 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-colors text-sm font-bold bg-black/50 backdrop-blur-sm">+</button>
+        <button onClick={() => {
+          if (bottomMapRef.current) { bottomMapRef.current.zoomIn(); }
+          if (topMapRef.current) { topMapRef.current.setView(bottomMapRef.current?.getCenter(), bottomMapRef.current?.getZoom(), { animate: false }); }
+        }} className="w-8 h-8 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-colors text-sm font-bold bg-black/50 backdrop-blur-sm">+</button>
         <div className="h-px bg-white/10" />
-        <button onClick={() => bottomMapRef.current?.zoomOut()} className="w-8 h-8 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-colors text-sm font-bold bg-black/50 backdrop-blur-sm">−</button>
+        <button onClick={() => {
+          if (bottomMapRef.current) { bottomMapRef.current.zoomOut(); }
+          if (topMapRef.current) { topMapRef.current.setView(bottomMapRef.current?.getCenter(), bottomMapRef.current?.getZoom(), { animate: false }); }
+        }} className="w-8 h-8 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-colors text-sm font-bold bg-black/50 backdrop-blur-sm">−</button>
       </div>
     </div>
   );
