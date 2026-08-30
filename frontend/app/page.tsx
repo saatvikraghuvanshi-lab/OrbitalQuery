@@ -10,6 +10,7 @@ import TemporalComparisonView from '@/components/TemporalComparisonView';
 import ShowcaseQueries from '@/components/ShowcaseQueries';
 import DatasetList, { Dataset } from '@/components/DatasetList';
 import DatasetDetailPanel from '@/components/DatasetDetailPanel';
+import DiscoverySummary from '@/components/DiscoverySummary';
 import { useAnalysis } from '@/hooks/useAnalysis';
 import ShaderBackground from '@/components/ShaderBackground';
 
@@ -90,6 +91,7 @@ function HomePageContent() {
   const [discoverBbox, setDiscoverBbox] = useState<BoundingBox | null>(null);
   const [discoverProvider, setDiscoverProvider] = useState('');
   const [discoverCollection, setDiscoverCollection] = useState('');
+  const [selectedDiscoverCollection, setSelectedDiscoverCollection] = useState<string | null>(null);
   const [bboxResults, setBboxResults] = useState<Dataset[]>([]);
   const [bboxLoading, setBboxLoading] = useState(false);
   const [bboxDetail, setBboxDetail] = useState<any>(null);
@@ -512,12 +514,28 @@ function HomePageContent() {
             ) : (
               /* List view */
               <>
+                {/* Discovery Summary — grouped availability + best match */}
+                {discoverBbox && filteredDatasets.length > 0 && (
+                  <div className="px-4 py-3 border-b border-slate-700/30 flex-shrink-0">
+                    <DiscoverySummary
+                      datasets={filteredDatasets}
+                      bbox={discoverBbox}
+                      onSelectCollection={(col) => {
+                        setSelectedDiscoverCollection(col);
+                        setDiscoverCollection(col ?? '');
+                      }}
+                      selectedCollection={selectedDiscoverCollection}
+                    />
+                  </div>
+                )}
+
+                {/* Dataset list header */}
                 <div className="px-4 py-3 border-b border-slate-700/30 flex-shrink-0">
                   <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
-                    {discoverBbox ? `${filteredDatasets.length} Scenes in Area` : 'Available Datasets'}
+                    {discoverBbox ? `${filteredDatasets.length} Observations${selectedDiscoverCollection ? ` in ${selectedDiscoverCollection}` : ''}` : 'Available Datasets'}
                   </h3>
                   <p className="text-[10px] text-slate-500 mt-0.5">
-                    {discoverBbox ? 'Draw bbox on map to search — click a result for details' : 'Click a dataset to view details + analyze'}
+                    {discoverBbox ? 'Click an observation for details and analysis options' : 'Click a dataset to view details + analyze'}
                   </p>
                 </div>
                 <div className="flex-1 overflow-hidden">
