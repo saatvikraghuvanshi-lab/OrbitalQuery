@@ -25,7 +25,7 @@ const PHENOMENON_CONFIG: Record<string, { emoji: string; color: string; label: s
 
 type ViewMode = 'side-by-side' | 'swipe' | 'difference';
 
-const TILE_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}';
+const TILE_URL = 'https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}';
 
 // ── Synchronized Dual Map ────────────────────────────────────
 async function fetchTileJson(url: string): Promise<{ tiles: string[]; bounds: number[]; maxzoom: number } | null> {
@@ -70,12 +70,12 @@ function SynchronizedDualMap({
       const leftMap = L.map(leftRef.current, {
         center, zoom: 10, zoomControl: false, attributionControl: false,
       });
-      L.tileLayer(TILE_URL, { maxZoom: 19 }).addTo(leftMap);
+      L.tileLayer(TILE_URL, { maxZoom: 22, subdomains: ['0', '1', '2', '3'] }).addTo(leftMap);
 
       const rightMap = L.map(rightRef.current, {
         center, zoom: 10, zoomControl: false, attributionControl: false,
       });
-      L.tileLayer(TILE_URL, { maxZoom: 19 }).addTo(rightMap);
+      L.tileLayer(TILE_URL, { maxZoom: 22, subdomains: ['0', '1', '2', '3'] }).addTo(rightMap);
 
       // Parse bbox from imagery (may be JSON string or array)
       const parseBbox = (b: any): number[] | null => {
@@ -207,7 +207,7 @@ function DifferenceView({
       const map = L.map(mapRef.current, {
         center, zoom: 10, zoomControl: false, attributionControl: false,
       });
-      L.tileLayer(TILE_URL, { maxZoom: 19 }).addTo(map);
+      L.tileLayer(TILE_URL, { maxZoom: 22, subdomains: ['0', '1', '2', '3'] }).addTo(map);
 
       if (changeDetection?.regions && Array.isArray(changeDetection.regions)) {
         changeDetection.regions.forEach((region: any) => {

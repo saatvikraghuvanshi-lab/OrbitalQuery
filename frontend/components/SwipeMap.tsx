@@ -2,7 +2,7 @@
 
 import { useRef, useState, useCallback, useEffect } from 'react';
 
-const TILE_URL = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}';
+const TILE_URL = 'https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}';
 
 interface SwipeMapProps {
   bbox: number[];
@@ -54,14 +54,14 @@ export default function SwipeMap({ bbox, thumbnailT1, thumbnailT2, tilejsonT1, t
         center, zoom: 10, zoomControl: false, attributionControl: false,
         zoomSnap: 0.25, zoomDelta: 0.5,
       });
-      L.tileLayer(TILE_URL, { maxZoom: 19 }).addTo(bottomMap);
+      L.tileLayer(TILE_URL, { maxZoom: 22, subdomains: ['0', '1', '2', '3'] }).addTo(bottomMap);
 
       // Top map = Period 1
       const topMap = L.map(topRef.current, {
         center, zoom: 10, zoomControl: false, attributionControl: false,
         zoomSnap: 0.25, zoomDelta: 0.5,
       });
-      L.tileLayer(TILE_URL, { maxZoom: 19 }).addTo(topMap);
+      L.tileLayer(TILE_URL, { maxZoom: 22, subdomains: ['0', '1', '2', '3'] }).addTo(topMap);
 
       let fitBounds = [[south, west], [north, east]] as L.LatLngBoundsExpression;
 

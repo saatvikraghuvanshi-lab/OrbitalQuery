@@ -5,33 +5,38 @@ import { MapContainer, TileLayer, GeoJSON, useMap, Rectangle, useMapEvents } fro
 import L from 'leaflet';
 import { DatasetResult, BoundingBox } from '@/app/page';
 
-type MapStyle = 'dark' | 'light' | 'streets' | 'satellite' | 'terrain';
+type MapStyle = 'satellite' | 'hybrid' | 'terrain' | 'dark' | 'light' | 'streets';
 
 const MAP_STYLES: Record<MapStyle, { url: string; attribution: string; name: string }> = {
+  satellite: {
+    url: 'https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+    attribution: '&copy; Google',
+    name: 'Satellite',
+  },
+  hybrid: {
+    url: 'https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
+    attribution: '&copy; Google',
+    name: 'Satellite + Labels',
+  },
+  terrain: {
+    url: 'https://mt{s}.google.com/vt/lyrs=p&x={x}&y={y}&z={z}',
+    attribution: '&copy; Google',
+    name: 'Terrain',
+  },
   dark: {
     url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
     attribution: '&copy; Esri, HERE, Garmin',
-    name: '🌑 Dark',
+    name: 'Dark',
   },
   light: {
     url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',
     attribution: '&copy; Esri, HERE, Garmin',
-    name: '🗺️ Light',
+    name: 'Light',
   },
   streets: {
     url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-    attribution: '&copy; <a href="https://openstreetmap.org/copyright">OpenStreetMap</a>',
-    name: '🌍 Streets',
-  },
-  satellite: {
-    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-    attribution: '&copy; Esri, Maxar, Earthstar Geographics',
-    name: '🛰️ Satellite',
-  },
-  terrain: {
-    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
-    attribution: '&copy; Esri, HERE, Garmin',
-    name: '🏔️ Terrain',
+    attribution: '&copy; OpenStreetMap',
+    name: 'Streets',
   },
 };
 
@@ -171,7 +176,7 @@ function DrawHandler({ isDrawing, onBboxChange, onDrawBbox }: {
 }
 
 export default function MapView({ results, selectedDataset, onSelectDataset, bbox, onBboxChange }: MapViewProps) {
-  const [mapStyle, setMapStyle] = useState<MapStyle>('dark');
+  const [mapStyle, setMapStyle] = useState<MapStyle>('satellite');
   const [isDrawing, setIsDrawing] = useState(false);
   const [drawBbox, setDrawBbox] = useState<[number, number, number, number] | null>(null);
 
@@ -219,6 +224,8 @@ export default function MapView({ results, selectedDataset, onSelectDataset, bbo
           key={mapStyle}
           url={style.url}
           attribution={style.attribution}
+          subdomains={['0', '1', '2', '3']}
+          maxZoom={22}
         />
         <GeoJSON
           key={`geo-${results.length}-${selectedDataset?.id || 'none'}`}
