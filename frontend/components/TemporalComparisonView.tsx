@@ -159,8 +159,8 @@ function SynchronizedDualMap({
   }, [bbox, thumbnailT1, thumbnailT2, tilejsonT1, tilejsonT2, sceneBboxT1, sceneBboxT2]);
 
   return (
-    <div className="grid grid-cols-2 gap-1" style={{ height: 'calc(80vh - 120px)', minHeight: '500px' }}>
-      <div className="relative rounded-l-xl overflow-hidden border border-slate-700/30">
+    <div className="w-full flex gap-2" style={{ height: '520px' }}>
+      <div className="relative flex-1 rounded-xl overflow-hidden border border-slate-700/30">
         <div ref={leftRef} className="absolute inset-0" />
         <div className="absolute top-3 left-3 z-[1000] px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-blue-500/80 text-white backdrop-blur-sm">Period 1 — Before</div>
         {leftLoading && (
@@ -180,7 +180,7 @@ function SynchronizedDualMap({
           <button onClick={() => leftMapRef.current?.zoomOut()} className="w-8 h-8 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-colors text-sm font-bold bg-black/50 backdrop-blur-sm">−</button>
         </div>
       </div>
-      <div className="relative rounded-r-xl overflow-hidden border border-slate-700/30">
+      <div className="relative flex-1 rounded-xl overflow-hidden border border-slate-700/30">
         <div ref={rightRef} className="absolute inset-0" />
         <div className="absolute top-3 left-3 z-[1000] px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-orange-500/80 text-white backdrop-blur-sm">Period 2 — After</div>
         {rightLoading && (
@@ -200,12 +200,14 @@ function SynchronizedDualMap({
           <button onClick={() => rightMapRef.current?.zoomOut()} className="w-8 h-8 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-colors text-sm font-bold bg-black/50 backdrop-blur-sm">−</button>
         </div>
       </div>
-      {/* Legend */}
-      <div className="col-span-2 flex justify-center">
-        <div className="inline-flex items-center gap-4 px-3 py-1.5 rounded-lg bg-slate-800/60 border border-slate-700/30 text-[10px]">
-          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-blue-500" /> Earlier observation</span>
-          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-orange-500" /> Later observation</span>
-          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded bg-cyan-400/30 border border-cyan-400" /> AOI boundary</span>
+      {/* Legend — compact pill */}
+      <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-[1000]">
+        <div className="flex items-center gap-4 px-5 py-1.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10 text-[10px]">
+          <span className="flex items-center gap-1.5 text-slate-300"><span className="w-2 h-2 rounded-full bg-blue-500" /> Earlier</span>
+          <span className="text-slate-600">|</span>
+          <span className="flex items-center gap-1.5 text-slate-300"><span className="w-2 h-2 rounded-full bg-orange-500" /> After</span>
+          <span className="text-slate-600">|</span>
+          <span className="flex items-center gap-1.5 text-slate-300"><span className="w-2 h-2 rounded border border-cyan-400/50 bg-cyan-400/10" /> AOI</span>
         </div>
       </div>
     </div>
@@ -347,7 +349,7 @@ function DifferenceView({
     : metrics.changed_area_km2 || '0';
 
   return (
-    <div className="rounded-xl overflow-hidden border border-slate-700/30 relative" style={{ height: 'calc(80vh - 120px)', minHeight: '500px' }}>
+    <div className="rounded-xl overflow-hidden border border-slate-700/30 relative w-full" style={{ height: '520px' }}>
       <div ref={mapRef} className="absolute inset-0" />
       <div className="absolute top-3 left-3 z-[1000] px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-slate-800/90 text-white backdrop-blur-sm border border-slate-600/30">
         Difference — {config.indexLabel} Overlay
@@ -562,30 +564,27 @@ export default function TemporalComparisonView({ result }: Props) {
       <AnalysisSummary result={result} />
 
       {/* ── 2. VISUAL EVIDENCE ─────────────────────────────── */}
-      {/* View Mode Switcher */}
-      {!isFallback && (
-        <div className="flex justify-center">
-          <div className="inline-flex bg-slate-800/50 rounded-xl border border-slate-700/30 p-1">
-            {(['side-by-side', 'swipe', 'difference'] as ViewMode[]).map((mode) => (
-              <button
-                key={mode}
-                onClick={() => setViewMode(mode)}
-                className={`px-4 py-2 rounded-lg text-[11px] font-medium transition-all ${
-                  viewMode === mode ? 'bg-slate-700/50 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                {mode === 'side-by-side' && '⊞ Side by Side'}
-                {mode === 'swipe' && '⇔ Swipe'}
-                {mode === 'difference' && '◎ Difference'}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Map Area */}
+      {/* Map Area with floating control bar */}
       {!isFallback && result.aoi_bbox && result.aoi_bbox.length === 4 && (
-        <div className="relative">
+        <div className="relative w-full">
+          {/* View Mode Switcher — floating over map */}
+          <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[1010]">
+            <div className="inline-flex bg-black/40 backdrop-blur-md rounded-full border border-white/10 p-1 shadow-xl">
+              {(['side-by-side', 'swipe', 'difference'] as ViewMode[]).map((mode) => (
+                <button
+                  key={mode}
+                  onClick={() => setViewMode(mode)}
+                  className={`px-4 py-1.5 rounded-full text-[11px] font-medium transition-all ${
+                    viewMode === mode ? 'bg-white/15 text-white shadow-sm' : 'text-slate-400 hover:text-white hover:bg-white/5'
+                  }`}
+                >
+                  {mode === 'side-by-side' && '⊞ Side by Side'}
+                  {mode === 'swipe' && '⇔ Swipe'}
+                  {mode === 'difference' && '◎ Difference'}
+                </button>
+              ))}
+            </div>
+          </div>
           {viewMode === 'side-by-side' && (
             <SynchronizedDualMap
               bbox={result.aoi_bbox}
