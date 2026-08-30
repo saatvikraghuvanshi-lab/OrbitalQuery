@@ -1302,6 +1302,24 @@ router.post('/temporal-compare', optionalAuth, async (req: AuthRequest, res: Res
   const result = await callPythonService('POST', '/analysis/temporal-compare', pythonBody, 'temporal-compare', PYTHON_TIMEOUT);
 
   if (result.ok) {
+    // Post-process: ensure tilejson URLs and bbox are in imagery response
+    const data = result.data?.result || result.data;
+    if (data?.imagery) {
+      for (const period of ['period1', 'period2']) {
+        const img = data.imagery[period];
+        if (!img) continue;
+        const scene = period === 'period1' ? data.scene_t1 : data.scene_t2;
+        // Ensure bbox from scene
+        if ((!img.bbox || img.bbox.length === 0) && scene?.bbox) {
+          img.bbox = scene.bbox;
+        }
+        // Ensure tilejson URL constructed from scene
+        if (!img.tilejson && scene?.item_id && (scene?.collection || img.collection)) {
+          const col = scene.collection || img.collection || 'sentinel-2-l2a';
+          img.tilejson = `https://planetarycomputer.microsoft.com/api/data/v1/item/tilejson.json?collection=${col}&item=${scene.item_id}&assets=visual&asset_bidx=visual%7C1%2C2%2C3`;
+        }
+      }
+    }
     res.json({
       requestId: result.requestId,
       ...result.data,
