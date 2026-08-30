@@ -3,6 +3,10 @@
  *
  * Constructs Planetary Computer tile URLs directly from scene metadata.
  * Does NOT rely on TileJSON fetch (which times out in browsers).
+ *
+ * Key insight: Sentinel-2 scenes only cover their tile footprint.
+ * Tiles outside the footprint return empty/transparent — this is NORMAL.
+ * The tileerror handler must NOT remove the layer for these expected failures.
  */
 
 // ── Types ────────────────────────────────────────────────────────
@@ -61,11 +65,11 @@ export function getBestBounds(
   return [[-85, -180], [85, 180]];
 }
 
-// ── Tile URL construction (direct, no TileJSON fetch) ─────────────
+// ── Tile URL construction ─────────────────────────────────────────
 
 /**
- * Build Planetary Computer tile URL template directly from scene metadata.
- * This bypasses the TileJSON endpoint entirely.
+ * Build Planetary Computer tile URL template from scene metadata.
+ * This is the exact URL format returned by the TileJSON endpoint.
  */
 export function buildTileUrl(collection: string, itemId: string): string {
   return (
@@ -73,7 +77,6 @@ export function buildTileUrl(collection: string, itemId: string): string {
     + `?collection=${encodeURIComponent(collection)}`
     + `&item=${encodeURIComponent(itemId)}`
     + `&assets=visual`
-    + `&asset_bidx=visual%7C1%2C2%2C3`
   );
 }
 
@@ -86,19 +89,21 @@ export function buildTileJsonUrl(collection: string, itemId: string): string {
     + `?collection=${encodeURIComponent(collection)}`
     + `&item=${encodeURIComponent(itemId)}`
     + `&assets=visual`
-    + `&asset_bidx=visual%7C1%2C2%2C3`
   );
 }
 
-// ── Main tile loading function ───────────────────────────────────
+// ── Main tile loading function ────────────────────────────────────
 
 /**
  * Load satellite imagery tiles for a scene into a Leaflet map.
  *
  * Strategy:
- * 1. If scene has item_id + collection → construct tile URL directly (fastest, no fetch)
+ * 1. If scene has item_id + collection → construct tile URL directly
  * 2. If that fails → try thumbnail image overlay
  * 3. If both fail → error state
+ *
+ * IMPORTANT: Tiles outside the Sentinel-2 footprint return empty/transparent.
+ * This is normal and expected. The tile layer must NOT be removed for this.
  */
 export async function loadSatelliteTiles(
   map: any,
@@ -126,29 +131,44 @@ export async function loadSatelliteTiles(
     try {
       const tileUrl = buildTileUrl(collection, itemId);
       const bounds = getBestBounds(sceneBbox, aoiBbox);
-      console.log('[satellite-tiles] Creating tile layer directly:', tileUrl.slice(0, 100));
+      console.log('[satellite-tiles] Creating tile layer:', tileUrl.slice(0, 120));
 
       const tileLayer = L.tileLayer(tileUrl, {
         maxZoom: 24,
+        minZoom: 0,
         opacity,
         zIndex,
-        crossOrigin: true,
+        // Do NOT set crossOrigin — Planetary Computer tiles work without it
+        // Setting crossOrigin: true can cause CORS preflight failures
+        errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVQI12NgAAIABQABNjN9GQAAAAlwSFlzAAAWJQAAFiUBSVIk8AAAABl0RVh0U29mdHdhcmUAcGFpbnQubmV0IDQuMC41ZYUyZQAAAA1JREFUGFdjYPj/nwEABQAB/VjLQQAAAABJRU5ErkJggg==',
       });
 
+      // Count tile loads vs errors for diagnostics
+      let loadedCount = 0;
       let errorCount = 0;
+
+      tileLayer.on('tileload', () => {
+        loadedCount++;
+        if (loadedCount === 1) {
+          console.log('[satellite-tiles] ✅ First tile loaded — imagery is rendering');
+        }
+      });
+
+      // Do NOT remove the layer on tile errors.
+      // Tiles outside the Sentinel-2 footprint return empty/transparent — this is normal.
       tileLayer.on('tileerror', () => {
         errorCount++;
-        if (errorCount > 3) {
-          console.warn('[satellite-tiles] Too many tile errors, removing layer');
-          map.removeLayer(tileLayer);
+        // Only log periodically to avoid console spam
+        if (errorCount === 1) {
+          console.log('[satellite-tiles] Some tiles returned empty (expected for tiles outside scene footprint)');
         }
       });
 
       tileLayer.addTo(map);
-      console.log('[satellite-tiles] ✅ Tile layer added successfully');
+      console.log('[satellite-tiles] ✅ Tile layer added to map');
       return { hasImagery: true, layer: tileLayer, bounds, usedTileJson: true, tileUrl };
     } catch (err: any) {
-      console.warn('[satellite-tiles] Direct tile URL failed:', err?.message);
+      console.warn('[satellite-tiles] Tile layer creation failed:', err?.message);
     }
   }
 

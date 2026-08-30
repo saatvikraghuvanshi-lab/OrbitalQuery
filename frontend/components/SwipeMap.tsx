@@ -5,6 +5,7 @@ import {
   loadSatelliteTiles,
   buildTileJsonUrl,
   boundsToLatLng,
+  parseBbox,
 } from '@/lib/satellite-tiles';
 import type { SceneInfo } from '@/hooks/useAnalysis';
 
@@ -63,18 +64,23 @@ export default function SwipeMap({
     import('leaflet').then(async (L) => {
       if (cancelled || !bottomRef.current || !topRef.current) return;
 
-      const [west, south, east, north] = bbox;
+      // Use scene bbox for initial zoom
+      const initBounds = parseBbox(sceneBboxT1) || parseBbox(sceneBboxT2) || bbox;
+      const [west, south, east, north] = initBounds;
       const center: [number, number] = [(south + north) / 2, (west + east) / 2];
+      const latDiff = north - south;
+      const lngDiff = east - west;
+      const initZoom = Math.min(12, Math.max(6, Math.floor(Math.log2(360 / Math.max(latDiff, lngDiff)))));
 
       // ── Create both maps with Google Satellite basemap ──────
       const bottomMap = L.map(bottomRef.current, {
-        center, zoom: 10, zoomControl: false, attributionControl: false,
+        center, zoom: initZoom, zoomControl: false, attributionControl: false,
         zoomSnap: 0.25, zoomDelta: 0.5,
       });
       L.tileLayer(GOOGLE_TILE, { maxZoom: 22, subdomains: ['0', '1', '2', '3'] }).addTo(bottomMap);
 
       const topMap = L.map(topRef.current, {
-        center, zoom: 10, zoomControl: false, attributionControl: false,
+        center, zoom: initZoom, zoomControl: false, attributionControl: false,
         zoomSnap: 0.25, zoomDelta: 0.5,
       });
       L.tileLayer(GOOGLE_TILE, { maxZoom: 22, subdomains: ['0', '1', '2', '3'] }).addTo(topMap);
@@ -116,8 +122,13 @@ export default function SwipeMap({
 
       // ── Fit both maps to the same bounds ────────────────────
       const sharedBounds = bottomResult.bounds;
-      bottomMap.fitBounds(sharedBounds, { padding: [20, 20], maxZoom: 14 });
-      topMap.fitBounds(sharedBounds, { padding: [20, 20], maxZoom: 14 });
+      bottomMap.fitBounds(sharedBounds, { padding: [30, 30] });
+      topMap.fitBounds(sharedBounds, { padding: [30, 30] });
+
+      setTimeout(() => {
+        bottomMap.invalidateSize();
+        topMap.invalidateSize();
+      }, 100);
 
       // ── Synchronize navigation ──────────────────────────────
       bottomMap.on('move', () => {

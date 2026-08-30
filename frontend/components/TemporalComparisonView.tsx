@@ -70,20 +70,32 @@ function SynchronizedDualMap({
     import('leaflet').then(async (L) => {
       if (cancelled || !leftRef.current || !rightRef.current) return;
 
-      const [west, south, east, north] = bbox;
+      console.log('[SynchronizedDualMap] Initializing maps…');
+      console.log('[SynchronizedDualMap] Scene T1:', sceneT1?.item_id, 'bbox:', sceneBboxT1);
+      console.log('[SynchronizedDualMap] Scene T2:', sceneT2?.item_id, 'bbox:', sceneBboxT2);
+
+      // Use scene bbox if available, otherwise AOI bbox for initial view
+      const initBounds = parseBbox(sceneBboxT1) || parseBbox(sceneBboxT2) || bbox;
+      const [west, south, east, north] = initBounds;
       const center: [number, number] = [(south + north) / 2, (west + east) / 2];
+
+      // Calculate zoom level from bbox size
+      const latDiff = north - south;
+      const lngDiff = east - west;
+      const initZoom = Math.min(12, Math.max(6, Math.floor(Math.log2(360 / Math.max(latDiff, lngDiff)))));
 
       // Create both maps with the Google basemap
       const leftMap = L.map(leftRef.current, {
-        center, zoom: 10, zoomControl: false, attributionControl: false,
+        center, zoom: initZoom, zoomControl: false, attributionControl: false,
       });
       L.tileLayer(GOOGLE_TILE, { maxZoom: 22, subdomains: ['0', '1', '2', '3'] }).addTo(leftMap);
 
       const rightMap = L.map(rightRef.current, {
-        center, zoom: 10, zoomControl: false, attributionControl: false,
+        center, zoom: initZoom, zoomControl: false, attributionControl: false,
       });
       L.tileLayer(GOOGLE_TILE, { maxZoom: 22, subdomains: ['0', '1', '2', '3'] }).addTo(rightMap);
 
+      // Load satellite tiles
       const [leftResult, rightResult] = await Promise.all([
         loadSatelliteTiles(leftMap, {
           L,
@@ -120,9 +132,17 @@ function SynchronizedDualMap({
       L.rectangle(aoiBounds, { color: '#22d3ee', weight: 1.5, fillColor: '#22d3ee', fillOpacity: 0.05, dashArray: '6 3' }).addTo(leftMap);
       L.rectangle(aoiBounds, { color: '#22d3ee', weight: 1.5, fillColor: '#22d3ee', fillOpacity: 0.05, dashArray: '6 3' }).addTo(rightMap);
 
-      // Fit to imagery bounds so satellite imagery fills the viewport
-      leftMap.fitBounds(leftResult.bounds, { padding: [20, 20], maxZoom: 14 });
-      rightMap.fitBounds(rightResult.bounds, { padding: [20, 20], maxZoom: 14 });
+      // Fit maps to the imagery bounds
+      // Use the scene bbox (wider) for initial view, not just AOI
+      leftMap.fitBounds(leftResult.bounds, { padding: [30, 30] });
+      rightMap.fitBounds(rightResult.bounds, { padding: [30, 30] });
+
+      // Force maps to re-render after tile layers are added
+      setTimeout(() => {
+        leftMap.invalidateSize();
+        rightMap.invalidateSize();
+        console.log('[SynchronizedDualMap] Maps invalidated — tiles should be visible');
+      }, 100);
 
       // Synchronize navigation: when one map moves, the other follows
       leftMap.on('move', () => {
