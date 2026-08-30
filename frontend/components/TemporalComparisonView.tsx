@@ -12,6 +12,7 @@ import {
   boundsToLatLng,
   getBestBounds,
 } from '@/lib/satellite-tiles';
+import AnalysisSummary from '@/components/AnalysisSummary';
 
 interface Props {
   result: TemporalComparisonResult;
@@ -568,24 +569,10 @@ export default function TemporalComparisonView({ result }: Props) {
 
   return (
     <div className="space-y-5">
-      {/* Header */}
-      <div className="text-center">
-        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[11px] font-medium mb-3"
-          style={{ background: `${config.color}20`, color: config.color, border: `1px solid ${config.color}30` }}>
-          {config.emoji} {config.label}
-        </div>
-        <h2 className="text-xl font-bold text-white mb-1">
-          {explanation.title || `${result.aoi_name} — ${config.label}`}
-        </h2>
-        <p className="text-xs text-slate-400">
-          {result.period1?.start} → {result.period2?.end}
-          {' · '}
-          {sensorInfo.primary_sensor || 'Sentinel-2'}
-          {' · '}
-          {sensorInfo.resolution_m || 10}m resolution
-        </p>
-      </div>
+      {/* ── 1. INSIGHT (top of page) ────────────────────────── */}
+      <AnalysisSummary result={result} />
 
+      {/* ── 2. VISUAL EVIDENCE ─────────────────────────────── */}
       {/* View Mode Switcher */}
       {!isFallback && (
         <div className="flex justify-center">
@@ -653,114 +640,126 @@ export default function TemporalComparisonView({ result }: Props) {
         </div>
       )}
 
-      {/* Scene Metadata Strip */}
+      {/* ── 3. SCENE EVIDENCE (collapsible) ─────────────────── */}
       {!isFallback && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <SceneMetadataStrip scene={result.scene_t1} indexStats={result.index_t1} label="Period 1 — Before" color="#3b82f6" />
-          <SceneMetadataStrip scene={result.scene_t2} indexStats={result.index_t2} label="Period 2 — After" color="#f97316" />
-        </div>
-      )}
-
-      {/* Key Metrics */}
-      <div>
-        <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-3 flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full" style={{ background: config.color }} />
-          Key Metrics
-        </h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {getMetricCards().map((card, i) => (
-            <MetricCard key={i} {...card} />
-          ))}
-        </div>
-      </div>
-
-      {/* Change Detection Details */}
-      {!isFallback && result.change_detection && (
-        <div className="bg-slate-800/30 rounded-xl border border-slate-700/30 p-5">
-          <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-3 flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-blue-400" />
-            Change Detection
-          </h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div>
-              <div className="text-[10px] text-slate-400 uppercase">Algorithm</div>
-              <div className="text-sm text-slate-200">{result.change_detection.algorithm || 'difference_threshold'}</div>
-            </div>
-            <div>
-              <div className="text-[10px] text-slate-400 uppercase">Index Used</div>
-              <div className="text-sm text-slate-200">{config.indexLabel}</div>
-            </div>
-            <div>
-              <div className="text-[10px] text-slate-400 uppercase">Changed Pixels</div>
-              <div className="text-sm text-slate-200">{(result.change_detection.changedPixels || result.change_detection.changed_pixels || 0).toLocaleString()}</div>
-            </div>
-            <div>
-              <div className="text-[10px] text-slate-400 uppercase">Regions</div>
-              <div className="text-sm text-slate-200">{result.change_detection.numRegions || result.change_detection.num_regions || 0}</div>
+        <details className="bg-slate-800/30 rounded-xl border border-slate-700/30 overflow-hidden group" open>
+          <summary className="px-5 py-3 text-xs font-semibold text-slate-200 uppercase tracking-wider cursor-pointer hover:text-white transition-colors flex items-center justify-between">
+            <span className="flex items-center gap-2">
+              <svg className="w-3.5 h-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              Scene Evidence
+            </span>
+            <svg className="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </summary>
+          <div className="px-5 pb-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <SceneMetadataStrip scene={result.scene_t1} indexStats={result.index_t1} label="Period 1 — Before" color="#3b82f6" />
+              <SceneMetadataStrip scene={result.scene_t2} indexStats={result.index_t2} label="Period 2 — After" color="#f97316" />
             </div>
           </div>
-        </div>
+        </details>
       )}
 
-      {/* Analysis Summary + Methodology */}
-      {explanation.summary && (
-        <div className="bg-slate-800/30 rounded-xl border border-slate-700/30 p-5">
-          <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-3 flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-green-400" />
-            Analysis Summary
-          </h3>
-          <p className="text-sm text-slate-200 leading-relaxed mb-4" style={{ maxWidth: '72ch' }}>{explanation.summary}</p>
-
-          {explanation.key_findings && explanation.key_findings.length > 0 && (
-            <div className="mb-4">
-              <h4 className="text-[10px] text-slate-400 uppercase tracking-wider font-medium mb-2">Key Findings</h4>
-              <div className="space-y-1.5">
-                {explanation.key_findings.map((finding, i) => (
-                  <div key={i} className="flex items-start gap-2 text-xs text-slate-300">
-                    <span className="text-green-400 mt-0.5">▸</span>
-                    <span>{finding}</span>
+      {/* ── 4. SECONDARY METRICS (collapsible) ──────────────── */}
+      {!isFallback && (
+        <details className="bg-slate-800/30 rounded-xl border border-slate-700/30 overflow-hidden group">
+          <summary className="px-5 py-3 text-xs font-semibold text-slate-200 uppercase tracking-wider cursor-pointer hover:text-white transition-colors flex items-center justify-between">
+            <span className="flex items-center gap-2">
+              <svg className="w-3.5 h-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+              Detailed Metrics
+            </span>
+            <svg className="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </summary>
+          <div className="px-5 pb-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {getMetricCards().map((card, i) => (
+                <MetricCard key={i} {...card} />
+              ))}
+            </div>
+            {/* Change Detection Details */}
+            {result.change_detection && (
+              <div className="mt-4 pt-4 border-t border-slate-700/30">
+                <div className="text-[10px] text-slate-400 uppercase tracking-wider font-medium mb-2">Change Detection</div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div>
+                    <div className="text-[9px] text-slate-500 uppercase">Algorithm</div>
+                    <div className="text-[11px] text-slate-200">{result.change_detection.algorithm || 'difference_threshold'}</div>
                   </div>
-                ))}
+                  <div>
+                    <div className="text-[9px] text-slate-500 uppercase">Index</div>
+                    <div className="text-[11px] text-slate-200">{config.indexLabel}</div>
+                  </div>
+                  <div>
+                    <div className="text-[9px] text-slate-500 uppercase">Changed Pixels</div>
+                    <div className="text-[11px] text-slate-200">{(result.change_detection.changedPixels || result.change_detection.changed_pixels || 0).toLocaleString()}</div>
+                  </div>
+                  <div>
+                    <div className="text-[9px] text-slate-500 uppercase">Regions</div>
+                    <div className="text-[11px] text-slate-200">{result.change_detection.numRegions || result.change_detection.num_regions || 0}</div>
+                  </div>
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
+        </details>
+      )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-slate-700/30">
-            <div>
-              <h4 className="text-[10px] text-slate-400 uppercase tracking-wider font-medium mb-1.5">Methodology</h4>
-              {explanation.methodology && (
-                <p className="text-xs text-slate-300 leading-relaxed mb-3">{explanation.methodology}</p>
-              )}
-              <div className="space-y-1 text-xs text-slate-300">
-                <div>Index: <span className="text-slate-200 font-mono">{sensorInfo.index_used || config.indexLabel}</span></div>
-                {sensorInfo.index_formula && (
-                  <div>Formula: <span className="text-slate-200 font-mono text-[10px]">{sensorInfo.index_formula}</span></div>
-                )}
-                <div>Resolution: <span className="text-slate-200">{sensorInfo.resolution_m || 10}m</span></div>
+      {/* ── 5. METHODOLOGY (collapsed) ──────────────────────── */}
+      {(explanation.methodology || sensorInfo.index_formula) && (
+        <details className="bg-slate-800/30 rounded-xl border border-slate-700/30 overflow-hidden group">
+          <summary className="px-5 py-3 text-xs font-semibold text-slate-200 uppercase tracking-wider cursor-pointer hover:text-white transition-colors flex items-center justify-between">
+            <span className="flex items-center gap-2">
+              <svg className="w-3.5 h-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              </svg>
+              Methodology
+            </span>
+            <svg className="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </summary>
+          <div className="px-5 pb-4 space-y-3">
+            {explanation.methodology && (
+              <p className="text-xs text-slate-300 leading-relaxed">{explanation.methodology}</p>
+            )}
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              <div>
+                <div className="text-[9px] text-slate-500 uppercase">Index</div>
+                <div className="text-[11px] text-slate-200 font-mono">{sensorInfo.index_used || config.indexLabel}</div>
               </div>
-            </div>
-            <div>
-              <h4 className="text-[10px] text-slate-400 uppercase tracking-wider font-medium mb-1.5">Confidence & Limitations</h4>
-              <p className="text-xs text-slate-300 mb-2">{explanation.confidence || 'Medium confidence'}</p>
-              {explanation.limitations && explanation.limitations.length > 0 && (
-                <div className="flex flex-wrap gap-1.5">
-                  {explanation.limitations.map((lim, i) => (
-                    <span key={i} className="inline-flex items-center gap-1 text-[10px] text-slate-400 bg-slate-700/30 px-2 py-1 rounded-md border border-slate-600/20">
-                      <span className="text-amber-400/70">⚠</span> {lim}
-                    </span>
-                  ))}
+              {sensorInfo.index_formula && (
+                <div className="col-span-2">
+                  <div className="text-[9px] text-slate-500 uppercase">Formula</div>
+                  <div className="text-[11px] text-slate-200 font-mono">{sensorInfo.index_formula}</div>
                 </div>
               )}
+              <div>
+                <div className="text-[9px] text-slate-500 uppercase">Resolution</div>
+                <div className="text-[11px] text-slate-200">{sensorInfo.resolution_m || 10}m</div>
+              </div>
             </div>
           </div>
-        </div>
+        </details>
       )}
 
-      {/* Processing Pipeline (collapsible card) */}
+      {/* ── 6. PROCESSING PIPELINE (collapsed) ──────────────── */}
       {result.processing_steps && result.processing_steps.length > 0 && (
         <details className="bg-slate-800/30 rounded-xl border border-slate-700/30 overflow-hidden group">
-          <summary className="px-5 py-3.5 text-xs font-semibold text-slate-200 uppercase tracking-wider cursor-pointer hover:text-white transition-colors flex items-center justify-between">
-            <span>Processing Pipeline ({result.processing_steps.length} steps)</span>
+          <summary className="px-5 py-3 text-xs font-semibold text-slate-200 uppercase tracking-wider cursor-pointer hover:text-white transition-colors flex items-center justify-between">
+            <span className="flex items-center gap-2">
+              <svg className="w-3.5 h-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              Processing Pipeline ({result.processing_steps.length} steps)
+            </span>
             <svg className="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
             </svg>
@@ -771,7 +770,7 @@ export default function TemporalComparisonView({ result }: Props) {
         </details>
       )}
 
-      {/* Yearly Trend Button */}
+      {/* ── 7. YEARLY TREND ────────────────────────────────── */}
       {!isFallback && !showYearly && (
         <div className="flex justify-center">
           <button
