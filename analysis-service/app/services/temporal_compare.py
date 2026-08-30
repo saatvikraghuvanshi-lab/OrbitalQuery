@@ -242,14 +242,14 @@ def _scene_to_selection(item: dict[str, Any], provider_name: str) -> SceneSelect
 
 
 def _get_imagery_urls(scene: SceneSelection) -> dict[str, str]:
-    """Extract imagery URLs from a scene's assets."""
+    """Extract imagery URLs from a scene's assets + construct TileJSON URL."""
     urls = {}
     assets = scene.assets
 
     # Thumbnail / preview
     for key in ["thumbnail", "rendered_preview", "visual", "preview"]:
         if key in assets:
-            href = assets[key].get("href", "")
+            href = assets[key].get("href", "") if isinstance(assets[key], dict) else assets[key]
             if href:
                 urls["thumbnail"] = href
                 break
@@ -257,23 +257,36 @@ def _get_imagery_urls(scene: SceneSelection) -> dict[str, str]:
     # Rendered image
     for key in ["rendered_preview", "visual"]:
         if key in assets:
-            href = assets[key].get("href", "")
+            href = assets[key].get("href", "") if isinstance(assets[key], dict) else assets[key]
             if href:
                 urls["rendered"] = href
                 break
 
-    # TileJSON for XYZ tile rendering (zoomable satellite imagery)
-    if "tilejson" in assets:
-        href = assets["tilejson"].get("href", "")
+    # TileJSON: Construct directly from scene ID (Planetary Computer convention)
+    # This is more reliable than extracting from assets which may be stripped
+    if scene.collection and scene.item_id:
+        tilejson_url = (
+            f"https://planetarycomputer.microsoft.com/api/data/v1/item/tilejson.json"
+            f"?collection={scene.collection}"
+            f"&item={scene.item_id}"
+            f"&assets=visual"
+            f"&asset_bidx=visual%7C1%2C2%2C3"
+        )
+        urls["tilejson"] = tilejson_url
+
+    # Also check assets for tilejson (backup)
+    if "tilejson" not in urls and "tilejson" in assets:
+        href = assets["tilejson"].get("href", "") if isinstance(assets["tilejson"], dict) else assets["tilejson"]
         if href:
             urls["tilejson"] = href
 
     # Individual bands (for index computation)
     for key, asset in assets.items():
-        if key.upper().startswith("B") or key.lower() in ("vv", "vh", "red", "green", "blue", "nir", "swir16", "swir22"):
-            href = asset.get("href", "")
-            if href:
-                urls[f"band_{key}"] = href
+        if isinstance(asset, dict):
+            if key.upper().startswith("B") or key.lower() in ("vv", "vh", "red", "green", "blue", "nir", "swir16", "swir22"):
+                href = asset.get("href", "")
+                if href:
+                    urls[f"band_{key}"] = href
 
     return urls
 
@@ -830,16 +843,16 @@ def run_temporal_comparison(
         imagery["period1"]["date"] = scene_sel_t1.datetime
         imagery["period1"]["cloud_cover"] = scene_sel_t1.cloud_cover
         imagery["period1"]["platform"] = scene_sel_t1.platform
-        if scene_sel_t1.bbox:
-            imagery["period1"]["bbox"] = scene_sel_t1.bbox
+        imagery["period1"]["bbox"] = scene_sel_t1.bbox or []
+        imagery["period1"]["collection"] = scene_sel_t1.collection
     if scene_sel_t2:
         imagery["period2"] = _get_imagery_urls(scene_sel_t2)
         imagery["period2"]["scene_id"] = scene_sel_t2.item_id
         imagery["period2"]["date"] = scene_sel_t2.datetime
         imagery["period2"]["cloud_cover"] = scene_sel_t2.cloud_cover
         imagery["period2"]["platform"] = scene_sel_t2.platform
-        if scene_sel_t2.bbox:
-            imagery["period2"]["bbox"] = scene_sel_t2.bbox
+        imagery["period2"]["bbox"] = scene_sel_t2.bbox or []
+        imagery["period2"]["collection"] = scene_sel_t2.collection
 
     # ── Step 8: Generate explanation ──────────────────────────────
     explanation = _generate_explanation(
