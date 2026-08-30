@@ -1,8 +1,13 @@
 'use client';
 
 import { useRef, useState, useCallback, useEffect } from 'react';
+import {
+  loadSatelliteTiles,
+  buildTileJsonUrl,
+  boundsToLatLng,
+} from '@/lib/satellite-tiles';
 
-const TILE_URL = 'https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}';
+const GOOGLE_TILE = 'https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}';
 
 interface SwipeMapProps {
   bbox: number[];
@@ -14,30 +19,37 @@ interface SwipeMapProps {
   sceneBboxT2?: any;
 }
 
-async function fetchTileJson(url: string): Promise<{ tiles: string[]; bounds: number[]; maxzoom: number } | null> {
-  try {
-    const res = await fetch(url);
-    if (!res.ok) return null;
-    return await res.json();
-  } catch {
-    return null;
-  }
-}
-
 /**
- * Swipe comparison using two stacked Leaflet maps.
- * Bottom map = Period 2 (full). Top map = Period 1 (clipped by split position).
- * Both maps sync center/zoom so they always show the same view.
- * Uses TileJSON XYZ tiles when available for real zoomable satellite imagery.
+ * Swipe comparison using two full-size stacked Leaflet maps.
+ *
+ * Architecture:
+ * - Bottom map (z-index 1): Period 2 (After) — full satellite imagery
+ * - Top map (z-index 2): Period 1 (Before) — satellite imagery clipped by CSS clip-path
+ * - Both maps share the same Google basemap and are always at the same center/zoom
+ * - A draggable divider controls the clip-path of the top map's satellite layer
+ *
+ * Key insight: We clip the SATELLITE IMAGERY LAYER, not the entire map.
+ * Both maps' basemaps, controls, and interactions remain fully intact.
  */
-export default function SwipeMap({ bbox, thumbnailT1, thumbnailT2, tilejsonT1, tilejsonT2, sceneBboxT1, sceneBboxT2 }: SwipeMapProps) {
+export default function SwipeMap({
+  bbox,
+  thumbnailT1,
+  thumbnailT2,
+  tilejsonT1,
+  tilejsonT2,
+  sceneBboxT1,
+  sceneBboxT2,
+}: SwipeMapProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const topRef = useRef<HTMLDivElement>(null);
   const bottomMapRef = useRef<any>(null);
   const topMapRef = useRef<any>(null);
   const syncingRef = useRef(false);
+  const topSatelliteRef = useRef<any>(null); // Ref to the clipped satellite layer
   const [splitPos, setSplitPos] = useState(50);
   const draggingRef = useRef(false);
+  const [bottomError, setBottomError] = useState<string | null>(null);
+  const [topError, setTopError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!bottomRef.current || !topRef.current || bottomMapRef.current) return;
@@ -49,83 +61,65 @@ export default function SwipeMap({ bbox, thumbnailT1, thumbnailT2, tilejsonT1, t
       const [west, south, east, north] = bbox;
       const center: [number, number] = [(south + north) / 2, (west + east) / 2];
 
-      // Bottom map = Period 2
+      // ── Create both maps with Google Satellite basemap ──────
       const bottomMap = L.map(bottomRef.current, {
         center, zoom: 10, zoomControl: false, attributionControl: false,
         zoomSnap: 0.25, zoomDelta: 0.5,
       });
-      L.tileLayer(TILE_URL, { maxZoom: 22, subdomains: ['0', '1', '2', '3'] }).addTo(bottomMap);
+      L.tileLayer(GOOGLE_TILE, { maxZoom: 22, subdomains: ['0', '1', '2', '3'] }).addTo(bottomMap);
 
-      // Top map = Period 1
       const topMap = L.map(topRef.current, {
         center, zoom: 10, zoomControl: false, attributionControl: false,
         zoomSnap: 0.25, zoomDelta: 0.5,
       });
-      L.tileLayer(TILE_URL, { maxZoom: 22, subdomains: ['0', '1', '2', '3'] }).addTo(topMap);
+      L.tileLayer(GOOGLE_TILE, { maxZoom: 22, subdomains: ['0', '1', '2', '3'] }).addTo(topMap);
 
-      let fitBounds = [[south, west], [north, east]] as L.LatLngBoundsExpression;
+      // ── Load satellite imagery for both periods ──────────────
+      // Period 2 (After) → Bottom map (full, no clipping)
+      const bottomResult = await loadSatelliteTiles(bottomMap, {
+        L,
+        tilejsonUrl: tilejsonT2,
+        thumbnailUrl: thumbnailT2,
+        sceneBbox: sceneBboxT2,
+        aoiBbox: bbox,
+        opacity: 0.9,
+      });
 
-      // Period 2 — try TileJSON first
-      if (tilejsonT2) {
-        const tj = await fetchTileJson(tilejsonT2);
-        if (tj && tj.tiles?.[0]) {
-          L.tileLayer(tj.tiles[0], { maxZoom: tj.maxzoom || 24, opacity: 0.9 }).addTo(bottomMap);
-          if (tj.bounds?.length === 4) {
-            fitBounds = [[tj.bounds[1], tj.bounds[0]], [tj.bounds[3], tj.bounds[2]]] as L.LatLngBoundsExpression;
-          }
-        } else if (thumbnailT2 && sceneBboxT2) {
-          L.imageOverlay(thumbnailT2, [[sceneBboxT2[1], sceneBboxT2[0]], [sceneBboxT2[3], sceneBboxT2[2]]], { opacity: 0.9, interactive: false }).addTo(bottomMap);
-          fitBounds = [[sceneBboxT2[1], sceneBboxT2[0]], [sceneBboxT2[3], sceneBboxT2[2]]] as L.LatLngBoundsExpression;
-        }
-      } else if (thumbnailT2 && sceneBboxT2) {
-        L.imageOverlay(thumbnailT2, [[sceneBboxT2[1], sceneBboxT2[0]], [sceneBboxT2[3], sceneBboxT2[2]]], { opacity: 0.9, interactive: false }).addTo(bottomMap);
-        fitBounds = [[sceneBboxT2[1], sceneBboxT2[0]], [sceneBboxT2[3], sceneBboxT2[2]]] as L.LatLngBoundsExpression;
+      // Period 1 (Before) → Top map (clipped via CSS clip-path)
+      const topResult = await loadSatelliteTiles(topMap, {
+        L,
+        tilejsonUrl: tilejsonT1,
+        thumbnailUrl: thumbnailT1,
+        sceneBbox: sceneBboxT1,
+        aoiBbox: bbox,
+        opacity: 0.9,
+      });
+
+      if (cancelled) return;
+
+      if (!bottomResult.hasImagery) setBottomError(bottomResult.error || null);
+      if (!topResult.hasImagery) setTopError(topResult.error || null);
+
+      // Store reference to the top satellite layer for clip-path application
+      if (topResult.layer) {
+        topSatelliteRef.current = topResult.layer;
+        // Apply initial clip-path to the satellite layer's container
+        applyClip(topResult.layer, splitPos);
       }
 
-      // Period 1 — try TileJSON first
-      let topBounds = fitBounds;
-      if (tilejsonT1) {
-        const tj = await fetchTileJson(tilejsonT1);
-        if (tj && tj.tiles?.[0]) {
-          L.tileLayer(tj.tiles[0], { maxZoom: tj.maxzoom || 24, opacity: 0.9 }).addTo(topMap);
-          if (tj.bounds?.length === 4) {
-            topBounds = [[tj.bounds[1], tj.bounds[0]], [tj.bounds[3], tj.bounds[2]]] as L.LatLngBoundsExpression;
-          }
-        } else if (thumbnailT1 && sceneBboxT1) {
-          L.imageOverlay(thumbnailT1, [[sceneBboxT1[1], sceneBboxT1[0]], [sceneBboxT1[3], sceneBboxT1[2]]], { opacity: 0.9, interactive: false }).addTo(topMap);
-          topBounds = [[sceneBboxT1[1], sceneBboxT1[0]], [sceneBboxT1[3], sceneBboxT1[2]]] as L.LatLngBoundsExpression;
-        }
-      } else if (thumbnailT1 && sceneBboxT1) {
-        L.imageOverlay(thumbnailT1, [[sceneBboxT1[1], sceneBboxT1[0]], [sceneBboxT1[3], sceneBboxT1[2]]], { opacity: 0.9, interactive: false }).addTo(topMap);
-        topBounds = [[sceneBboxT1[1], sceneBboxT1[0]], [sceneBboxT1[3], sceneBboxT1[2]]] as L.LatLngBoundsExpression;
-      }
+      // ── Fit both maps to the same bounds ────────────────────
+      const sharedBounds = bottomResult.bounds;
+      bottomMap.fitBounds(sharedBounds, { padding: [20, 20], maxZoom: 14 });
+      topMap.fitBounds(sharedBounds, { padding: [20, 20], maxZoom: 14 });
 
-      // Fit both maps to imagery bounds
-      bottomMap.fitBounds(fitBounds, { padding: [20, 20], maxZoom: 14 });
-      topMap.fitBounds(topBounds, { padding: [20, 20], maxZoom: 14 });
-
-      // Sync: bottom → top
+      // ── Synchronize navigation ──────────────────────────────
       bottomMap.on('move', () => {
         if (syncingRef.current) return;
         syncingRef.current = true;
         topMap.setView(bottomMap.getCenter(), bottomMap.getZoom(), { animate: false });
         syncingRef.current = false;
       });
-      bottomMap.on('zoom', () => {
-        if (syncingRef.current) return;
-        syncingRef.current = true;
-        topMap.setView(bottomMap.getCenter(), bottomMap.getZoom(), { animate: false });
-        syncingRef.current = false;
-      });
-
-      // Sync: top → bottom
       topMap.on('move', () => {
-        if (syncingRef.current) return;
-        syncingRef.current = true;
-        bottomMap.setView(topMap.getCenter(), topMap.getZoom(), { animate: false });
-        syncingRef.current = false;
-      });
-      topMap.on('zoom', () => {
         if (syncingRef.current) return;
         syncingRef.current = true;
         bottomMap.setView(topMap.getCenter(), topMap.getZoom(), { animate: false });
@@ -142,8 +136,26 @@ export default function SwipeMap({ bbox, thumbnailT1, thumbnailT2, tilejsonT1, t
       topMapRef.current?.remove();
       bottomMapRef.current = null;
       topMapRef.current = null;
+      topSatelliteRef.current = null;
     };
   }, [bbox, thumbnailT1, thumbnailT2, tilejsonT1, tilejsonT2, sceneBboxT1, sceneBboxT2]);
+
+  // Apply clip-path to the satellite imagery layer
+  function applyClip(layer: any, pos: number) {
+    if (!layer?.getContainer) return;
+    const el = layer.getContainer();
+    if (el) {
+      el.style.clipPath = `inset(0 ${100 - pos}% 0 0)`;
+      el.style.zIndex = '500'; // Above basemap, below controls
+    }
+  }
+
+  // Update clip when split position changes
+  useEffect(() => {
+    if (topSatelliteRef.current) {
+      applyClip(topSatelliteRef.current, splitPos);
+    }
+  }, [splitPos]);
 
   const handleMouseDown = useCallback((e: React.MouseEvent | React.TouchEvent) => {
     e.preventDefault();
@@ -179,15 +191,11 @@ export default function SwipeMap({ bbox, thumbnailT1, thumbnailT2, tilejsonT1, t
       onTouchMove={handleTouchMove}
       onTouchEnd={handlePointerUp}
     >
-      {/* Bottom map = Period 2 (full) */}
+      {/* Bottom map = Period 2 (After) — full satellite imagery visible */}
       <div ref={bottomRef} className="absolute inset-0" />
 
-      {/* Top map = Period 1 (clipped by split) */}
-      <div
-        ref={topRef}
-        className="absolute inset-0"
-        style={{ clipPath: `inset(0 ${100 - splitPos}% 0 0)` }}
-      />
+      {/* Top map = Period 1 (Before) — satellite imagery clipped, basemap visible everywhere */}
+      <div ref={topRef} className="absolute inset-0" style={{ pointerEvents: 'none' }} />
 
       {/* Draggable divider */}
       <div
@@ -195,29 +203,43 @@ export default function SwipeMap({ bbox, thumbnailT1, thumbnailT2, tilejsonT1, t
         style={{ left: `${splitPos}%`, transform: 'translateX(-50%)' }}
         onMouseDown={handleMouseDown}
         onTouchStart={handleMouseDown}
+        onClick={() => {}} // Absorb clicks
       >
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-white shadow-xl flex items-center justify-center">
-          <svg className="w-3.5 h-3.5 text-slate-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white shadow-xl flex items-center justify-center">
+          <svg className="w-4 h-4 text-slate-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M8 9l4-4 4 4m0 6l-4 4-4-4" />
           </svg>
         </div>
       </div>
 
       {/* Labels */}
-      <div className="absolute top-3 left-3 z-[1000] px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-blue-500/80 text-white backdrop-blur-sm">Before</div>
-      <div className="absolute top-3 right-3 z-[1000] px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-orange-500/80 text-white backdrop-blur-sm">After</div>
+      <div className="absolute top-3 left-3 z-[1001] px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-blue-500/80 text-white backdrop-blur-sm">
+        Before
+        {topError && <span className="ml-1.5 text-[8px] font-normal opacity-70">(basemap only)</span>}
+      </div>
+      <div className="absolute top-3 right-3 z-[1001] px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-orange-500/80 text-white backdrop-blur-sm">
+        After
+        {bottomError && <span className="ml-1.5 text-[8px] font-normal opacity-70">(basemap only)</span>}
+      </div>
 
       {/* Zoom controls — sync both maps */}
-      <div className="absolute bottom-3 right-3 z-[1000] flex flex-col rounded-lg overflow-hidden border border-white/10 shadow-lg">
+      <div className="absolute bottom-3 right-3 z-[1001] flex flex-col rounded-lg overflow-hidden border border-white/10 shadow-lg">
         <button onClick={() => {
-          if (bottomMapRef.current) { bottomMapRef.current.zoomIn(); }
-          if (topMapRef.current) { topMapRef.current.setView(bottomMapRef.current?.getCenter(), bottomMapRef.current?.getZoom(), { animate: false }); }
+          if (bottomMapRef.current) bottomMapRef.current.zoomIn();
         }} className="w-8 h-8 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-colors text-sm font-bold bg-black/50 backdrop-blur-sm">+</button>
         <div className="h-px bg-white/10" />
         <button onClick={() => {
-          if (bottomMapRef.current) { bottomMapRef.current.zoomOut(); }
-          if (topMapRef.current) { topMapRef.current.setView(bottomMapRef.current?.getCenter(), bottomMapRef.current?.getZoom(), { animate: false }); }
+          if (bottomMapRef.current) bottomMapRef.current.zoomOut();
         }} className="w-8 h-8 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-colors text-sm font-bold bg-black/50 backdrop-blur-sm">−</button>
+      </div>
+
+      {/* Legend */}
+      <div className="absolute bottom-3 left-3 z-[1001] flex items-center gap-3 px-3 py-1.5 rounded-lg bg-black/60 backdrop-blur-sm border border-white/10 text-[10px]">
+        <span className="flex items-center gap-1.5 text-blue-300"><span className="w-2 h-2 rounded-full bg-blue-400" /> Before</span>
+        <span className="text-slate-500">|</span>
+        <span className="flex items-center gap-1.5 text-orange-300"><span className="w-2 h-2 rounded-full bg-orange-400" /> After</span>
+        <span className="text-slate-500">|</span>
+        <span className="text-slate-400">Drag divider to compare</span>
       </div>
     </div>
   );

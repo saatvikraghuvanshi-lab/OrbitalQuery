@@ -5,6 +5,13 @@ import type { TemporalComparisonResult, SceneInfo, IndexInfo } from '@/hooks/use
 import SwipeMap from '@/components/SwipeMap';
 import YearlyComparisonView from '@/components/YearlyComparisonView';
 import type { YearlyComparisonResult } from '@/hooks/useYearlyComparison';
+import {
+  loadSatelliteTiles,
+  buildTileJsonUrl,
+  parseBbox,
+  boundsToLatLng,
+  getBestBounds,
+} from '@/lib/satellite-tiles';
 
 interface Props {
   result: TemporalComparisonResult;
@@ -27,19 +34,18 @@ const PHENOMENON_CONFIG: Record<string, { emoji: string; color: string; label: s
 
 type ViewMode = 'side-by-side' | 'swipe' | 'difference';
 
-const TILE_URL = 'https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}';
+const GOOGLE_TILE = 'https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}';
 
-// ── Synchronized Dual Map ────────────────────────────────────
-async function fetchTileJson(url: string): Promise<{ tiles: string[]; bounds: number[]; maxzoom: number } | null> {
-  try {
-    const res = await fetch(url);
-    if (!res.ok) return null;
-    return await res.json();
-  } catch {
-    return null;
+/** Build tilejson URL from scene data if not provided in imagery response */
+function resolveTileJson(scene: SceneInfo | null | undefined, imageryTilejson?: string): string | undefined {
+  if (imageryTilejson) return imageryTilejson;
+  if (scene?.item_id) {
+    return buildTileJsonUrl(scene.collection || 'sentinel-2-l2a', scene.item_id);
   }
+  return undefined;
 }
 
+// ── Synchronized Dual Map ────────────────────────────────────
 function SynchronizedDualMap({
   bbox, sceneT1, sceneT2, thumbnailT1, thumbnailT2, tilejsonT1, tilejsonT2, sceneBboxT1, sceneBboxT2,
 }: {
@@ -58,6 +64,8 @@ function SynchronizedDualMap({
   const leftMapRef = useRef<any>(null);
   const rightMapRef = useRef<any>(null);
   const syncingRef = useRef(false);
+  const [leftError, setLeftError] = useState<string | null>(null);
+  const [rightError, setRightError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!leftRef.current || !rightRef.current || leftMapRef.current) return;
@@ -69,71 +77,55 @@ function SynchronizedDualMap({
       const [west, south, east, north] = bbox;
       const center: [number, number] = [(south + north) / 2, (west + east) / 2];
 
+      // Create both maps with the Google basemap
       const leftMap = L.map(leftRef.current, {
         center, zoom: 10, zoomControl: false, attributionControl: false,
       });
-      L.tileLayer(TILE_URL, { maxZoom: 22, subdomains: ['0', '1', '2', '3'] }).addTo(leftMap);
+      L.tileLayer(GOOGLE_TILE, { maxZoom: 22, subdomains: ['0', '1', '2', '3'] }).addTo(leftMap);
 
       const rightMap = L.map(rightRef.current, {
         center, zoom: 10, zoomControl: false, attributionControl: false,
       });
-      L.tileLayer(TILE_URL, { maxZoom: 22, subdomains: ['0', '1', '2', '3'] }).addTo(rightMap);
+      L.tileLayer(GOOGLE_TILE, { maxZoom: 22, subdomains: ['0', '1', '2', '3'] }).addTo(rightMap);
 
-      // Parse bbox from imagery (may be JSON string or array)
-      const parseBbox = (b: any): number[] | null => {
-        if (!b) return null;
-        if (Array.isArray(b) && b.length === 4) return b;
-        if (typeof b === 'string') { try { const p = JSON.parse(b); if (Array.isArray(p) && p.length === 4) return p; } catch {} }
-        return null;
-      };
-      const parsedBboxT1 = parseBbox(sceneBboxT1);
-      const parsedBboxT2 = parseBbox(sceneBboxT2);
+      // Load satellite imagery with robust fallback
+      const tjUrlT1 = resolveTileJson(sceneT1, tilejsonT1);
+      const tjUrlT2 = resolveTileJson(sceneT2, tilejsonT2);
 
-      // Try TileJSON for zoomable satellite tiles
-      let leftBounds: L.LatLngBoundsExpression = [[south, west], [north, east]];
-      let rightBounds: L.LatLngBoundsExpression = [[south, west], [north, east]];
+      const [leftResult, rightResult] = await Promise.all([
+        loadSatelliteTiles(leftMap, {
+          L,
+          tilejsonUrl: tjUrlT1,
+          thumbnailUrl: thumbnailT1,
+          sceneBbox: sceneBboxT1,
+          aoiBbox: bbox,
+          opacity: 0.9,
+        }),
+        loadSatelliteTiles(rightMap, {
+          L,
+          tilejsonUrl: tjUrlT2,
+          thumbnailUrl: thumbnailT2,
+          sceneBbox: sceneBboxT2,
+          aoiBbox: bbox,
+          opacity: 0.9,
+        }),
+      ]);
 
-      if (tilejsonT1) {
-        const tj = await fetchTileJson(tilejsonT1);
-        if (tj && tj.tiles?.[0]) {
-          L.tileLayer(tj.tiles[0], { maxZoom: tj.maxzoom || 24, opacity: 0.9 }).addTo(leftMap);
-          if (tj.bounds && tj.bounds.length === 4) {
-            leftBounds = [[tj.bounds[1], tj.bounds[0]], [tj.bounds[3], tj.bounds[2]]];
-          }
-        } else if (thumbnailT1 && parsedBboxT1) {
-          L.imageOverlay(thumbnailT1, [[parsedBboxT1[1], parsedBboxT1[0]], [parsedBboxT1[3], parsedBboxT1[2]]], { opacity: 0.85, interactive: false }).addTo(leftMap);
-          leftBounds = [[parsedBboxT1[1], parsedBboxT1[0]], [parsedBboxT1[3], parsedBboxT1[2]]];
-        }
-      } else if (thumbnailT1 && parsedBboxT1) {
-        L.imageOverlay(thumbnailT1, [[parsedBboxT1[1], parsedBboxT1[0]], [parsedBboxT1[3], parsedBboxT1[2]]], { opacity: 0.85, interactive: false }).addTo(leftMap);
-        leftBounds = [[parsedBboxT1[1], parsedBboxT1[0]], [parsedBboxT1[3], parsedBboxT1[2]]];
-      }
+      if (cancelled) return;
 
-      if (tilejsonT2) {
-        const tj = await fetchTileJson(tilejsonT2);
-        if (tj && tj.tiles?.[0]) {
-          L.tileLayer(tj.tiles[0], { maxZoom: tj.maxzoom || 24, opacity: 0.9 }).addTo(rightMap);
-          if (tj.bounds && tj.bounds.length === 4) {
-            rightBounds = [[tj.bounds[1], tj.bounds[0]], [tj.bounds[3], tj.bounds[2]]];
-          }
-        } else if (thumbnailT2 && parsedBboxT2) {
-          L.imageOverlay(thumbnailT2, [[parsedBboxT2[1], parsedBboxT2[0]], [parsedBboxT2[3], parsedBboxT2[2]]], { opacity: 0.85, interactive: false }).addTo(rightMap);
-          rightBounds = [[parsedBboxT2[1], parsedBboxT2[0]], [parsedBboxT2[3], parsedBboxT2[2]]];
-        }
-      } else if (thumbnailT2 && parsedBboxT2) {
-        L.imageOverlay(thumbnailT2, [[parsedBboxT2[1], parsedBboxT2[0]], [parsedBboxT2[3], parsedBboxT2[2]]], { opacity: 0.85, interactive: false }).addTo(rightMap);
-        rightBounds = [[parsedBboxT2[1], parsedBboxT2[0]], [parsedBboxT2[3], parsedBboxT2[2]]];
-      }
+      if (!leftResult.hasImagery) setLeftError(leftResult.error || 'No imagery');
+      if (!rightResult.hasImagery) setRightError(rightResult.error || 'No imagery');
 
-      // AOI rectangle
-      const aoiBounds: L.LatLngBoundsExpression = [[south, west], [north, east]];
+      // AOI rectangle on both maps
+      const aoiBounds = boundsToLatLng(bbox);
       L.rectangle(aoiBounds, { color: '#22d3ee', weight: 1.5, fillColor: '#22d3ee', fillOpacity: 0.05, dashArray: '6 3' }).addTo(leftMap);
       L.rectangle(aoiBounds, { color: '#22d3ee', weight: 1.5, fillColor: '#22d3ee', fillOpacity: 0.05, dashArray: '6 3' }).addTo(rightMap);
 
-      // Fit to scene bounds so imagery fills the viewport
-      leftMap.fitBounds(leftBounds, { padding: [20, 20], maxZoom: 14 });
-      rightMap.fitBounds(rightBounds, { padding: [20, 20], maxZoom: 14 });
+      // Fit to imagery bounds so satellite imagery fills the viewport
+      leftMap.fitBounds(leftResult.bounds, { padding: [20, 20], maxZoom: 14 });
+      rightMap.fitBounds(rightResult.bounds, { padding: [20, 20], maxZoom: 14 });
 
+      // Synchronize navigation: when one map moves, the other follows
       leftMap.on('move', () => {
         if (syncingRef.current) return;
         syncingRef.current = true;
@@ -165,6 +157,11 @@ function SynchronizedDualMap({
       <div className="relative rounded-l-xl overflow-hidden border border-slate-700/30">
         <div ref={leftRef} className="absolute inset-0" />
         <div className="absolute top-3 left-3 z-[1000] px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-blue-500/80 text-white backdrop-blur-sm">Period 1 — Before</div>
+        {leftError && (
+          <div className="absolute top-3 right-3 z-[1000] px-2 py-1 rounded text-[9px] bg-amber-500/80 text-white backdrop-blur-sm">
+            Basemap only — imagery unavailable
+          </div>
+        )}
         <div className="absolute bottom-3 right-3 z-[1000] flex flex-col rounded-lg overflow-hidden border border-white/10 shadow-lg">
           <button onClick={() => leftMapRef.current?.zoomIn()} className="w-8 h-8 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-colors text-sm font-bold bg-black/50 backdrop-blur-sm">+</button>
           <div className="h-px bg-white/10" />
@@ -174,10 +171,23 @@ function SynchronizedDualMap({
       <div className="relative rounded-r-xl overflow-hidden border border-slate-700/30">
         <div ref={rightRef} className="absolute inset-0" />
         <div className="absolute top-3 left-3 z-[1000] px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-orange-500/80 text-white backdrop-blur-sm">Period 2 — After</div>
+        {rightError && (
+          <div className="absolute top-3 right-3 z-[1000] px-2 py-1 rounded text-[9px] bg-amber-500/80 text-white backdrop-blur-sm">
+            Basemap only — imagery unavailable
+          </div>
+        )}
         <div className="absolute bottom-3 right-3 z-[1000] flex flex-col rounded-lg overflow-hidden border border-white/10 shadow-lg">
           <button onClick={() => rightMapRef.current?.zoomIn()} className="w-8 h-8 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-colors text-sm font-bold bg-black/50 backdrop-blur-sm">+</button>
           <div className="h-px bg-white/10" />
           <button onClick={() => rightMapRef.current?.zoomOut()} className="w-8 h-8 flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-colors text-sm font-bold bg-black/50 backdrop-blur-sm">−</button>
+        </div>
+      </div>
+      {/* Legend */}
+      <div className="col-span-2 flex justify-center">
+        <div className="inline-flex items-center gap-4 px-3 py-1.5 rounded-lg bg-slate-800/60 border border-slate-700/30 text-[10px]">
+          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-blue-500" /> Earlier observation</span>
+          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-orange-500" /> Later observation</span>
+          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded bg-cyan-400/30 border border-cyan-400" /> AOI boundary</span>
         </div>
       </div>
     </div>
@@ -188,6 +198,7 @@ function SynchronizedDualMap({
 function DifferenceView({
   bbox, changeDetection, config, metrics,
   tilejsonT1, tilejsonT2, sceneBboxT1, sceneBboxT2,
+  sceneT1, sceneT2, thumbnailT1, thumbnailT2,
 }: {
   bbox: number[];
   changeDetection: Record<string, any> | null;
@@ -197,13 +208,20 @@ function DifferenceView({
   tilejsonT2?: string;
   sceneBboxT1?: any;
   sceneBboxT2?: any;
+  sceneT1?: SceneInfo | null;
+  sceneT2?: SceneInfo | null;
+  thumbnailT1?: string;
+  thumbnailT2?: string;
 }) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
+  const [mapError, setMapError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!mapRef.current || mapInstanceRef.current) return;
-    let cancelled = false;      import('leaflet').then(async (L) => {
+    let cancelled = false;
+
+    import('leaflet').then(async (L) => {
       if (cancelled || !mapRef.current) return;
 
       const [west, south, east, north] = bbox;
@@ -212,50 +230,51 @@ function DifferenceView({
       const map = L.map(mapRef.current, {
         center, zoom: 10, zoomControl: false, attributionControl: false,
       });
-      L.tileLayer(TILE_URL, { maxZoom: 22, subdomains: ['0', '1', '2', '3'] }).addTo(map);
+      L.tileLayer(GOOGLE_TILE, { maxZoom: 22, subdomains: ['0', '1', '2', '3'] }).addTo(map);
 
-      // Parse bbox helper
-      const parseBbox = (b: any): number[] | null => {
-        if (!b) return null;
-        if (Array.isArray(b) && b.length === 4) return b;
-        if (typeof b === 'string') { try { const p = JSON.parse(b); if (Array.isArray(p) && p.length === 4) return p; } catch {} }
-        return null;
-      };
+      // Load Period 1 (before) satellite imagery as the base layer
+      const tjUrlT1 = resolveTileJson(sceneT1, tilejsonT1);
+      const result = await loadSatelliteTiles(map, {
+        L,
+        tilejsonUrl: tjUrlT1,
+        thumbnailUrl: thumbnailT1,
+        sceneBbox: sceneBboxT1,
+        aoiBbox: bbox,
+        opacity: 0.85,
+      });
 
-      // Add Period 1 (before) satellite imagery as base
-      let imageryBounds: L.LatLngBoundsExpression = [[south, west], [north, east]];
-      if (tilejsonT1) {
-        const tj = await fetchTileJson(tilejsonT1);
-        if (tj && tj.tiles?.[0]) {
-          L.tileLayer(tj.tiles[0], { maxZoom: tj.maxzoom || 24, opacity: 0.85 }).addTo(map);
-          if (tj.bounds?.length === 4) {
-            imageryBounds = [[tj.bounds[1], tj.bounds[0]], [tj.bounds[3], tj.bounds[2]]];
-          }
-        } else {
-          const pb = parseBbox(sceneBboxT1);
-          if (pb) { imageryBounds = [[pb[1], pb[0]], [pb[3], pb[2]]]; }
-        }
-      } else {
-        const pb = parseBbox(sceneBboxT1);
-        if (pb) { imageryBounds = [[pb[1], pb[0]], [pb[3], pb[2]]]; }
-      }
+      if (cancelled) return;
+      if (!result.hasImagery) setMapError(result.error || 'No imagery');
 
       // Fit to imagery bounds
-      map.fitBounds(imageryBounds, { padding: [40, 40], maxZoom: 14 });
+      map.fitBounds(result.bounds, { padding: [40, 40], maxZoom: 14 });
 
+      // Overlay change detection regions
       if (changeDetection?.regions && Array.isArray(changeDetection.regions)) {
         changeDetection.regions.forEach((region: any) => {
           if (region.bbox && Array.isArray(region.bbox) && region.bbox.length === 4) {
             const [rw, rs, re, rn] = region.bbox;
-            L.rectangle([[rs, rw], [rn, re]], {
-              color: config.color, weight: 2, fillColor: config.color, fillOpacity: 0.25,
-            }).addTo(map);
+            // Validate region bbox is WGS84
+            if (Math.abs(rw) <= 180 && Math.abs(re) <= 180 && Math.abs(rs) <= 90 && Math.abs(rn) <= 90) {
+              L.rectangle([[rs, rw], [rn, re]], {
+                color: config.color, weight: 2, fillColor: config.color, fillOpacity: 0.25,
+              }).addTo(map);
+            }
           }
         });
       }
 
+      // Draw the change detection as a single overlay polygon if no individual regions
+      if ((!changeDetection?.regions || !changeDetection.regions.length) && changeDetection?.changedPct > 0) {
+        // Draw a semi-transparent overlay across the AOI to indicate detected change
+        L.rectangle([[south, west], [north, east]], {
+          color: config.color, weight: 1, fillColor: config.color, fillOpacity: 0.12, dashArray: '8 4',
+        }).addTo(map);
+      }
+
+      // AOI boundary
       L.rectangle([[south, west], [north, east]], {
-        color: '#22d3ee', weight: 2, fillColor: '#22d3ee', fillOpacity: 0.05, dashArray: '8 4',
+        color: '#22d3ee', weight: 1.5, fillColor: '#22d3ee', fillOpacity: 0.03, dashArray: '8 4',
       }).addTo(map);
 
       mapInstanceRef.current = map;
@@ -281,6 +300,11 @@ function DifferenceView({
       <div className="absolute top-3 left-3 z-[1000] px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-red-500/80 text-white backdrop-blur-sm">
         Change Detection — {config.indexLabel} Difference
       </div>
+      {mapError && (
+        <div className="absolute top-3 right-3 z-[1000] px-2 py-1 rounded text-[9px] bg-amber-500/80 text-white backdrop-blur-sm">
+          Basemap only — imagery unavailable
+        </div>
+      )}
       <div className="absolute bottom-3 left-3 z-[1000] bg-black/70 backdrop-blur-sm rounded-xl border border-white/10 p-4">
         <div className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">Changed Area</div>
         <div className="text-2xl font-bold" style={{ color: config.color }}>{changedArea} km²</div>
@@ -291,6 +315,7 @@ function DifferenceView({
           </div>
         )}
       </div>
+      {/* Legend */}
       <div className="absolute bottom-3 right-3 z-[1000] bg-black/70 backdrop-blur-sm rounded-lg border border-white/10 px-3 py-2">
         <div className="text-[9px] text-slate-400 uppercase tracking-wider mb-1.5">Legend</div>
         <div className="flex items-center gap-2">
@@ -300,6 +325,10 @@ function DifferenceView({
         <div className="flex items-center gap-2 mt-1">
           <div className="w-3 h-3 rounded-sm" style={{ background: config.color, opacity: 0.8 }} />
           <span className="text-[10px] text-slate-300">High change</span>
+        </div>
+        <div className="flex items-center gap-2 mt-1">
+          <div className="w-3 h-3 rounded-sm border border-cyan-400/50 bg-cyan-400/10" />
+          <span className="text-[10px] text-slate-300">AOI boundary</span>
         </div>
       </div>
       <div className="absolute top-3 right-3 z-[1000] flex flex-col rounded-lg overflow-hidden border border-white/10 shadow-lg">
@@ -588,8 +617,8 @@ export default function TemporalComparisonView({ result }: Props) {
               sceneT2={result.scene_t2}
               thumbnailT1={result.imagery?.period1?.thumbnail}
               thumbnailT2={result.imagery?.period2?.thumbnail}
-              tilejsonT1={result.imagery?.period1?.tilejson || (result.scene_t1?.item_id ? `https://planetarycomputer.microsoft.com/api/data/v1/item/tilejson.json?collection=${result.scene_t1.collection || 'sentinel-2-l2a'}&item=${result.scene_t1.item_id}&assets=visual&asset_bidx=visual%7C1%2C2%2C3` : undefined)}
-              tilejsonT2={result.imagery?.period2?.tilejson || (result.scene_t2?.item_id ? `https://planetarycomputer.microsoft.com/api/data/v1/item/tilejson.json?collection=${result.scene_t2.collection || 'sentinel-2-l2a'}&item=${result.scene_t2.item_id}&assets=visual&asset_bidx=visual%7C1%2C2%2C3` : undefined)}
+              tilejsonT1={result.imagery?.period1?.tilejson || (result.scene_t1?.item_id ? buildTileJsonUrl(result.scene_t1.collection || 'sentinel-2-l2a', result.scene_t1.item_id) : undefined)}
+              tilejsonT2={result.imagery?.period2?.tilejson || (result.scene_t2?.item_id ? buildTileJsonUrl(result.scene_t2.collection || 'sentinel-2-l2a', result.scene_t2.item_id) : undefined)}
               sceneBboxT1={result.imagery?.period1?.bbox || result.scene_t1?.bbox}
               sceneBboxT2={result.imagery?.period2?.bbox || result.scene_t2?.bbox}
             />
@@ -599,8 +628,8 @@ export default function TemporalComparisonView({ result }: Props) {
               bbox={result.aoi_bbox}
               thumbnailT1={result.imagery?.period1?.thumbnail}
               thumbnailT2={result.imagery?.period2?.thumbnail}
-              tilejsonT1={result.imagery?.period1?.tilejson || (result.scene_t1?.item_id ? `https://planetarycomputer.microsoft.com/api/data/v1/item/tilejson.json?collection=${result.scene_t1.collection || 'sentinel-2-l2a'}&item=${result.scene_t1.item_id}&assets=visual&asset_bidx=visual%7C1%2C2%2C3` : undefined)}
-              tilejsonT2={result.imagery?.period2?.tilejson || (result.scene_t2?.item_id ? `https://planetarycomputer.microsoft.com/api/data/v1/item/tilejson.json?collection=${result.scene_t2.collection || 'sentinel-2-l2a'}&item=${result.scene_t2.item_id}&assets=visual&asset_bidx=visual%7C1%2C2%2C3` : undefined)}
+              tilejsonT1={result.imagery?.period1?.tilejson || (result.scene_t1?.item_id ? buildTileJsonUrl(result.scene_t1.collection || 'sentinel-2-l2a', result.scene_t1.item_id) : undefined)}
+              tilejsonT2={result.imagery?.period2?.tilejson || (result.scene_t2?.item_id ? buildTileJsonUrl(result.scene_t2.collection || 'sentinel-2-l2a', result.scene_t2.item_id) : undefined)}
               sceneBboxT1={result.imagery?.period1?.bbox || result.scene_t1?.bbox}
               sceneBboxT2={result.imagery?.period2?.bbox || result.scene_t2?.bbox}
             />
@@ -611,10 +640,14 @@ export default function TemporalComparisonView({ result }: Props) {
               changeDetection={result.change_detection}
               config={config}
               metrics={metrics}
-              tilejsonT1={result.imagery?.period1?.tilejson || (result.scene_t1?.item_id ? `https://planetarycomputer.microsoft.com/api/data/v1/item/tilejson.json?collection=${result.scene_t1.collection || 'sentinel-2-l2a'}&item=${result.scene_t1.item_id}&assets=visual&asset_bidx=visual%7C1%2C2%2C3` : undefined)}
-              tilejsonT2={result.imagery?.period2?.tilejson || (result.scene_t2?.item_id ? `https://planetarycomputer.microsoft.com/api/data/v1/item/tilejson.json?collection=${result.scene_t2.collection || 'sentinel-2-l2a'}&item=${result.scene_t2.item_id}&assets=visual&asset_bidx=visual%7C1%2C2%2C3` : undefined)}
+              tilejsonT1={result.imagery?.period1?.tilejson || (result.scene_t1?.item_id ? buildTileJsonUrl(result.scene_t1.collection || 'sentinel-2-l2a', result.scene_t1.item_id) : undefined)}
+              tilejsonT2={result.imagery?.period2?.tilejson || (result.scene_t2?.item_id ? buildTileJsonUrl(result.scene_t2.collection || 'sentinel-2-l2a', result.scene_t2.item_id) : undefined)}
               sceneBboxT1={result.imagery?.period1?.bbox || result.scene_t1?.bbox}
               sceneBboxT2={result.imagery?.period2?.bbox || result.scene_t2?.bbox}
+              sceneT1={result.scene_t1}
+              sceneT2={result.scene_t2}
+              thumbnailT1={result.imagery?.period1?.thumbnail}
+              thumbnailT2={result.imagery?.period2?.thumbnail}
             />
           )}
         </div>
