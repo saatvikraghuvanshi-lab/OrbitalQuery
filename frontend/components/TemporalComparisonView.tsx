@@ -376,14 +376,18 @@ function DifferenceView({
 function MetricCard({ label, value, unit, color, subtitle }: {
   label: string; value: string | number; unit?: string; color?: string; subtitle?: string;
 }) {
+  const isZero = typeof value === 'number' && value === 0;
+  const isNA = value === 'N/A' || value === null || value === undefined || value === '';
+  const isMuted = isZero || isNA;
+
   return (
     <div className="bg-slate-800/40 rounded-xl p-4 border border-slate-700/30">
       <div className="text-[10px] text-slate-400 uppercase tracking-wider font-medium mb-1">{label}</div>
       <div className="flex items-baseline gap-1.5">
-        <span className="text-2xl font-bold" style={{ color: color || '#e2e8f0' }}>
+        <span className="text-2xl font-bold" style={{ color: isMuted ? '#475569' : (color || '#e2e8f0') }}>
           {typeof value === 'number' ? value.toLocaleString(undefined, { maximumFractionDigits: 2 }) : value}
         </span>
-        {unit && <span className="text-xs text-slate-300">{unit}</span>}
+        {unit && <span className={`text-xs ${isMuted ? 'text-slate-600' : 'text-slate-300'}`}>{unit}</span>}
       </div>
       {subtitle && <div className="text-[10px] text-slate-400 mt-1">{subtitle}</div>}
     </div>
@@ -641,7 +645,7 @@ export default function TemporalComparisonView({ result }: Props) {
             <span className="w-2 h-2 rounded-full bg-green-400" />
             Analysis Summary
           </h3>
-          <p className="text-sm text-slate-200 leading-relaxed mb-4">{explanation.summary}</p>
+          <p className="text-sm text-slate-200 leading-relaxed mb-4" style={{ maxWidth: '72ch' }}>{explanation.summary}</p>
 
           {explanation.key_findings && explanation.key_findings.length > 0 && (
             <div className="mb-4">
@@ -676,9 +680,11 @@ export default function TemporalComparisonView({ result }: Props) {
               <h4 className="text-[10px] text-slate-400 uppercase tracking-wider font-medium mb-1.5">Confidence & Limitations</h4>
               <p className="text-xs text-slate-300 mb-2">{explanation.confidence || 'Medium confidence'}</p>
               {explanation.limitations && explanation.limitations.length > 0 && (
-                <div className="space-y-1">
+                <div className="flex flex-wrap gap-1.5">
                   {explanation.limitations.map((lim, i) => (
-                    <div key={i} className="text-[10px] text-slate-400">⚠ {lim}</div>
+                    <span key={i} className="inline-flex items-center gap-1 text-[10px] text-slate-400 bg-slate-700/30 px-2 py-1 rounded-md border border-slate-600/20">
+                      <span className="text-amber-400/70">⚠</span> {lim}
+                    </span>
                   ))}
                 </div>
               )}
@@ -687,11 +693,14 @@ export default function TemporalComparisonView({ result }: Props) {
         </div>
       )}
 
-      {/* ── Processing Pipeline (collapsible) ─────────────────── */}
+      {/* ── Processing Pipeline (collapsible card) ────────────── */}
       {result.processing_steps && result.processing_steps.length > 0 && (
-        <details className="bg-slate-800/20 rounded-xl border border-slate-700/20 overflow-hidden">
-          <summary className="px-5 py-3 text-xs font-semibold text-slate-200 uppercase tracking-wider cursor-pointer hover:text-slate-200 transition-colors">
-            Processing Pipeline ({result.processing_steps.length} steps)
+        <details className="bg-slate-800/30 rounded-xl border border-slate-700/30 overflow-hidden group">
+          <summary className="px-5 py-3.5 text-xs font-semibold text-slate-200 uppercase tracking-wider cursor-pointer hover:text-white transition-colors flex items-center justify-between">
+            <span>Processing Pipeline ({result.processing_steps.length} steps)</span>
+            <svg className="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
           </summary>
           <div className="px-5 pb-4">
             <ProcessingTimeline steps={result.processing_steps} />

@@ -164,7 +164,7 @@ export default function Header({ activeTab = 'ask', onNavigate, onSettingsChange
           <div className="flex flex-col gap-0">
             {/* ── Section: Map & Display ── */}
             <div className="py-4">
-              <p className="text-[10px] uppercase tracking-widest text-gray-600 font-semibold mb-3">Map &amp; Display</p>
+              <p className="text-[10px] uppercase tracking-widest text-slate-500 font-semibold mb-3">Map &amp; Display</p>
 
               {/* Default Map Style */}
               <div className="flex items-center justify-between mb-3">
@@ -209,7 +209,7 @@ export default function Header({ activeTab = 'ask', onNavigate, onSettingsChange
 
             {/* ── Section: Data ── */}
             <div className="py-4">
-              <p className="text-[10px] uppercase tracking-widest text-gray-600 font-semibold mb-3">Data &amp; Filtering</p>
+              <p className="text-[10px] uppercase tracking-widest text-slate-500 font-semibold mb-3">Data &amp; Filtering</p>
 
               {/* Default Provider */}
               <div className="flex items-center justify-between mb-3">
@@ -256,12 +256,12 @@ export default function Header({ activeTab = 'ask', onNavigate, onSettingsChange
 
             {/* ── Section: Behavior (toggles) ── */}
             <div className="py-4">
-              <p className="text-[10px] uppercase tracking-widest text-gray-600 font-semibold mb-3">Behavior</p>
+              <p className="text-[10px] uppercase tracking-widest text-slate-500 font-semibold mb-3">Behavior</p>
 
               <div className="flex items-center justify-between mb-3">
                 <div className="flex flex-col gap-0.5">
                   <Label className="text-sm text-gray-300">Auto-zoom to results</Label>
-                  <p className="text-[10px] text-gray-500">Map zooms to selected dataset area</p>
+                  <p className="text-[10px] text-slate-500">Map zooms to selected dataset area</p>
                 </div>
                 <Switch
                   checked={settings.autoZoom}
@@ -272,7 +272,7 @@ export default function Header({ activeTab = 'ask', onNavigate, onSettingsChange
               <div className="flex items-center justify-between">
                 <div className="flex flex-col gap-0.5">
                   <Label className="text-sm text-gray-300">Show dataset footprints</Label>
-                  <p className="text-[10px] text-gray-500">Display geometry outlines on the map</p>
+                  <p className="text-[10px] text-slate-500">Display geometry outlines on the map</p>
                 </div>
                 <Switch
                   checked={settings.showFootprints}

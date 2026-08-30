@@ -220,39 +220,41 @@ function HomePageContent() {
 
         {step !== 'idle' && step !== 'complete' && step !== 'error' && (
           <div className="flex-1 overflow-y-auto">
-            <div className="max-w-[1800px] mx-auto px-4 py-8">
+            <div className="max-w-4xl mx-auto px-4 py-8 flex flex-col items-center">
               {/* Back button — centered */}
-              <div className="flex justify-center mb-6">
-                <button onClick={analysis.reset} className="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-300 transition-colors">
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-                  </svg>
-                  New Analysis
-                </button>
-              </div>
+              <button onClick={analysis.reset} className="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-300 transition-colors mb-8">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                </svg>
+                New Analysis
+              </button>
 
-              {/* Progress Steps — centered */}
-              <div className="flex items-center justify-center gap-2 mb-6">
-                {['planning', 'searching', 'ranking', 'processing', 'deciding', 'explaining'].map((s, i) => {
-                  const isActive = s === step;
-                  const isDone = ['planning', 'searching', 'ranking', 'processing', 'deciding', 'explaining'].indexOf(step) > i;
+              {/* Progress Steps — centered with labels */}
+              <div className="flex items-center justify-center gap-1 mb-3">
+                {[{ key: 'planning', label: 'Plan', short: '📋' }, { key: 'searching', label: 'Search', short: '🛰️' }, { key: 'ranking', label: 'Rank', short: '📊' }, { key: 'processing', label: 'Process', short: '⚙️' }, { key: 'deciding', label: 'Detect', short: '🧠' }, { key: 'explaining', label: 'Report', short: '📝' }].map(({ key, label, short }, i) => {
+                  const isActive = key === step;
+                  const stepIdx = ['planning', 'searching', 'ranking', 'processing', 'deciding', 'explaining'].indexOf(step);
+                  const isDone = stepIdx > i;
                   return (
-                    <div key={s} className="flex items-center gap-2">
-                      <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold transition-all ${
-                        isActive ? 'bg-blue-500 text-white animate-pulse' :
-                        isDone ? 'bg-green-500/20 text-green-400' :
-                        'bg-slate-800 text-slate-600'
-                      }`}>
-                        {isDone ? '✓' : i + 1}
+                    <div key={key} className="flex items-center gap-1">
+                      <div className="flex flex-col items-center">
+                        <div className={`w-9 h-9 rounded-full flex items-center justify-center text-[11px] font-bold transition-all ${
+                          isActive ? 'bg-blue-500 text-white animate-pulse shadow-lg shadow-blue-500/30' :
+                          isDone ? 'bg-green-500/20 text-green-400 border border-green-500/30' :
+                          'bg-slate-800 text-slate-600 border border-slate-700/30'
+                        }`}>
+                          {isDone ? '✓' : short}
+                        </div>
+                        <span className={`text-[9px] mt-1 font-medium ${isActive ? 'text-blue-400' : isDone ? 'text-green-400/60' : 'text-slate-600'}`}>{label}</span>
                       </div>
-                      {i < 5 && <div className={`w-8 h-0.5 ${isDone ? 'bg-green-500/30' : 'bg-slate-800'}`} />}
+                      {i < 5 && <div className={`w-6 h-0.5 mt-[-12px] ${isDone ? 'bg-green-500/30' : 'bg-slate-700/50'}`} />}
                     </div>
                   );
                 })}
               </div>
 
-              {/* Step Label — centered */}
-              <div className="text-xs text-slate-500 mb-6 capitalize text-center">
+              {/* Active step label — centered below stepper */}
+              <div className="text-sm text-slate-300 mb-8 font-medium">
                 {step === 'planning' && '📋 Parsing your query...'}
                 {step === 'searching' && '🛰️ Searching satellite archives...'}
                 {step === 'ranking' && '📊 Ranking evidence quality...'}
@@ -261,10 +263,12 @@ function HomePageContent() {
                 {step === 'explaining' && '📝 Generating analysis...'}
               </div>
 
-              {/* Partial Results — centered */}
-              <div className="flex justify-center">
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 w-full max-w-4xl">
+              {/* Partial Results — centered, balanced layout */}
+              <div className="w-full grid grid-cols-1 lg:grid-cols-3 gap-4">
+                <div className="lg:col-span-2">
                   {analysis.state.plan && <AnalysisPlanView plan={analysis.state.plan} />}
+                </div>
+                <div className="lg:col-span-1">
                   {analysis.state.scenes.length > 0 && <EvidencePanel scenes={analysis.state.scenes} />}
                 </div>
               </div>
@@ -384,9 +388,9 @@ function HomePageContent() {
       <Header activeTab={tab} onNavigate={setTab} />
 
       {/* Compact filter bar */}
-      <div className="max-w-[1800px] mx-auto px-4 mb-3 w-full">
-        <div className="glass rounded-xl border border-slate-700/30 px-4 py-3">
-          <div className="flex flex-wrap items-center gap-3">
+      <div className="px-6 mb-3 w-full">
+        <div className="glass rounded-xl border border-slate-700/30 px-5 py-3">
+          <div className="flex flex-wrap items-center gap-4">
             <div className="flex items-center gap-2">
               <label className="text-[10px] text-slate-500 uppercase tracking-wider font-medium">Provider</label>
               <select
@@ -413,7 +417,7 @@ function HomePageContent() {
                 <option value="landsat">Landsat C2 L2</option>
               </select>
             </div>
-            <div className="ml-auto text-[10px] text-slate-500">
+            <div className="ml-auto text-[11px] text-slate-400 font-medium">
               {filteredDatasets.length} datasets
             </div>
           </div>
@@ -421,7 +425,7 @@ function HomePageContent() {
       </div>
 
       {/* Main content: Map + Dataset List */}
-      <div className="max-w-[1800px] mx-auto px-4 pb-8 w-full">
+      <div className="px-6 pb-8 w-full">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4" style={{ height: 'calc(100vh - 160px)', minHeight: '500px' }}>
           {/* Map — 2/3 width */}
           <div className="lg:col-span-2 rounded-2xl overflow-hidden border border-slate-700/30">
