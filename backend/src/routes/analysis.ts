@@ -1306,27 +1306,24 @@ router.post('/temporal-compare', optionalAuth, async (req: AuthRequest, res: Res
     const result = await callPythonService('POST', '/analysis/temporal-compare', pythonBody, 'temporal-compare', PYTHON_TIMEOUT);
 
     if (result.ok) {
-      // Post-process: inject tilejson URLs and bbox into imagery
+      // Inject tilejson URLs and bbox into imagery before sending
       const rd = result.data?.result || result.data;
-      if (rd?.imagery) {
-        for (const period of ['period1', 'period2']) {
-          const img = rd.imagery[period];
-          if (!img) continue;
-          const scene = period === 'period1' ? rd.scene_t1 : rd.scene_t2;
-          if (scene?.bbox && (!img.bbox || img.bbox.length === 0)) {
-            img.bbox = scene.bbox;
-          }
-          if (!img.tilejson && scene?.item_id) {
-            const col = scene.collection || 'sentinel-2-l2a';
-            img.tilejson = `https://planetarycomputer.microsoft.com/api/data/v1/item/tilejson.json?collection=${col}&item=${scene.item_id}&assets=visual&asset_bidx=visual%7C1%2C2%2C3`;
-          }
+      const imagery = rd?.imagery || {};
+      for (const period of ['period1', 'period2'] as const) {
+        const img = imagery[period] || {};
+        const scene = period === 'period1' ? rd?.scene_t1 : rd?.scene_t2;
+        if (scene?.bbox && (!img.bbox || img.bbox.length === 0)) img.bbox = scene.bbox;
+        if (!img.tilejson && scene?.item_id) {
+          const col = scene.collection || 'sentinel-2-l2a';
+          img.tilejson = `https://planetarycomputer.microsoft.com/api/data/v1/item/tilejson.json?collection=${col}&item=${scene.item_id}&assets=visual&asset_bidx=visual%7C1%2C2%2C3`;
         }
+        imagery[period] = img;
       }
-      // Rebuild response to include mutations
-      const resp: any = { requestId: result.requestId, ...result.data, latencyMs: result.upstreamLatencyMs };
-      if (rd?.imagery) {
-        resp.result = { ...resp.result, imagery: rd.imagery };
-      }
+      // Send response with enriched imagery
+      const resp: any = { ...result.data };
+      if (rd) resp.result = { ...rd, imagery };
+      resp.requestId = result.requestId;
+      resp.latencyMs = result.upstreamLatencyMs;
       res.json(resp);
       return;
     }
