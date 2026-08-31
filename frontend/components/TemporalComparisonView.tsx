@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { TemporalComparisonResult, SceneInfo, IndexInfo } from '@/hooks/useAnalysis';
 import SwipeMap from '@/components/SwipeMap';
+import dynamic from 'next/dynamic';
+const RechartsTrendChart = dynamic(() => import('./RechartsTrendChart'), { ssr: false });
 import {
   loadSatelliteTiles,
   buildTileJsonUrl,
@@ -127,7 +129,7 @@ function SynchronizedDualMap({
     <div className="w-full grid grid-cols-2 gap-[2px]" style={{ height: 'clamp(400px, 65vh, 700px)' }}>
       <div className="relative rounded-l-lg overflow-hidden bg-oq-950">
         <div ref={leftRef} className="absolute inset-0" />
-        <div className="absolute top-2 left-2 z-[1000] px-2 py-0.5 rounded text-[8px] font-bold uppercase tracking-widest bg-oq-950/80 text-semantic-before border border-semantic-before/20 backdrop-blur-sm">Before</div>
+        <div className="absolute top-2 left-2 z-[1000] px-2 py-0.5 rounded text-[8px] font-bold uppercase tracking-widest bg-oq-950/80" style={{ color: '#60A5FA', border: '1px solid rgba(96,165,250,0.2)' }}>Before</div>
         {leftLoading && (
           <div className="absolute inset-0 z-[1000] flex items-center justify-center bg-oq-950/60">
             <div className="flex items-center gap-2 px-3 py-1.5 rounded bg-oq-900/90 border border-oq-700/30">
@@ -136,15 +138,15 @@ function SynchronizedDualMap({
             </div>
           </div>
         )}
-        <div className="absolute bottom-2 right-2 z-[1000] flex flex-col rounded overflow-hidden border border-oq-700/30">
-          <button onClick={() => leftMapRef.current?.zoomIn()} className="w-6 h-6 flex items-center justify-center text-oq-200 hover:text-lime hover:bg-oq-800/80 transition-colors text-xs font-bold bg-oq-950/70 backdrop-blur-sm">+</button>
-          <div className="h-px bg-oq-700/30" />
-          <button onClick={() => leftMapRef.current?.zoomOut()} className="w-6 h-6 flex items-center justify-center text-oq-200 hover:text-lime hover:bg-oq-800/80 transition-colors text-xs font-bold bg-oq-950/70 backdrop-blur-sm">−</button>
+        <div className="absolute bottom-2 right-2 z-[1000] flex flex-col rounded overflow-hidden border border-oq-700/30" style={{ padding: 12 }}>
+          <button onClick={() => leftMapRef.current?.zoomIn()} className="w-7 h-7 flex items-center justify-center text-oq-200 hover:text-lime hover:bg-oq-800/80 transition-colors text-xs font-bold bg-oq-950/70 backdrop-blur-sm rounded">+</button>
+          <div className="h-px bg-oq-700/30 my-0.5" />
+          <button onClick={() => leftMapRef.current?.zoomOut()} className="w-7 h-7 flex items-center justify-center text-oq-200 hover:text-lime hover:bg-oq-800/80 transition-colors text-xs font-bold bg-oq-950/70 backdrop-blur-sm rounded">−</button>
         </div>
       </div>
       <div className="relative rounded-r-lg overflow-hidden bg-oq-950">
         <div ref={rightRef} className="absolute inset-0" />
-        <div className="absolute top-2 left-2 z-[1000] px-2 py-0.5 rounded text-[8px] font-bold uppercase tracking-widest bg-oq-950/80 text-semantic-after border border-semantic-after/20 backdrop-blur-sm">After</div>
+        <div className="absolute top-2 left-2 z-[1000] px-2 py-0.5 rounded text-[8px] font-bold uppercase tracking-widest bg-oq-950/80" style={{ color: '#FB923C', border: '1px solid rgba(251,146,60,0.2)' }}>After</div>
         {rightLoading && (
           <div className="absolute inset-0 z-[1000] flex items-center justify-center bg-oq-950/60">
             <div className="flex items-center gap-2 px-3 py-1.5 rounded bg-oq-900/90 border border-oq-700/30">
@@ -153,10 +155,10 @@ function SynchronizedDualMap({
             </div>
           </div>
         )}
-        <div className="absolute bottom-2 right-2 z-[1000] flex flex-col rounded overflow-hidden border border-oq-700/30">
-          <button onClick={() => rightMapRef.current?.zoomIn()} className="w-6 h-6 flex items-center justify-center text-oq-200 hover:text-lime hover:bg-oq-800/80 transition-colors text-xs font-bold bg-oq-950/70 backdrop-blur-sm">+</button>
-          <div className="h-px bg-oq-700/30" />
-          <button onClick={() => rightMapRef.current?.zoomOut()} className="w-6 h-6 flex items-center justify-center text-oq-200 hover:text-lime hover:bg-oq-800/80 transition-colors text-xs font-bold bg-oq-950/70 backdrop-blur-sm">−</button>
+        <div className="absolute bottom-2 right-2 z-[1000] flex flex-col rounded overflow-hidden border border-oq-700/30" style={{ padding: 12 }}>
+          <button onClick={() => rightMapRef.current?.zoomIn()} className="w-7 h-7 flex items-center justify-center text-oq-200 hover:text-lime hover:bg-oq-800/80 transition-colors text-xs font-bold bg-oq-950/70 backdrop-blur-sm rounded">+</button>
+          <div className="h-px bg-oq-700/30 my-0.5" />
+          <button onClick={() => rightMapRef.current?.zoomOut()} className="w-7 h-7 flex items-center justify-center text-oq-200 hover:text-lime hover:bg-oq-800/80 transition-colors text-xs font-bold bg-oq-950/70 backdrop-blur-sm rounded">−</button>
         </div>
       </div>
     </div>
@@ -199,8 +201,8 @@ function DifferenceView({
       const map = L.map(mapRef.current, { center, zoom: 10, zoomControl: false, attributionControl: false });
       L.tileLayer(GOOGLE_TILE, { maxZoom: 22, subdomains: ['0', '1', '2', '3'] }).addTo(map);
 
-      const baseResult = await loadSatelliteTiles(map, { L, sceneCollection: sceneT2?.collection, sceneItemId: sceneT2?.item_id, thumbnailUrl: thumbnailT2, sceneBbox: sceneBboxT2, aoiBbox: bbox, opacity: 0.9, zIndex: 400 });
-      const overlayResult = await loadSatelliteTiles(map, { L, sceneCollection: sceneT1?.collection, sceneItemId: sceneT1?.item_id, thumbnailUrl: thumbnailT1, sceneBbox: sceneBboxT1, aoiBbox: bbox, opacity: overlayOpacity, zIndex: 500 });
+      const baseResult = await loadSatelliteTiles(map, { L, sceneCollection: sceneT1?.collection, sceneItemId: sceneT1?.item_id, thumbnailUrl: thumbnailT1, sceneBbox: sceneBboxT1, aoiBbox: bbox, opacity: 0.9, zIndex: 400 });
+      const overlayResult = await loadSatelliteTiles(map, { L, sceneCollection: sceneT2?.collection, sceneItemId: sceneT2?.item_id, thumbnailUrl: thumbnailT2, sceneBbox: sceneBboxT2, aoiBbox: bbox, opacity: overlayOpacity, zIndex: 500 });
 
       if (cancelled) return;
 
@@ -238,10 +240,10 @@ function DifferenceView({
         </div>
       </div>
       {/* Zoom */}
-      <div className="absolute top-2 right-2 z-[1000] flex flex-col rounded overflow-hidden border border-oq-700/30">
-        <button onClick={() => mapInstanceRef.current?.zoomIn()} className="w-6 h-6 flex items-center justify-center text-oq-200 hover:text-lime hover:bg-oq-800/80 transition-colors text-xs font-bold bg-oq-950/70 backdrop-blur-sm">+</button>
-        <div className="h-px bg-oq-700/30" />
-        <button onClick={() => mapInstanceRef.current?.zoomOut()} className="w-6 h-6 flex items-center justify-center text-oq-200 hover:text-lime hover:bg-oq-800/80 transition-colors text-xs font-bold bg-oq-950/70 backdrop-blur-sm">−</button>
+      <div className="absolute top-2 right-2 z-[1000] flex flex-col rounded overflow-hidden border border-oq-700/30" style={{ padding: 12 }}>
+        <button onClick={() => mapInstanceRef.current?.zoomIn()} className="w-7 h-7 flex items-center justify-center text-oq-200 hover:text-lime hover:bg-oq-800/80 transition-colors text-xs font-bold bg-oq-950/70 backdrop-blur-sm rounded">+</button>
+        <div className="h-px bg-oq-700/30 my-0.5" />
+        <button onClick={() => mapInstanceRef.current?.zoomOut()} className="w-7 h-7 flex items-center justify-center text-oq-200 hover:text-lime hover:bg-oq-800/80 transition-colors text-xs font-bold bg-oq-950/70 backdrop-blur-sm rounded">−</button>
       </div>
     </div>
   );
@@ -253,27 +255,32 @@ function DifferenceView({
 function SceneStrip({ scene, indexStats, label, color }: {
   scene: SceneInfo | null; indexStats: IndexInfo | null; label: string; color: string;
 }) {
-  if (!scene) return <div className="p-3 rounded bg-oq-800/20 border border-oq-700/15 text-[10px] text-oq-300 text-center">No scene available</div>;
+  if (!scene) return <div className="p-4 rounded-lg text-[10px] text-oq-300 text-center" style={{ background: 'rgba(13,23,17,0.6)', border: '1px solid rgba(42,58,47,0.5)' }}>No scene available</div>;
 
   const dateStr = scene.datetime ? new Date(scene.datetime).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '—';
 
   return (
-    <div className="p-3 rounded bg-oq-800/20 border border-oq-700/15">
-      <div className="flex items-center gap-1.5 mb-2">
-        <span className="w-1.5 h-1.5 rounded-full" style={{ background: color }} />
-        <span className="text-[9px] font-semibold uppercase tracking-wider text-oq-100">{label}</span>
+    <div className="p-4 rounded-lg" style={{ background: 'rgba(13,23,17,0.6)', border: '1px solid rgba(42,58,47,0.5)' }}>
+      <div className="flex items-center gap-1.5 mb-3">
+        <span className="w-2 h-2 rounded-full" style={{ background: color }} />
+        <span className="text-[9px] font-semibold uppercase tracking-wider" style={{ color: '#E5E7EB' }}>{label}</span>
       </div>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-x-3 gap-y-1.5">
-        <div><div className="text-[8px] text-oq-300 uppercase">Sensor</div><div className="text-[11px] text-oq-100 font-medium">{scene.platform || '—'}</div></div>
-        <div><div className="text-[8px] text-oq-300 uppercase">Date</div><div className="text-[11px] text-oq-100 font-medium">{dateStr}</div></div>
-        <div><div className="text-[8px] text-oq-300 uppercase">Cloud</div><div className="text-[11px] text-oq-100 font-medium font-mono">{scene.cloud_cover != null ? `${scene.cloud_cover.toFixed(1)}%` : '—'}</div></div>
-        <div><div className="text-[8px] text-oq-300 uppercase">Collection</div><div className="text-[11px] text-oq-100 font-mono truncate">{scene.collection}</div></div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-2 mb-3">
+        <div><div className="text-[8px] uppercase tracking-wider" style={{ color: '#9CA3AF' }}>Sensor</div><div className="text-[11px] font-medium" style={{ color: '#FFFFFF' }}>{scene.platform || '—'}</div></div>
+        <div><div className="text-[8px] uppercase tracking-wider" style={{ color: '#9CA3AF' }}>Date</div><div className="text-[11px] font-medium" style={{ color: '#FFFFFF' }}>{dateStr}</div></div>
+        <div><div className="text-[8px] uppercase tracking-wider" style={{ color: '#9CA3AF' }}>Cloud</div><div className="text-[11px] font-mono" style={{ color: '#FFFFFF' }}>{scene.cloud_cover != null ? `${scene.cloud_cover.toFixed(1)}%` : '—'}</div></div>
+        <div><div className="text-[8px] uppercase tracking-wider" style={{ color: '#9CA3AF' }}>Collection</div><div className="text-[11px] font-mono truncate" style={{ color: '#FFFFFF' }}>{scene.collection}</div></div>
       </div>
       {indexStats && (
-        <div className="mt-2 pt-2 border-t border-oq-700/15 grid grid-cols-3 md:grid-cols-6 gap-x-2 gap-y-1">
-          {Object.entries(indexStats.stats).slice(0, 6).map(([key, val]) => (
-            <div key={key}><div className="text-[7px] text-oq-300 uppercase">{key}</div><div className="text-[10px] text-oq-100 font-mono">{typeof val === 'number' ? val.toFixed(4) : String(val)}</div></div>
-          ))}
+        <div className="pt-3" style={{ borderTop: '1px solid rgba(42,58,47,0.4)' }}>
+          <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
+            {Object.entries(indexStats.stats).slice(0, 6).map(([key, val]) => (
+              <div key={key} className="text-center">
+                <div className="text-[7px] uppercase tracking-wider mb-0.5" style={{ color: '#9CA3AF' }}>{key}</div>
+                <div className="text-[11px] font-mono font-medium" style={{ color: '#FFFFFF' }}>{typeof val === 'number' ? val.toFixed(4) : String(val)}</div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>
@@ -308,6 +315,51 @@ function ProcessingPipeline({ steps }: { steps: Array<{ step: string; detail: st
         );
       })}
     </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
+// ── Annual Trend Chart ──────────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+function AnnualTrendChart({ result, config }: { result: TemporalComparisonResult; config: { color: string; indexLabel: string } }) {
+  const t1 = result.index_t1;
+  const t2 = result.index_t2;
+  if (!t1 || !t2) return null;
+
+  const meanT1 = t1.stats?.mean ?? 0;
+  const meanT2 = t2.stats?.mean ?? 0;
+  const changedArea = (result.metrics?.changed_area_km2 as number) || 0;
+
+  const dateT1 = result.scene_t1?.datetime ? new Date(result.scene_t1.datetime).getFullYear() : 2021;
+  const dateT2 = result.scene_t2?.datetime ? new Date(result.scene_t2.datetime).getFullYear() : 2025;
+
+  const years: number[] = [];
+  for (let y = dateT1; y <= dateT2; y++) years.push(y);
+  if (years.length < 2) return null;
+
+  const trendData = years.map((year, i) => {
+    const t = years.length > 1 ? i / (years.length - 1) : 0;
+    const indexVal = meanT1 + (meanT2 - meanT1) * t;
+    const areaKm2 = Math.abs(changedArea) * t;
+    return { year: String(year), index: parseFloat(indexVal.toFixed(4)), area: parseFloat(areaKm2.toFixed(1)) };
+  });
+
+  return (
+    <details className="rounded-lg border border-oq-700/15 bg-oq-800/15 overflow-hidden group" open>
+      <summary className="px-4 py-2.5 text-[10px] font-semibold text-oq-200 uppercase tracking-wider cursor-pointer hover:text-oq-50 transition-colors flex items-center justify-between">
+        <span className="flex items-center gap-1.5">
+          <svg className="w-3 h-3 text-oq-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" /></svg>
+          Annual Trend ({dateT1} - {dateT2})
+        </span>
+        <svg className="w-3.5 h-3.5 text-oq-300 group-open:rotate-180 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+      </summary>
+      <div className="px-4 pb-4">
+        <div className="mb-2">
+          <span className="text-[9px] text-oq-300">Interpolated trend between {dateT1} and {dateT2} observations</span>
+        </div>
+        <RechartsTrendChart data={trendData} indexLabel={config.indexLabel} />
+      </div>
+    </details>
   );
 }
 
@@ -404,7 +456,7 @@ export default function TemporalComparisonView({ result }: Props) {
           )}
 
           {/* ── CHANGE SUMMARY (overlaid at bottom of map) ─── */}
-          <div className="absolute bottom-0 left-0 right-0 z-[1005] bg-gradient-to-t from-oq-950/95 via-oq-950/70 to-transparent pt-10 pb-3 px-4">
+          <div className="absolute bottom-0 left-0 right-0 z-[1005] bg-gradient-to-t from-oq-950/95 via-oq-950/70 to-transparent pt-12 pb-5 px-4">
             <div className="max-w-3xl mx-auto">
               {/* Phenomenon label */}
               <div className="mb-2">
@@ -419,12 +471,12 @@ export default function TemporalComparisonView({ result }: Props) {
                 {/* Changed area */}
                 {changedArea != null && changedArea > 0 ? (
                   <div>
-                    <div className="text-[8px] text-oq-300 uppercase tracking-wider font-medium mb-0.5">Change Detected</div>
-                    <div className="text-[28px] font-bold text-oq-50 leading-none tracking-tight">
+                    <div className="text-[8px] uppercase tracking-wider font-medium mb-0.5" style={{ color: '#E5E7EB' }}>Change Detected</div>
+                    <div className="text-[28px] font-bold leading-none tracking-tight" style={{ color: '#FFFFFF' }}>
                       {typeof changedArea === 'number' ? changedArea.toLocaleString(undefined, { maximumFractionDigits: 0 }) : changedArea} km²
                     </div>
                     {changedPct != null && (
-                      <div className="text-[10px] text-oq-300 mt-0.5">{typeof changedPct === 'number' ? changedPct.toFixed(1) : changedPct}% of study area</div>
+                      <div className="text-[10px] mt-0.5" style={{ color: '#E5E7EB' }}>{typeof changedPct === 'number' ? changedPct.toFixed(1) : changedPct}% of study area</div>
                     )}
                   </div>
                 ) : changedPct != null && changedPct > 0 ? (
@@ -444,7 +496,7 @@ export default function TemporalComparisonView({ result }: Props) {
                 {/* Index change */}
                 {deltaIndex != null && (
                   <div>
-                    <div className="text-[8px] text-oq-300 uppercase tracking-wider font-medium mb-0.5">{config.indexLabel} Change</div>
+                    <div className="text-[8px] uppercase tracking-wider font-medium mb-0.5" style={{ color: '#E5E7EB' }}>{config.indexLabel} Change</div>
                     <div className="text-[22px] font-bold leading-none tracking-tight" style={{ color: config.color }}>
                       {deltaIndex > 0 ? '+' : ''}{typeof deltaIndex === 'number' ? deltaIndex.toFixed(2) : deltaIndex}
                     </div>
@@ -454,8 +506,8 @@ export default function TemporalComparisonView({ result }: Props) {
                 {/* Direction / trend */}
                 {trendLabel && (
                   <div>
-                    <div className="text-[8px] text-oq-300 uppercase tracking-wider font-medium mb-0.5">Detected Trend</div>
-                    <div className="text-[16px] font-bold text-oq-100 leading-none tracking-tight">{trendLabel}</div>
+                    <div className="text-[8px] uppercase tracking-wider font-medium mb-0.5" style={{ color: '#E5E7EB' }}>Detected Trend</div>
+                    <div className="text-[16px] font-bold leading-none tracking-tight" style={{ color: '#FFFFFF' }}>{trendLabel}</div>
                   </div>
                 )}
               </div>
@@ -463,8 +515,8 @@ export default function TemporalComparisonView({ result }: Props) {
               {/* Changed pixels (if raster-derived) */}
               {changedPixels > 0 && (
                 <div className="mt-2 flex items-center gap-3">
-                  <span className="text-[9px] text-oq-300 font-mono">{changedPixels.toLocaleString()} changed pixels</span>
-                  {totalPixels > 0 && <span className="text-[9px] text-oq-400">/ {totalPixels.toLocaleString()} total</span>}
+                  <span className="text-[9px] font-mono" style={{ color: '#E5E7EB' }}>{changedPixels.toLocaleString()} changed pixels</span>
+                  {totalPixels > 0 && <span className="text-[9px]" style={{ color: '#9CA3AF' }}>/ {totalPixels.toLocaleString()} total</span>}
                   {metrics.raster_derived && <span className="text-[8px] text-lime/70 font-medium">RASTER-DERIVED</span>}
                 </div>
               )}
@@ -552,7 +604,10 @@ export default function TemporalComparisonView({ result }: Props) {
           </details>
         )}
 
-        {/* ── 3. Methodology ────────────────────────────────── */}
+        {/* ── 3. Annual Trend ──────────────────────────────── */}
+        <AnnualTrendChart result={result} config={config} />
+
+        {/* ── 4. Methodology ────────────────────────────────── */}
         {(explanation.methodology || sensorInfo.index_formula) && (
           <details className="rounded-lg border border-oq-700/15 bg-oq-800/15 overflow-hidden group">
             <summary className="px-4 py-2.5 text-[10px] font-semibold text-oq-200 uppercase tracking-wider cursor-pointer hover:text-oq-50 transition-colors flex items-center justify-between">
@@ -586,7 +641,7 @@ export default function TemporalComparisonView({ result }: Props) {
           </details>
         )}
 
-        {/* ── 4. Processing Pipeline ────────────────────────── */}
+        {/* ── 5. Processing Pipeline ────────────────────────── */}
         {result.processing_steps && result.processing_steps.length > 0 && (
           <details className="rounded-lg border border-oq-700/15 bg-oq-800/15 overflow-hidden group">
             <summary className="px-4 py-2.5 text-[10px] font-semibold text-oq-200 uppercase tracking-wider cursor-pointer hover:text-oq-50 transition-colors flex items-center justify-between">
