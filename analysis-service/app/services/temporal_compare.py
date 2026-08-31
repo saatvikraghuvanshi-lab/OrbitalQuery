@@ -731,6 +731,54 @@ def _generate_findings(phenomenon: str, metrics: dict[str, Any]) -> list[str]:
     return findings
 
 
+# ── Pure-Python PNG encoder (no Pillow required) ───────────────
+import struct
+import zlib
+
+
+def _make_png_chunk(chunk_type: bytes, data: bytes) -> bytes:
+    """Create a PNG chunk: length + type + data + CRC."""
+    chunk = chunk_type + data
+    crc = zlib.crc32(chunk) & 0xFFFFFFFF
+    return struct.pack('>I', len(data)) + chunk + struct.pack('>I', crc)
+
+
+def _encode_rgba_png(rgba_array: np.ndarray) -> str:
+    """Encode a (H, W, 4) uint8 RGBA array as a PNG, returning hex string."""
+    h, w = rgba_array.shape[:2]
+    # PNG signature
+    sig = b'\x89PNG\r\n\x1a\n'
+    # IHDR: width, height, bit_depth=8, color_type=6 (RGBA)
+    ihdr_data = struct.pack('>IIBBBBB', w, h, 8, 6, 0, 0, 0)
+    ihdr = _make_png_chunk(b'IHDR', ihdr_data)
+    # IDAT: filter byte (0) + raw pixel data per row, zlib-compressed
+    raw_rows = []
+    for row in rgba_array:
+        raw_rows.append(b'\x00' + row.tobytes())
+    raw = b''.join(raw_rows)
+    compressed = zlib.compress(raw, 6)
+    idat = _make_png_chunk(b'IDAT', compressed)
+    # IEND
+    iend = _make_png_chunk(b'IEND', b'')
+    return (sig + ihdr + idat + iend).hex()
+
+
+def _encode_rgb_png(rgb_array: np.ndarray) -> str:
+    """Encode a (H, W, 3) uint8 RGB array as a PNG, returning hex string."""
+    h, w = rgb_array.shape[:2]
+    sig = b'\x89PNG\r\n\x1a\n'
+    ihdr_data = struct.pack('>IIBBBBB', w, h, 8, 2, 0, 0, 0)
+    ihdr = _make_png_chunk(b'IHDR', ihdr_data)
+    raw_rows = []
+    for row in rgb_array:
+        raw_rows.append(b'\x00' + row.tobytes())
+    raw = b''.join(raw_rows)
+    compressed = zlib.compress(raw, 6)
+    idat = _make_png_chunk(b'IDAT', compressed)
+    iend = _make_png_chunk(b'IEND', b'')
+    return (sig + ihdr + idat + iend).hex()
+
+
 # ── Main pipeline ────────────────────────────────────────────────
 
 def run_temporal_comparison(
@@ -990,15 +1038,6 @@ def run_temporal_comparison(
     diff_vis_b64 = None
     if index_t1 and index_t2 and index_t1.value is not None and index_t2.value is not None:
         try:
-            import io
-            try:
-                from PIL import Image
-            except ImportError:
-                logger.warning("[visualization] Pillow not installed — cannot generate change mask PNG")
-                Image = None
-            if Image is None:
-                raise ImportError("Pillow not available")
-
             t1_arr = index_t1.value
             t2_arr = index_t2.value
             min_h = min(t1_arr.shape[0], t2_arr.shape[0])
@@ -1014,39 +1053,29 @@ def run_temporal_comparison(
             change_mask = valid & (np.abs(diff) >= threshold)
 
             mask_img = np.zeros((min_h, min_w, 4), dtype=np.uint8)
-            # Green for positive change (e.g. vegetation gain / water increase)
             pos_mask = change_mask & (diff > 0)
             mask_img[pos_mask, 0] = 16
             mask_img[pos_mask, 1] = 185
             mask_img[pos_mask, 2] = 129
             mask_img[pos_mask, 3] = 200
-            # Red/orange for negative change (e.g. vegetation loss / urban expansion)
             neg_mask = change_mask & (diff < 0)
             mask_img[neg_mask, 0] = 239
             mask_img[neg_mask, 1] = 68
             mask_img[neg_mask, 2] = 68
             mask_img[neg_mask, 3] = 200
 
-            mask_pil = Image.fromarray(mask_img, 'RGBA')
-            buf = io.BytesIO()
-            mask_pil.save(buf, format='PNG', optimize=True)
-            change_mask_b64 = buf.getvalue().hex()
+            change_mask_b64 = _encode_rgba_png(mask_img)
 
             # -- Difference visualization (blue-white-red diverging) --
             diff_clipped = np.clip(diff, -1, 1)
             diff_norm = ((diff_clipped + 1) / 2 * 255).astype(np.uint8)
             diff_img = np.zeros((min_h, min_w, 3), dtype=np.uint8)
-            # Blue for decrease, white for neutral, red for increase
-            diff_img[:, :, 0] = np.where(diff > 0, diff_norm, 0)      # R
-            diff_img[:, :, 1] = np.where(valid, np.full_like(diff_norm, 200), 0)  # G
-            diff_img[:, :, 2] = np.where(diff < 0, diff_norm, 0)      # B
-            # Where not valid, make dark
+            diff_img[:, :, 0] = np.where(diff > 0, diff_norm, 0)
+            diff_img[:, :, 1] = np.where(valid, np.full_like(diff_norm, 200), 0)
+            diff_img[:, :, 2] = np.where(diff < 0, diff_norm, 0)
             diff_img[~valid] = [13, 23, 17]
 
-            diff_pil = Image.fromarray(diff_img, 'RGB')
-            buf2 = io.BytesIO()
-            diff_pil.save(buf2, format='PNG', optimize=True)
-            diff_vis_b64 = buf2.getvalue().hex()
+            diff_vis_b64 = _encode_rgb_png(diff_img)
 
             logger.info("[%s] Generated change mask + difference visualization: %dx%d", index_name, min_w, min_h)
         except Exception as e:
