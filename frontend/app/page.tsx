@@ -254,14 +254,6 @@ function HomePageContent() {
         {/* ── ANALYSIS IN PROGRESS ─────────────────────────── */}
         {step !== 'idle' && step !== 'complete' && step !== 'error' && (
           <div className="flex-1 flex flex-col overflow-hidden">
-            {/* Compact search bar */}
-            <QueryInput
-              onAnalyze={analysis.analyze}
-              loading={true}
-              compact
-            />
-
-            <div className="flex-1 overflow-hidden">
               <div className="max-w-[1400px] mx-auto px-6 py-4 h-full flex flex-col">
                 {/* Back + query */}
                 <div className="flex items-center justify-between mb-3">
@@ -313,7 +305,6 @@ function HomePageContent() {
                 </div>
               </div>
             </div>
-          </div>
         )}
 
         {/* ── ERROR ────────────────────────────────────────── */}

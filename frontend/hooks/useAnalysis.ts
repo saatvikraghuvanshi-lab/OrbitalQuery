@@ -125,7 +125,7 @@ const FETCH_TIMEOUT_MS = 60_000;
 const MAX_RETRIES = 1;
 
 /** Delay between retries (gives Python service time to warm up) */
-const RETRY_DELAY_MS = 5_000;
+const RETRY_DELAY_MS = 3_000;
 
 // ── Helper: single fetch attempt ────────────────────────────────
 
@@ -222,7 +222,7 @@ export function useAnalysis() {
     }));
 
     try {
-      await new Promise(r => setTimeout(r, 200));
+      await new Promise(r => setTimeout(r, 50));
 
       setState(prev => ({ ...prev, step: 'searching', detail: 'Querying satellite archives...' }));
 
@@ -285,7 +285,7 @@ export function useAnalysis() {
         processingSteps: backendSteps,
       }));
 
-      await new Promise(r => setTimeout(r, 400));
+      await new Promise(r => setTimeout(r, 100));
 
       const changedPct = result?.metrics?.changed_pct;
       setState(prev => ({
@@ -296,7 +296,7 @@ export function useAnalysis() {
           : 'Running change detection...',
       }));
 
-      await new Promise(r => setTimeout(r, 300));
+      await new Promise(r => setTimeout(r, 80));
 
       const findingCount = result?.explanation?.key_findings?.length || 0;
       setState(prev => ({
@@ -307,7 +307,7 @@ export function useAnalysis() {
           : 'Generating analysis summary...',
       }));
 
-      await new Promise(r => setTimeout(r, 300));
+      await new Promise(r => setTimeout(r, 80));
 
       const scenes: SceneInfo[] = [];
       if (result.scene_t1) scenes.push(result.scene_t1);
