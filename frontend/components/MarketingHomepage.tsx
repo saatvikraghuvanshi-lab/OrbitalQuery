@@ -307,29 +307,41 @@ export default function MarketingHomepage({ onLaunchAsk, onNavigate }: Marketing
       </section>
 
       {/* ════════════════════════════════════════════════════════ */}
-      {/* 8. TECHNICAL CREDIBILITY                                */}
+      {/* 8. TECHNICAL CREDIBILITY + ARCHITECTURE                 */}
       {/* ════════════════════════════════════════════════════════ */}
-      <section className="py-12 px-6 border-t border-oq-700/15">
-        <div className="max-w-4xl mx-auto text-center">
-          <h2 className="text-[20px] font-bold text-oq-50 tracking-tight mb-6">A working system, not just a concept.</h2>
-          <div className="flex flex-wrap justify-center gap-2">
+      <section className="py-16 px-6 border-t border-oq-700/15">
+        <div className="max-w-5xl mx-auto text-center">
+          <h2 className="text-[22px] font-bold text-oq-50 tracking-tight mb-3">A working system, not just a concept.</h2>
+          <p className="text-[13px] text-oq-300 mb-8">Core capabilities powering OrbitalQuery's Earth observation analysis.</p>
+
+          {/* Feature tags row */}
+          <div className="flex flex-wrap justify-center gap-2.5 mb-10">
             {CAPABILITIES.map(c => (
-              <span key={c} className="px-3 py-1 rounded text-[10px] font-mono text-oq-200 border border-oq-700/15 bg-oq-900/20">{c}</span>
+              <span key={c} className="px-4 py-1.5 rounded-md text-[11px] font-medium text-[#E5E7EB] border border-[#2A3A2F] bg-[#0F1A13]">
+                {c}
+              </span>
             ))}
           </div>
-        </div>
-      </section>
 
-      {/* ════════════════════════════════════════════════════════ */}
-      {/* 9. ARCHITECTURE VISUAL                                  */}
-      {/* ════════════════════════════════════════════════════════ */}
-      <section className="py-12 px-6 border-t border-oq-700/15">
-        <div className="max-w-3xl mx-auto">
-          <div className="flex items-center justify-center gap-3 flex-wrap">
-            {['User Query', 'Semantic Search', 'EO Data Sources', 'Analysis', 'Map + Insight'].map((step, i) => (
-              <div key={step} className="flex items-center gap-3">
-                <span className="px-3 py-1.5 rounded text-[10px] font-mono text-oq-100 border border-oq-700/20 bg-oq-900/30">{step}</span>
-                {i < 4 && <svg className="w-3 h-3 text-oq-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" /></svg>}
+          {/* System pipeline row */}
+          <div className="flex items-center justify-center gap-2 flex-wrap">
+            {[
+              { num: '01', label: 'User Query' },
+              { num: '02', label: 'Semantic Search' },
+              { num: '03', label: 'EO Data Sources' },
+              { num: '04', label: 'Analysis' },
+              { num: '05', label: 'Map + Insight' },
+            ].map((step, i) => (
+              <div key={step.label} className="flex items-center gap-2">
+                <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-lg border border-[#2A3A2F] bg-[#0D1711]">
+                  <span className="text-[9px] font-mono font-bold" style={{ color: '#A3E635' }}>{step.num}</span>
+                  <span className="text-[11px] font-medium text-[#E5E7EB]">{step.label}</span>
+                </div>
+                {i < 4 && (
+                  <svg className="w-5 h-5 flex-shrink-0" style={{ color: '#A3E635' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                  </svg>
+                )}
               </div>
             ))}
           </div>
