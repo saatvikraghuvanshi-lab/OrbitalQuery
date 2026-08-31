@@ -277,7 +277,7 @@ export default function MapView({ results, selectedDataset, onSelectDataset, bbo
       </MapContainer>
 
       {/* Style selector */}
-      <div className="absolute top-4 left-4 z-[1000]">
+      <div className="absolute top-4 left-4 z-[1100]">
         <select
           value={mapStyle}
           onChange={(e) => setMapStyle(e.target.value as MapStyle)}

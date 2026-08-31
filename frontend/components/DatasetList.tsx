@@ -71,7 +71,7 @@ export default function DatasetList({ datasets, selectedId, onSelect, loading }:
   }
 
   return (
-    <div className="h-full overflow-y-auto">
+    <div className="h-full overflow-y-auto pb-4">
       <div className="p-2">
         {datasets.map((ds) => {
           const isSelected = ds.id === selectedId;
@@ -96,7 +96,7 @@ export default function DatasetList({ datasets, selectedId, onSelect, loading }:
               {/* Dataset name */}
               <div className="flex items-center justify-between gap-2">
                 <span
-                  className="text-[13px] font-medium truncate leading-tight"
+                  className="text-[13px] font-medium truncate leading-tight min-w-0"
                   style={{ color: isSelected ? '#F1F5F2' : '#A7B3AA' }}
                 >
                   {displayTitle}

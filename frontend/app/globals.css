@@ -116,6 +116,7 @@ body {
 /* ── Leaflet dark overrides ── */
 .leaflet-control-attribution { background: rgba(5,8,6,0.85) !important; color: var(--color-text-muted) !important; font-size: 9px !important; }
 .leaflet-control-attribution a { color: var(--color-text-secondary) !important; }
+.leaflet-control-zoom { margin-top: 56px !important; z-index: 999 !important; }
 .leaflet-control-zoom a { background: rgba(13,23,17,0.9) !important; color: var(--color-text-secondary) !important; border-color: var(--color-border) !important; }
 .leaflet-control-zoom a:hover { color: var(--color-accent) !important; }
 

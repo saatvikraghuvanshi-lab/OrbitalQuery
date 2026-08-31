@@ -445,7 +445,7 @@ function HomePageContent() {
 
       {/* Filter bar */}
       <div style={{ borderBottom: '1px solid #17251C', background: '#09110D' }}>
-        <div className="max-w-[1600px] mx-auto px-5 h-12 flex items-center gap-5">
+        <div className="max-w-[1600px] mx-auto px-5 h-12 flex items-center gap-6">
           <div className="flex items-center gap-2">
             <span className="text-[10px] uppercase tracking-wider font-medium" style={{ color: '#68756E' }}>Provider</span>
             <select
@@ -484,7 +484,7 @@ function HomePageContent() {
             </select>
           </div>
           <div className="w-px h-4" style={{ background: '#17251C' }} />
-          <span className="text-[11px] font-mono" style={{ color: '#68756E' }}>{filteredDatasets.length} datasets</span>
+          <span className="text-[11px] font-mono ml-1" style={{ color: '#68756E' }}>{filteredDatasets.length} datasets</span>
         </div>
       </div>
 
