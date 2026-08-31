@@ -235,9 +235,24 @@ function HomePageContent() {
   // ── Analysis Workflow View ──────────────────────────────────────
 
   if (tab === 'ask') {  return (
-    <div className="h-screen flex flex-col overflow-hidden oq-bg">
+    <div className="h-screen flex flex-col overflow-hidden relative">
+      {/* Topographic background with dark/blur overlay */}
+      <div className="fixed inset-0 z-0 pointer-events-none">
+        <div
+          className="absolute inset-0 opacity-30"
+          style={{
+            backgroundImage: `url('https://images.unsplash.com/photo-1564167714675-6f2156b2bce4?q=80&w=2400&auto=format&fit=crop')`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            filter: 'blur(8px)',
+          }}
+        />
+        <div className="absolute inset-0 bg-[var(--color-bg-deep)]/80 backdrop-blur-sm" />
+      </div>
+
+      <div className="relative z-10 h-screen flex flex-col overflow-hidden">
         <ShaderBackground />
-        <Header activeTab={tab} onNavigate={setTab} />
+        <Header activeTab={tab} onNavigate={setTab} onHome={() => setView('home')} />
 
         {step === 'idle' && (
           <QueryInput onAnalyze={analysis.analyze} loading={false} />
@@ -332,22 +347,39 @@ function HomePageContent() {
               <TemporalComparisonView result={analysis.state.result} />
             </div>
           </div>
-        )}
-      </div>
-    );
-  }
+         )}
+       </div>
+     </div>
+     );
+   }
 
   // ── Showcase View ─────────────────────────────────────────────
 
   if (tab === 'showcase') {
     return (
-      <div className="h-screen flex flex-col overflow-hidden oq-bg">
-        <Header activeTab={tab} onNavigate={setTab} />
-        <div className="flex-1 overflow-y-auto">
-          <ShowcaseQueries onSelect={(query) => {
-            setTab('ask');
-            analysis.analyze(query);
-          }} />
+      <div className="h-screen flex flex-col overflow-hidden relative">
+        {/* Topographic background with dark/blur overlay */}
+        <div className="fixed inset-0 z-0 pointer-events-none">
+          <div
+            className="absolute inset-0 opacity-30"
+            style={{
+              backgroundImage: `url('https://images.unsplash.com/photo-1564167714675-6f2156b2bce4?q=80&w=2400&auto=format&fit=crop')`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+              filter: 'blur(8px)',
+            }}
+          />
+          <div className="absolute inset-0 bg-[var(--color-bg-deep)]/80 backdrop-blur-sm" />
+        </div>
+
+        <div className="relative z-10 h-screen flex flex-col overflow-hidden">
+          <Header activeTab={tab} onNavigate={setTab} onHome={() => setView('home')} />
+          <div className="flex-1 overflow-y-auto">
+            <ShowcaseQueries onSelect={(query) => {
+              setTab('ask');
+              analysis.analyze(query);
+            }} />
+          </div>
         </div>
       </div>
     );

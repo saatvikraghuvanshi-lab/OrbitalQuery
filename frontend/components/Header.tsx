@@ -11,6 +11,7 @@ import { Slider } from '@/components/ui/slider';
 interface HeaderProps {
   activeTab?: 'ask' | 'showcase' | 'discover';
   onNavigate?: (tab: 'ask' | 'showcase' | 'discover') => void;
+  onHome?: () => void;
   onSettingsChange?: (settings: AppSettings) => void;
 }
 
@@ -67,7 +68,7 @@ function NavIcon({ type }: { type: 'ask' | 'showcase' | 'discover' }) {
   );
 }
 
-export default function Header({ activeTab = 'ask', onNavigate, onSettingsChange }: HeaderProps) {
+export default function Header({ activeTab = 'ask', onNavigate, onHome, onSettingsChange }: HeaderProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
 
@@ -92,8 +93,19 @@ export default function Header({ activeTab = 'ask', onNavigate, onSettingsChange
     <>
       <header className="border-b border-[var(--color-accent-border)] sticky top-0 z-50" style={{ background: 'rgba(8,18,11,0.85)', backdropFilter: 'blur(12px)' }}>
         <div className="max-w-7xl mx-auto px-gutter-md h-control-bar-height flex items-center justify-between">
-          {/* Logo */}
+          {/* Logo + Home */}
           <div className="flex items-center gap-3">
+            {onHome && (
+              <button
+                onClick={onHome}
+                className="p-2 rounded-lg hover:bg-oq-700/40 transition-colors text-[var(--color-text-muted)] hover:text-[var(--color-accent)]"
+                title="Home"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125a1.125 1.125 0 001.125 1.125H9.75v-4.875a1.125 1.125 0 011.125-1.125h2.25a1.125 1.125 0 011.125 1.125v4.875h4.125a1.125 1.125 0 001.125-1.125V9.75M8.25 21h8.25" />
+                </svg>
+              </button>
+            )}
             <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
               <rect x="12" y="10" width="8" height="12" rx="2" fill="#ef4444" />
               <rect x="4" y="12" width="7" height="8" rx="1.5" stroke="#ef4444" strokeWidth="1.5" fill="none" />
