@@ -594,28 +594,30 @@ export default function TemporalComparisonView({ result }: Props) {
       {/* ── MAP AREA (dominant element) ─────────────────────── */}
       {/* ════════════════════════════════════════════════════════ */}
       {hasImagery && (
-        <div className="relative">
-          {/* Control bar — floating over map */}
-          <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[1010]">
-            <div className="inline-flex bg-oq-950/85 backdrop-blur-sm rounded border border-oq-700/30 p-[2px]">
-              {(['side-by-side', 'swipe', 'difference'] as ViewMode[]).map((mode) => (
-                <button
-                  key={mode}
-                  onClick={() => setViewMode(mode)}
-                  className={`px-3 py-1 rounded text-[9px] font-semibold uppercase tracking-wider transition-all ${
-                    viewMode === mode ? 'bg-lime text-oq-950' : 'text-oq-300 hover:text-oq-100 hover:bg-oq-800/50'
-                  }`}
-                >
-                  {mode === 'side-by-side' && 'Side by Side'}
-                  {mode === 'swipe' && 'Swipe'}
-                  {mode === 'difference' && 'Difference'}
-                  {mode === 'change-mask' && 'Change Mask'}
-                </button>
-              ))}
+        <>
+          {/* ── Map container with mode switcher overlaid ── */}
+          <div className="relative border border-oq-700/20 rounded-lg overflow-hidden">
+            {/* Mode switcher — centered at top of map */}
+            <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[1010]">
+              <div className="inline-flex bg-oq-950/85 backdrop-blur-sm rounded border border-oq-700/30 p-[2px]">
+                {(['side-by-side', 'swipe', 'difference'] as ViewMode[]).map((mode) => (
+                  <button
+                    key={mode}
+                    onClick={() => setViewMode(mode)}
+                    className={`px-3 py-1 rounded text-[9px] font-semibold uppercase tracking-wider transition-all ${
+                      viewMode === mode ? 'bg-lime text-oq-950' : 'text-oq-300 hover:text-oq-100 hover:bg-oq-800/50'
+                    }`}
+                  >
+                    {mode === 'side-by-side' && 'Side by Side'}
+                    {mode === 'swipe' && 'Swipe'}
+                    {mode === 'difference' && 'Difference'}
+                    {mode === 'change-mask' && 'Change Mask'}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
 
-          {/* Map views */}
+            {/* Map views */}
           {viewMode === 'side-by-side' && (
             <SynchronizedDualMap
               bbox={result.aoi_bbox}
@@ -664,8 +666,10 @@ export default function TemporalComparisonView({ result }: Props) {
             />
           )}
 
-          {/* ── CHANGE SUMMARY (overlaid at bottom of map) ─── */}
-          <div className="absolute bottom-0 left-0 right-0 z-[1005] bg-gradient-to-t from-oq-950/95 via-oq-950/70 to-transparent pt-12 pb-5 px-4">
+          </div>{/* end map container */}
+
+          {/* ── CHANGE SUMMARY (below map) ─── */}
+          <div className="mt-4 px-1">
             <div className="max-w-3xl mx-auto">
               {/* Phenomenon label */}
               <div className="mb-2">
@@ -731,7 +735,7 @@ export default function TemporalComparisonView({ result }: Props) {
               )}
             </div>
           </div>
-        </div>
+        </>
       )}
 
       {/* ════════════════════════════════════════════════════════ */}
