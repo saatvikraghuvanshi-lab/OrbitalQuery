@@ -6,48 +6,62 @@
 
 @layer base {
   :root {
-    /* OrbitalQuery — Mission Control palette */
-    --color-bg-deep: #040806;
-    --color-bg-base: #070E0A;
-    --color-bg-elevated: #0C1610;
-    --color-bg-card: #101E15;
-    --color-bg-hover: #152719;
-    --color-accent: #A3F63F;
-    --color-accent-hover: #B8FF63;
-    --color-accent-muted: #7EBF32;
-    --color-accent-dim: rgba(163,246,63,0.10);
-    --color-accent-border: rgba(163,246,63,0.14);
-    --color-purple: #8B6CF6;
-    --color-purple-muted: #6F58C7;
-    --color-purple-dim: rgba(139,108,246,0.10);
-    --color-purple-border: rgba(139,108,246,0.14);
-    --color-cyan: #22D3EE;
-    --color-cyan-dim: rgba(34,211,238,0.10);
-    --color-cyan-border: rgba(34,211,238,0.14);
-    --color-orange: #F97316;
-    --color-orange-dim: rgba(249,115,22,0.10);
-    --color-text-primary: #F0F4F1;
-    --color-text-secondary: #A0ADA4;
-    --color-text-muted: #5E6E63;
+    /* ── SURFACES (4 levels) ── */
+    --color-bg-deep: #050806;      /* Level 0 — Canvas */
+    --color-bg-base: #08100B;      /* Level 1 — Section */
+    --color-bg-card: #0D1711;      /* Level 2 — Card */
+    --color-bg-elevated: #111E15;  /* Level 3 — Elevated */
+    --color-bg-active: rgba(163,230,53,0.06); /* Level 4 — Active tint */
+    --color-bg-hover: #0D1711;
 
-    /* Semantic colors */
+    /* ── BRAND ── */
+    --color-accent: #A3E635;
+    --color-accent-hover: #B4F45A;
+    --color-accent-muted: #3F6212;
+    --color-accent-dim: rgba(163,230,53,0.06);
+    --color-accent-border: rgba(163,230,53,0.12);
+
+    /* ── BORDERS ── */
+    --color-border: #17251C;
+    --color-border-hover: #29402F;
+    --color-border-active: #A3E635;
+
+    /* ── TEXT ── */
+    --color-text-primary: #F1F5F2;
+    --color-text-secondary: #A7B3AA;
+    --color-text-muted: #68766D;
+    --color-text-disabled: #465249;
+
+    /* ── SEMANTIC ── */
+    --color-success: #4ADE80;
+    --color-warning: #FBBF24;
+    --color-danger: #F87171;
+    --color-info: #60A5FA;
+
+    /* ── TEMPORAL ── */
     --color-before: #60A5FA;
     --color-after: #FB923C;
-    --color-change: #8B6CF6;
-    --color-success: #A3F63F;
-    --color-warning: #FBBF24;
-    --color-error: #F87171;
+    --color-change: #A78BFA;
 
-    /* shadcn/ui compatibility */
+    /* ── CATEGORIES ── */
+    --color-cat-urban: #A78BFA;
+    --color-cat-water: #22D3EE;
+    --color-cat-vegetation: #4ADE80;
+    --color-cat-fire: #FB923C;
+    --color-cat-snow: #BAE6FD;
+    --color-cat-soil: #FBBF24;
+    --color-cat-coastal: #2DD4BF;
+
+    /* ── SHADCN COMPAT ── */
     --background: 140 50% 3%;
     --foreground: 140 8% 95%;
-    --card: 140 30% 7%;
+    --card: 140 30% 6%;
     --card-foreground: 140 8% 95%;
     --popover: 140 30% 7%;
     --popover-foreground: 140 8% 95%;
-    --primary: 88 92% 58%;
+    --primary: 88 92% 54%;
     --primary-foreground: 140 50% 3%;
-    --secondary: 140 20% 9%;
+    --secondary: 140 20% 8%;
     --secondary-foreground: 140 8% 95%;
     --muted: 140 15% 10%;
     --muted-foreground: 140 7% 38%;
@@ -55,10 +69,10 @@
     --accent-foreground: 140 8% 95%;
     --destructive: 0 84% 60%;
     --destructive-foreground: 210 40% 98%;
-    --border: 140 12% 14%;
-    --input: 140 12% 14%;
-    --ring: 88 92% 58%;
-    --radius: 0.5rem;
+    --border: 140 15% 11%;
+    --input: 140 15% 11%;
+    --ring: 88 92% 54%;
+    --radius: 0.375rem;
   }
 }
 
@@ -69,95 +83,44 @@ body {
   min-height: 100vh;
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
 }
 
-/* ── Orbital brand background ── */
+/* ── Brand background ── */
 .oq-bg {
-  background:
-    radial-gradient(ellipse at 50% 0%, rgba(163,246,63,0.03) 0%, transparent 50%),
-    radial-gradient(ellipse at 80% 20%, rgba(139,108,246,0.02) 0%, transparent 40%),
-    var(--color-bg-deep);
+  background: var(--color-bg-deep);
 }
 
-/* ── Glass panel ── */
-.glass-panel {
-  background: rgba(12,22,16,0.80);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(163,246,63,0.06);
-}
-
-/* ── Card — instrument panel ── */
+/* ── Card ── */
 .oq-card {
   background: var(--color-bg-card);
-  border: 1px solid rgba(163,246,63,0.08);
+  border: 1px solid var(--color-border);
   border-radius: 0.5rem;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.30), 0 2px 8px rgba(0,0,0,0.20);
 }
 
-/* ── Terminal panel ── */
+/* ── Terminal ── */
 .terminal-panel {
-  background: #0A0F0D;
-  border: 1px solid rgba(163,246,63,0.08);
+  background: #060A07;
+  border: 1px solid var(--color-border);
   border-radius: 0.5rem;
 }
 
 /* ── Scrollbar ── */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: rgba(94,110,99,0.30);
-  border-radius: 3px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(163,246,63,0.20);
-}
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(104,118,109,0.25); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(163,230,53,0.15); }
 
 /* ── Selection ── */
-::selection {
-  background: rgba(163,246,63,0.20);
-  color: var(--color-text-primary);
-}
+::selection { background: rgba(163,230,53,0.15); color: var(--color-text-primary); }
 
-/* ── Leaflet overrides for dark theme ── */
-.leaflet-control-attribution {
-  background: rgba(4,8,6,0.8) !important;
-  color: var(--color-text-muted) !important;
-  font-size: 9px !important;
-}
-.leaflet-control-attribution a {
-  color: var(--color-text-secondary) !important;
-}
-.leaflet-control-zoom a {
-  background: rgba(12,22,16,0.9) !important;
-  color: var(--color-text-secondary) !important;
-  border-color: rgba(163,246,63,0.1) !important;
-}
-.leaflet-control-zoom a:hover {
-  background: rgba(16,30,21,0.95) !important;
-  color: var(--color-accent) !important;
-}
+/* ── Leaflet dark overrides ── */
+.leaflet-control-attribution { background: rgba(5,8,6,0.85) !important; color: var(--color-text-muted) !important; font-size: 9px !important; }
+.leaflet-control-attribution a { color: var(--color-text-secondary) !important; }
+.leaflet-control-zoom a { background: rgba(13,23,17,0.9) !important; color: var(--color-text-secondary) !important; border-color: var(--color-border) !important; }
+.leaflet-control-zoom a:hover { color: var(--color-accent) !important; }
 
 /* ── Focus ring ── */
-*:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
-}
+*:focus-visible { outline: 1px solid var(--color-accent); outline-offset: 1px; }
 
-/* ── Smooth transitions ── */
-button, a, input, select {
-  transition-property: color, background-color, border-color, box-shadow, opacity, transform;
-  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-  transition-duration: 150ms;
-}
-
-/* ── Mono utility ── */
-.font-mono {
-  font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, monospace;
-}
+/* ── Mono ── */
+.font-mono { font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, monospace; }
