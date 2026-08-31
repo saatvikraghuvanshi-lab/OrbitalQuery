@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import logging
 import math
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from typing import Any, Optional
@@ -789,13 +790,12 @@ def run_temporal_comparison(
         period2_start = (end_dt - timedelta(days=30)).strftime("%Y-%m-%d")
         period2_end = (end_dt + timedelta(days=30)).strftime("%Y-%m-%d")
     else:
-        # Long range: split in half
+        # Long range: split in half, use narrow 45-day windows for faster search
         mid = start_dt + timedelta(days=total_days // 2)
-        # Use the first half as period 1, second half as period 2
-        # Take best 3 months from each half
+        window = min(45, total_days // 4)  # 45-day search windows
         period1_start = start_dt.strftime("%Y-%m-%d")
-        period1_end = (start_dt + timedelta(days=min(90, total_days // 2))).strftime("%Y-%m-%d")
-        period2_start = (end_dt - timedelta(days=min(90, total_days // 2))).strftime("%Y-%m-%d")
+        period1_end = (start_dt + timedelta(days=window)).strftime("%Y-%m-%d")
+        period2_start = (end_dt - timedelta(days=window)).strftime("%Y-%m-%d")
         period2_end = end_dt.strftime("%Y-%m-%d")
 
     period1 = {"start": period1_start, "end": period1_end}
@@ -806,19 +806,23 @@ def run_temporal_comparison(
         "detail": f"Period 1: {period1_start} → {period1_end} | Period 2: {period2_start} → {period2_end}",
     })
 
-    # ── Step 2: Search for scenes in each period ──────────────────
+    # ── Step 2: Search for scenes in each period (parallel) ────────
     logger.info("Searching scenes for period 1: %s to %s", period1_start, period1_end)
-    items_t1 = _search_scenes(collection, bbox, period1_start, period1_end, cloud_threshold, limit=15)
-    processing_steps.append({
-        "step": "search_period_1",
-        "detail": f"Found {len(items_t1)} scenes in {collection}",
-    })
-
     logger.info("Searching scenes for period 2: %s to %s", period2_start, period2_end)
-    items_t2 = _search_scenes(collection, bbox, period2_start, period2_end, cloud_threshold, limit=15)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        future_t1 = executor.submit(
+            _search_scenes, collection, bbox, period1_start, period1_end, cloud_threshold, 8
+        )
+        future_t2 = executor.submit(
+            _search_scenes, collection, bbox, period2_start, period2_end, cloud_threshold, 8
+        )
+        items_t1 = future_t1.result()
+        items_t2 = future_t2.result()
+
     processing_steps.append({
-        "step": "search_period_2",
-        "detail": f"Found {len(items_t2)} scenes in {collection}",
+        "step": "search_periods",
+        "detail": f"Period 1: {len(items_t1)} scenes | Period 2: {len(items_t2)} scenes",
     })
 
     # ── Step 3: Select best scene for each period ─────────────────
@@ -833,23 +837,31 @@ def run_temporal_comparison(
         "detail": f"Period 1: {scene_sel_t1.item_id if scene_sel_t1 else 'none'} | Period 2: {scene_sel_t2.item_id if scene_sel_t2 else 'none'}",
     })
 
-    # ── Step 4: Compute spectral indices for each period ──────────
+    # ── Step 4: Compute spectral indices for each period (parallel) ─
     index_t1 = None
     index_t2 = None
 
-    if scene_sel_t1:
-        index_t1 = _compute_index_stats(index_name, sensor, scene_sel_t1, bbox)
-        processing_steps.append({
-            "step": "compute_index_t1",
-            "detail": f"{index_name} for {scene_sel_t1.item_id}: mean={index_t1.stats['mean']}",
-        })
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = {}
+        if scene_sel_t1:
+            futures["t1"] = executor.submit(_compute_index_stats, index_name, sensor, scene_sel_t1, bbox)
+        if scene_sel_t2:
+            futures["t2"] = executor.submit(_compute_index_stats, index_name, sensor, scene_sel_t2, bbox)
 
-    if scene_sel_t2:
-        index_t2 = _compute_index_stats(index_name, sensor, scene_sel_t2, bbox)
-        processing_steps.append({
-            "step": "compute_index_t2",
-            "detail": f"{index_name} for {scene_sel_t2.item_id}: mean={index_t2.stats['mean']}",
-        })
+        for key, future in futures.items():
+            result = future.result()
+            if key == "t1":
+                index_t1 = result
+                processing_steps.append({
+                    "step": "compute_index_t1",
+                    "detail": f"{index_name} for {scene_sel_t1.item_id}: mean={result.stats['mean']}",
+                })
+            else:
+                index_t2 = result
+                processing_steps.append({
+                    "step": "compute_index_t2",
+                    "detail": f"{index_name} for {scene_sel_t2.item_id}: mean={result.stats['mean']}",
+                })
 
     # ── Step 5: Change detection ──────────────────────────────────
     change_result = None
