@@ -12,9 +12,22 @@ jobs:
     timeout-minutes: 5
 
     steps:
-    - name: Ping Python analysis service
+    - name: Check secrets are configured
       run: |
-        URL="https://orbitalquery.onrender.com/health"
+        if [ -z "${{ secrets.PYTHON_SERVICE_URL }}" ]; then
+          echo "::error::PYTHON_SERVICE_URL secret is not set. Add it in GitHub repo Settings → Secrets and variables → Actions."
+          exit 1
+        fi
+        if [ -z "${{ secrets.BACKEND_SERVICE_URL }}" ]; then
+          echo "::error::BACKEND_SERVICE_URL secret is not set. Add it in GitHub repo Settings → Secrets and variables → Actions."
+          exit 1
+        fi
+
+    - name: Ping Python analysis service
+      env:
+        PYTHON_URL: ${{ secrets.PYTHON_SERVICE_URL }}
+      run: |
+        URL="${PYTHON_URL}/health"
         echo "Pinging $URL ..."
         for i in 1 2 3; do
           HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "$URL" || echo "000")
@@ -25,12 +38,14 @@ jobs:
           fi
           sleep 5
         done
-        echo "  Warning: analysis service may be starting up. This is expected on first wake."
+        echo "::warning::Analysis service did not return 200 after 3 attempts. It may be starting up."
         exit 0  # Don't fail the workflow — cold start is expected
 
     - name: Ping Node.js backend service
+      env:
+        BACKEND_URL: ${{ secrets.BACKEND_SERVICE_URL }}
       run: |
-        URL="https://orbitalquery-backend.onrender.com/health"
+        URL="${BACKEND_URL}/api/health"
         echo "Pinging $URL ..."
         for i in 1 2 3; do
           HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "$URL" || echo "000")
@@ -41,5 +56,5 @@ jobs:
           fi
           sleep 5
         done
-        echo "  Warning: backend service may be starting up."
+        echo "::warning::Backend service did not return 200 after 3 attempts. It may be starting up."
         exit 0

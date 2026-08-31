@@ -19,8 +19,8 @@ const PYTHON_SERVICE_TIMEOUT_MS = parseInt(
   10,
 );
 
-const MAX_RETRIES = 1; // Retry once on 503 (cold start)
-const RETRY_DELAY_MS = 5000; // Wait 5s for cold start before retry
+const MAX_RETRIES = 3; // Retry up to 3 times on 503 (Render cold-start)
+const RETRY_DELAY_MS = 5000; // Initial delay — doubles on each retry
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -71,10 +71,13 @@ export async function callPythonService<T = any>(
       signal: AbortSignal.timeout(effectiveTimeout),
     });
 
-    // Retry once on 503 (Render cold-start)
-    if (response.status === 503) {
-      console.log(`[python-client] ← 503, retrying in ${RETRY_DELAY_MS}ms (cold start) | requestId=${requestId}`);
-      await new Promise(r => setTimeout(r, RETRY_DELAY_MS));
+    // Retry on 503 (Render cold-start) with exponential backoff
+    let retries = 0;
+    while (response.status === 503 && retries < MAX_RETRIES) {
+      const delay = RETRY_DELAY_MS * Math.pow(2, retries);
+      console.log(`[python-client] ← 503, retrying in ${delay}ms (attempt ${retries + 1}/${MAX_RETRIES}) | requestId=${requestId}`);
+      await new Promise(r => setTimeout(r, delay));
+      retries++;
       response = await fetch(url, {
         method,
         headers: {

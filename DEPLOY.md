@@ -199,7 +199,21 @@ Redeploy the backend service.
 
 ## STEP 5: Final Verification
 
-### Test the full pipeline:
+### 5a. Configure Keep-Alive Secrets (GitHub Actions)
+The keep-alive workflow needs your actual Render/Railway service URLs to ping them every 10 minutes and prevent cold starts.
+
+1. Go to your GitHub repo → **Settings** → **Secrets and variables** → **Actions**
+2. Click **New repository secret**
+3. Add:
+   - Name: `PYTHON_SERVICE_URL`
+     Value: `https://<your-python-service-url>` (without trailing slash)
+   - Name: `BACKEND_SERVICE_URL`
+     Value: `https://<your-backend-service-url>` (without trailing slash)
+4. Save both secrets
+
+The workflow will now ping the correct services instead of hardcoded placeholder URLs.
+
+### 5b. Test the full pipeline:
 
 ```bash
 # 1. Frontend loads
@@ -241,7 +255,7 @@ curl -X POST https://orbitalquery-frontend.vercel.app/api/analysis/temporal-comp
 |---|---|
 | Frontend shows "Backend is unreachable" | Check `NEXT_PUBLIC_BACKEND_URL` matches Railway URL |
 | CORS error in browser | Update `CORS_ORIGIN` in Railway to match Vercel URL exactly |
-| Python service timeout | Railway free tier cold-starts take ~30s; first request is slow |
+| Python service timeout / 503 | Ensure `PYTHON_SERVICE_URL` and `BACKEND_SERVICE_URL` GitHub secrets are set for keep-alive workflow |
 | Auth "Network error" | Check Railway backend logs: Railway → Service → Deployments → Logs |
 | Build fails on Railway | Check Node version — add `NODE_VERSION=18` to env vars |
 | Prisma error | Ensure `npx prisma generate` is in the build command |
