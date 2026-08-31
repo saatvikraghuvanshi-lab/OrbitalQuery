@@ -4,118 +4,119 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --orbital-gradient: linear-gradient(135deg, #0b3954 0%, #1e3a5f 25%, #364f75 50%, #4c6ef5 75%, #74c0fc 100%);
+@layer base {
+  :root {
+    /* OrbitalQuery palette */
+    --color-bg-deep: #050A07;
+    --color-bg-base: #08120B;
+    --color-bg-elevated: #0D1A11;
+    --color-bg-card: #122117;
+    --color-bg-hover: #17291B;
+    --color-accent: #A3F63F;
+    --color-accent-hover: #B8FF63;
+    --color-accent-muted: #7EBF32;
+    --color-accent-dim: rgba(163,246,63,0.12);
+    --color-accent-border: rgba(163,246,63,0.16);
+    --color-purple: #8B6CF6;
+    --color-purple-muted: #6F58C7;
+    --color-purple-dim: rgba(139,108,246,0.12);
+    --color-purple-border: rgba(139,108,246,0.16);
+    --color-text-primary: #F2F5F0;
+    --color-text-secondary: #A7B2A8;
+    --color-text-muted: #68766C;
+
+    /* shadcn/ui compatibility (dark theme = OrbitalQuery) */
+    --background: 130 42% 5%;
+    --foreground: 95 10% 95%;
+    --card: 130 28% 9%;
+    --card-foreground: 95 10% 95%;
+    --popover: 130 28% 9%;
+    --popover-foreground: 95 10% 95%;
+    --primary: 88 92% 58%;
+    --primary-foreground: 130 42% 5%;
+    --secondary: 130 24% 11%;
+    --secondary-foreground: 95 10% 95%;
+    --muted: 130 18% 12%;
+    --muted-foreground: 130 7% 41%;
+    --accent: 130 18% 12%;
+    --accent-foreground: 95 10% 95%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 130 15% 17%;
+    --input: 130 15% 17%;
+    --ring: 88 92% 58%;
+    --radius: 0.75rem;
+  }
 }
 
 body {
   font-family: 'Inter', system-ui, sans-serif;
-  background: #0a0e1a;
-  color: #e4e8f0;
+  background: var(--color-bg-deep);
+  color: var(--color-text-primary);
   min-height: 100vh;
-  overflow: hidden;
+  overflow-x: hidden;
 }
 
-/* Glass panel for search bars */
+/* Orbital brand background — near-black with restrained green glow */
+.oq-bg {
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(163,246,63,0.04) 0%, transparent 55%),
+    radial-gradient(ellipse at 80% 20%, rgba(139,108,246,0.03) 0%, transparent 50%),
+    var(--color-bg-deep);
+}
+
+/* Subtle topo texture */
+.topo-bg {
+  background-image: repeating-radial-gradient(
+    circle at 0 0,
+    transparent 0,
+    rgba(163,246,63,0.015) 10px,
+    transparent 11px,
+    transparent 20px
+  );
+}
+
+/* Glass panel — green-tinted, subtle */
 .glass-panel {
-  background: rgba(23, 26, 33, 0.7);
+  background: rgba(13,26,17,0.7);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(163,246,63,0.08);
 }
 
-/* Starfield background */
-.starfield {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 0;
-  background: radial-gradient(ellipse at 50% 0%, #1a1f35 0%, #0a0e1a 70%);
+/* Card — scientific instrument panel */
+.oq-card {
+  background: var(--color-bg-card);
+  border: 1px solid rgba(163,246,63,0.10);
+  border-radius: 0.75rem;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.25), 0 4px 12px rgba(0,0,0,0.2);
 }
 
-.starfield::before,
-.starfield::after {
-  content: '';
-  position: absolute;
-  width: 100%;
-  height: 100%;
-  background-image:
-    radial-gradient(1px 1px at 20px 30px, rgba(255,255,255,0.8), transparent),
-    radial-gradient(1px 1px at 40px 70px, rgba(255,255,255,0.5), transparent),
-    radial-gradient(1px 1px at 50px 160px, rgba(255,255,255,0.6), transparent),
-    radial-gradient(1px 1px at 90px 40px, rgba(255,255,255,0.4), transparent),
-    radial-gradient(1px 1px at 130px 80px, rgba(255,255,255,0.7), transparent),
-    radial-gradient(1px 1px at 160px 120px, rgba(255,255,255,0.3), transparent);
-  background-repeat: repeat;
-  background-size: 200px 200px;
-  animation: twinkle 4s ease-in-out infinite alternate;
+/* Terminal panel */
+.terminal-panel {
+  background: #0D1117;
+  border: 1px solid #30363D;
+  border-radius: 0.75rem;
 }
 
-.starfield::after {
-  background-size: 300px 300px;
-  animation-delay: 2s;
-  opacity: 0.5;
-}
-
-@keyframes twinkle {
-  from { opacity: 0.3; }
-  to { opacity: 0.7; }
-}
-
-/* Custom scrollbar */
+/* Scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
+  height: 8px;
 }
-
 ::-webkit-scrollbar-track {
-  background: rgba(15, 23, 42, 0.5);
+  background: rgba(13,26,17,0.5);
 }
-
 ::-webkit-scrollbar-thumb {
-  background: rgba(71, 85, 105, 0.5);
+  background: rgba(104,118,108,0.35);
   border-radius: 4px;
 }
-
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(100, 116, 139, 0.5);
+  background: rgba(163,246,63,0.25);
 }
 
-/* Glass morphism */
-.glass {
-  background: rgba(15, 23, 42, 0.7);
-  backdrop-filter: blur(16px);
-  border: 1px solid rgba(71, 85, 105, 0.3);
-}
-
-.glass-light {
-  background: rgba(30, 41, 59, 0.5);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(71, 85, 105, 0.2);
-}
-
-/* Glow effects */
-.glow-blue {
-  box-shadow: 0 0 20px rgba(79, 110, 245, 0.15), 0 0 40px rgba(79, 110, 245, 0.05);
-}
-
-.glow-text {
-  text-shadow: 0 0 20px rgba(79, 110, 245, 0.3);
-}
-
-/* Loading shimmer */
-.shimmer {
-  background: linear-gradient(90deg,
-    rgba(30, 41, 59, 0.5) 25%,
-    rgba(51, 63, 80, 0.5) 50%,
-    rgba(30, 41, 59, 0.5) 75%
-  );
-  background-size: 200% 100%;
-  animation: shimmer 1.5s ease-in-out infinite;
-}
-
-@keyframes shimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
+/* Selection */
+::selection {
+  background: rgba(163,246,63,0.25);
+  color: var(--color-text-primary);
 }

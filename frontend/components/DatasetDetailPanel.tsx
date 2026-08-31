@@ -57,12 +57,12 @@ export default function DatasetDetailPanel({ dataset, onClose, onAnalyze }: Prop
   return (
     <div className="h-full overflow-y-auto">
       {/* Header */}
-      <div className="px-4 py-3 border-b border-slate-700/30 flex items-start justify-between">
+      <div className="px-4 py-3 border-b border-oq-600/30 flex items-start justify-between">
         <div className="flex-1 min-w-0">
-          <h3 className="text-xs font-bold text-cyan-400 uppercase tracking-wider mb-1">Dataset Detail</h3>
-          <p className="text-[11px] text-slate-300 leading-tight truncate">{dataset.title}</p>
+          <h3 className="text-xs font-bold text-lime uppercase tracking-wider mb-1">Dataset Detail</h3>
+          <p className="text-[11px] text-oq-200 leading-tight truncate">{dataset.title}</p>
         </div>
-        <button onClick={onClose} className="ml-2 p-1 rounded-lg hover:bg-white/5 text-slate-500 hover:text-slate-300 transition-colors flex-shrink-0">
+        <button onClick={onClose} className="ml-2 p-1 rounded-lg hover:bg-oq-700/40 text-oq-300 hover:text-oq-200 transition-colors flex-shrink-0">
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
           </svg>
@@ -75,7 +75,7 @@ export default function DatasetDetailPanel({ dataset, onClose, onAnalyze }: Prop
           <img
             src={dataset.previewUrl}
             alt={dataset.title}
-            className="w-full h-32 object-cover rounded-lg border border-slate-700/30"
+            className="w-full h-32 object-cover rounded-lg border border-oq-600/30"
             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
           />
         </div>
@@ -93,25 +93,25 @@ export default function DatasetDetailPanel({ dataset, onClose, onAnalyze }: Prop
         </div>
 
         <div className="text-[10px]">
-          <span className="text-slate-500 uppercase tracking-wider">BBox</span>
-          <div className="text-slate-300 font-mono mt-0.5 text-[9px] break-all">{bboxStr}</div>
+          <span className="text-oq-300 uppercase tracking-wider">BBox</span>
+          <div className="text-oq-200 font-mono mt-0.5 text-[9px] break-all">{bboxStr}</div>
         </div>
 
         <div className="text-[10px]">
-          <span className="text-slate-500 uppercase tracking-wider">Description</span>
-          <p className="text-slate-300 mt-0.5 leading-relaxed">{info.description}</p>
+          <span className="text-oq-300 uppercase tracking-wider">Description</span>
+          <p className="text-oq-200 mt-0.5 leading-relaxed">{info.description}</p>
         </div>
       </div>
 
       {/* Divider */}
-      <div className="mx-4 h-px bg-slate-700/30" />
+      <div className="mx-4 h-px bg-oq-600/30" />
 
       {/* Available bands */}
       <div className="px-4 py-3">
-        <h4 className="text-[10px] text-slate-400 uppercase tracking-wider font-medium mb-2">Available Bands</h4>
+        <h4 className="text-[10px] text-oq-200 uppercase tracking-wider font-medium mb-2">Available Bands</h4>
         <div className="flex flex-wrap gap-1">
           {info.bands.map((band) => (
-            <span key={band} className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-slate-800/50 text-slate-300 border border-slate-700/30">
+            <span key={band} className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-oq-800/50 text-oq-200 border border-oq-600/30">
               {band}
             </span>
           ))}
@@ -119,14 +119,14 @@ export default function DatasetDetailPanel({ dataset, onClose, onAnalyze }: Prop
       </div>
 
       {/* Divider */}
-      <div className="mx-4 h-px bg-slate-700/30" />
+      <div className="mx-4 h-px bg-oq-600/30" />
 
       {/* Analysis capabilities */}
       <div className="px-4 py-3">
-        <h4 className="text-[10px] text-slate-400 uppercase tracking-wider font-medium mb-2">Can Compute</h4>
+        <h4 className="text-[10px] text-oq-200 uppercase tracking-wider font-medium mb-2">Can Compute</h4>
         <div className="flex flex-wrap gap-1">
           {info.indices.map((idx) => (
-            <span key={idx} className="px-1.5 py-0.5 rounded text-[9px] font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20">
+            <span key={idx} className="px-1.5 py-0.5 rounded text-[9px] font-medium bg-purple/10 text-purple border border-purple/20">
               {idx}
             </span>
           ))}
@@ -134,11 +134,11 @@ export default function DatasetDetailPanel({ dataset, onClose, onAnalyze }: Prop
       </div>
 
       {/* Divider */}
-      <div className="mx-4 h-px bg-slate-700/30" />
+      <div className="mx-4 h-px bg-oq-600/30" />
 
       {/* Quick analysis suggestions */}
       <div className="px-4 py-3">
-        <h4 className="text-[10px] text-slate-400 uppercase tracking-wider font-medium mb-2">Quick Analysis</h4>
+        <h4 className="text-[10px] text-oq-200 uppercase tracking-wider font-medium mb-2">Quick Analysis</h4>
         <div className="space-y-1.5">
           {suggestions.map((s) => {
             const locName = dataset.title.split('_')[2]?.substring(0, 6) || 'this area';
@@ -148,7 +148,7 @@ export default function DatasetDetailPanel({ dataset, onClose, onAnalyze }: Prop
               <button
                 key={s}
                 onClick={() => onAnalyze(query)}
-                className="w-full text-left px-2.5 py-1.5 rounded-lg text-[11px] text-slate-300 bg-slate-800/30 hover:bg-slate-800/60 border border-slate-700/20 hover:border-cyan-500/30 transition-all"
+                className="w-full text-left px-2.5 py-1.5 rounded-lg text-[11px] text-oq-200 bg-oq-800/30 hover:bg-oq-700/40 border border-oq-600/20 hover:border-[var(--color-accent-border)] transition-all"
               >
                 ▸ {s.charAt(0).toUpperCase() + s.slice(1)}
               </button>
@@ -164,7 +164,7 @@ export default function DatasetDetailPanel({ dataset, onClose, onAnalyze }: Prop
             href={dataset.stacLink}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center justify-center gap-1.5 w-full py-2 rounded-lg text-[11px] font-medium text-slate-400 hover:text-slate-200 bg-slate-800/20 hover:bg-slate-800/40 border border-slate-700/20 transition-all"
+            className="flex items-center justify-center gap-1.5 w-full py-2 rounded-lg text-[11px] font-medium text-oq-300 hover:text-oq-200 bg-oq-800/20 hover:bg-oq-700/40 border border-oq-600/20 transition-all"
           >
             <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
@@ -180,8 +180,8 @@ export default function DatasetDetailPanel({ dataset, onClose, onAnalyze }: Prop
 function MetaField({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <div className="text-[9px] text-slate-500 uppercase tracking-wider">{label}</div>
-      <div className="text-[11px] text-slate-200 font-medium mt-0.5">{value}</div>
+      <div className="text-[9px] text-oq-300 uppercase tracking-wider">{label}</div>
+      <div className="text-[11px] text-oq-200 font-medium mt-0.5">{value}</div>
     </div>
   );
 }

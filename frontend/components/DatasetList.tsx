@@ -98,7 +98,7 @@ export default function DatasetList({ datasets, selectedId, onSelect, loading }:
     return (
       <div className="space-y-3 p-4">
         {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="h-28 rounded-xl bg-slate-800/30 animate-pulse" />
+          <div key={i} className="h-28 rounded-xl bg-oq-800/30 animate-pulse oq-card" />
         ))}
       </div>
     );
@@ -108,8 +108,8 @@ export default function DatasetList({ datasets, selectedId, onSelect, loading }:
     return (
       <div className="flex flex-col items-center justify-center h-full text-center p-6">
         <div className="text-3xl mb-3">📦</div>
-        <h3 className="text-sm font-semibold text-slate-400 mb-1">No Datasets</h3>
-        <p className="text-xs text-slate-500">
+        <h3 className="text-sm font-semibold text-oq-300 mb-1">No Datasets</h3>
+        <p className="text-xs text-oq-300">
           Run a search in Ask to discover datasets, or adjust your filters.
         </p>
       </div>
@@ -131,8 +131,8 @@ export default function DatasetList({ datasets, selectedId, onSelect, loading }:
               onClick={() => onSelect(ds)}
               className={`w-full text-left rounded-xl p-3.5 transition-all duration-200 border ${
                 isSelected
-                  ? 'border-blue-500/50 bg-blue-500/8 shadow-lg shadow-blue-500/5'
-                  : 'border-slate-700/30 bg-slate-800/20 hover:bg-slate-800/40 hover:border-slate-600/50'
+                  ? 'border-[var(--color-accent-border)] bg-[var(--color-accent-dim)] shadow-lg shadow-lime/5'
+                  : 'border-oq-600/30 bg-oq-800/20 hover:bg-oq-700/40 hover:border-[var(--color-accent-border)]'
               }`}
             >
               {/* Top row: provider badge + cloud */}
@@ -145,20 +145,20 @@ export default function DatasetList({ datasets, selectedId, onSelect, loading }:
               </div>
 
               {/* Clean title */}
-              <h4 className="text-[13px] font-semibold text-slate-100 leading-tight mb-0.5">
+              <h4 className="text-[13px] font-semibold text-oq-50 leading-tight mb-0.5">
                 {displayTitle}
               </h4>
 
               {/* STAC ID (secondary, smaller) */}
               {stacId && (
-                <div className="text-[10px] text-slate-500 font-mono truncate mb-1.5">{stacId}</div>
+                <div className="text-[10px] text-oq-300 font-mono truncate mb-1.5">{stacId}</div>
               )}
 
               {/* Meta row */}
-              <div className="flex items-center gap-3 text-[10px] text-slate-400">
+              <div className="flex items-center gap-3 text-[10px] text-oq-300">
                 <span className="flex items-center gap-1">📅 {formatDate(ds.date)}</span>
                 {ds.bbox && (
-                  <span className="font-mono text-slate-500">
+                  <span className="font-mono text-oq-300">
                     📍 [{ds.bbox[0]?.toFixed(1)}, {ds.bbox[1]?.toFixed(1)}]
                   </span>
                 )}
@@ -167,13 +167,13 @@ export default function DatasetList({ datasets, selectedId, onSelect, loading }:
               {/* Score bar */}
               {ds.score != null && ds.score > 0 && (
                 <div className="mt-2">
-                  <div className="h-1 bg-slate-700/50 rounded-full overflow-hidden">
+                  <div className="h-1 bg-oq-700/50 rounded-full overflow-hidden">
                     <div
                       className="h-full rounded-full transition-all"
-                      style={{ width: `${Math.min(ds.score, 100)}%`, background: 'linear-gradient(90deg, #3b82f6, #06b6d4)' }}
+                      style={{ width: `${Math.min(ds.score, 100)}%`, background: 'linear-gradient(90deg, #A3F63F, #7EBF32)' }}
                     />
                   </div>
-                  <span className="text-[9px] text-slate-500 mt-0.5 block">
+                  <span className="text-[9px] text-oq-300 mt-0.5 block">
                     Relevance: {ds.score.toFixed(0)}%
                   </span>
                 </div>

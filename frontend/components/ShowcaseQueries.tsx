@@ -117,10 +117,10 @@ export default function ShowcaseQueries({ onSelect }: ShowcaseQueriesProps) {
       {/* Hero */}
       <div className="text-center mb-10">
         <div className="flex items-center justify-center gap-3 mb-3">
-          <Earth className="w-8 h-8 text-blue-400/70" strokeWidth={1.5} />
-          <h2 className="text-3xl font-bold text-white">Explore Earth</h2>
+          <Earth className="w-8 h-8 text-purple stroke-[1.5]" />
+          <h2 className="text-3xl font-bold text-oq-50">Explore Earth</h2>
         </div>
-        <p className="text-sm text-slate-400 max-w-xl mx-auto">
+        <p className="text-sm text-oq-300 max-w-xl mx-auto">
           Click any query below to run a real temporal comparison analysis.
           OrbitalQuery will discover satellite imagery, compute spectral indices,
           and generate change metrics automatically.
@@ -133,11 +133,11 @@ export default function ShowcaseQueries({ onSelect }: ShowcaseQueriesProps) {
         return (
           <div key={category.title} className="mb-10">
             <div className="mb-4">
-              <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                <CatIcon className="w-5 h-5 text-slate-400" strokeWidth={1.75} />
+              <h3 className="text-lg font-semibold text-oq-50 flex items-center gap-2">
+                <CatIcon className="w-5 h-5 text-oq-300" strokeWidth={1.75} />
                 {category.title}
               </h3>
-              <p className="text-xs text-slate-500">{category.subtitle}</p>
+              <p className="text-xs text-oq-300">{category.subtitle}</p>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -145,16 +145,16 @@ export default function ShowcaseQueries({ onSelect }: ShowcaseQueriesProps) {
                 <button
                   key={q.query}
                   onClick={() => onSelect(q.query)}
-                  className="group text-left p-4 rounded-xl border border-slate-700/30 bg-slate-800/30
-                    hover:bg-slate-800/60 hover:border-slate-600/50 transition-all duration-200"
+                  className="group text-left p-4 rounded-xl border border-oq-600/30 bg-oq-800/20
+                    hover:bg-oq-700/40 hover:border-[var(--color-accent-border)] transition-all duration-200 oq-card"
                 >
                   <div className="flex items-start gap-3">
                     <PhenomenonIcon phenomenon={q.phenomenon} />
                     <div className="min-w-0">
-                      <div className="text-sm font-medium text-slate-200 group-hover:text-white transition-colors leading-tight">
+                      <div className="text-sm font-medium text-oq-200 group-hover:text-oq-50 transition-colors leading-tight">
                         {q.query}
                       </div>
-                      <div className="text-[10px] text-slate-500 mt-1 capitalize">
+                      <div className="text-[10px] text-oq-300 mt-1 capitalize">
                         {q.phenomenon.replace(/_/g, ' ')}
                       </div>
                     </div>

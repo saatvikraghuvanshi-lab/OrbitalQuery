@@ -18,10 +18,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           crossOrigin=""
         />
       </head>
-      <body className="antialiased">
+      <body className="antialiased oq-bg text-[var(--color-text-primary)]">
         <MockInitializer />
-        <div className="starfield" />
-        <div className="relative z-10">
+        <div className="relative z-10 min-h-screen flex flex-col">
           {children}
         </div>
       </body>

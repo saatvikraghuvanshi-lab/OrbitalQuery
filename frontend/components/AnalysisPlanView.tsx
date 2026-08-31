@@ -24,52 +24,52 @@ export default function AnalysisPlanView({ plan }: AnalysisPlanViewProps) {
   const label = PHENOMENON_LABELS[plan.phenomenon] || plan.phenomenon;
 
   return (
-    <div className="glass rounded-2xl border border-blue-500/20 p-5">
+    <div className="oq-card p-5">
       <div className="flex items-center gap-2 mb-4">
-        <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center">
-          <svg className="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <div className="w-8 h-8 rounded-lg bg-purple/10 flex items-center justify-center">
+          <svg className="w-4 h-4 text-purple" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
           </svg>
         </div>
         <div>
-          <h3 className="text-sm font-bold text-slate-200">Analysis Plan</h3>
-          <p className="text-[10px] text-slate-600">System interpretation of your query</p>
+          <h3 className="text-sm font-bold text-oq-50">Analysis Plan</h3>
+          <p className="text-[10px] text-oq-300">System interpretation of your query</p>
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <div className="bg-slate-800/30 rounded-xl p-3">
-          <div className="text-[10px] text-slate-600 mb-1">Problem</div>
-          <div className="text-xs font-medium text-slate-300">{label}</div>
+        <div className="bg-oq-800/50 rounded-xl p-3 border border-oq-700/30">
+          <div className="text-[10px] text-oq-300 mb-1">Problem</div>
+          <div className="text-xs font-medium text-oq-50">{label}</div>
         </div>
 
-        <div className="bg-slate-800/30 rounded-xl p-3">
-          <div className="text-[10px] text-slate-600 mb-1">Location</div>
-          <div className="text-xs font-medium text-slate-300">{plan.aoi || '—'}</div>
+        <div className="bg-oq-800/50 rounded-xl p-3 border border-oq-700/30">
+          <div className="text-[10px] text-oq-300 mb-1">Location</div>
+          <div className="text-xs font-medium text-oq-50">{plan.aoi || '—'}</div>
           {plan.bbox && (
-            <div className="text-[9px] text-slate-500 mt-0.5 font-mono">
+            <div className="text-[9px] text-oq-400 mt-0.5 font-mono">
               [{plan.bbox.map((b: number) => b.toFixed(1)).join(', ')}]
             </div>
           )}
         </div>
 
-        <div className="bg-slate-800/30 rounded-xl p-3">
-          <div className="text-[10px] text-slate-600 mb-1">Period</div>
-          <div className="text-xs font-medium text-slate-300">
+        <div className="bg-oq-800/50 rounded-xl p-3 border border-oq-700/30">
+          <div className="text-[10px] text-oq-300 mb-1">Period</div>
+          <div className="text-xs font-medium text-oq-50">
             {plan.start_date} → {plan.end_date}
           </div>
         </div>
 
-        <div className="bg-slate-800/30 rounded-xl p-3">
-          <div className="text-[10px] text-slate-600 mb-1">Evidence</div>
-          <div className="text-xs font-medium text-slate-300">
+        <div className="bg-oq-800/50 rounded-xl p-3 border border-oq-700/30">
+          <div className="text-[10px] text-oq-300 mb-1">Evidence</div>
+          <div className="text-xs font-medium text-oq-50">
             {plan.sensor || 'sentinel-2-l2a'} ({(plan.bands || []).slice(0, 3).join(', ')})
           </div>
         </div>
 
-        <div className="bg-slate-800/30 rounded-xl p-3">
-          <div className="text-[10px] text-slate-600 mb-1">Method</div>
-          <div className="text-xs font-medium text-slate-300">{plan.analysis_type || '—'}</div>
+        <div className="bg-oq-800/50 rounded-xl p-3 border border-oq-700/30">
+          <div className="text-[10px] text-oq-300 mb-1">Method</div>
+          <div className="text-xs font-medium text-oq-50">{plan.analysis_type || '—'}</div>
         </div>
       </div>
     </div>

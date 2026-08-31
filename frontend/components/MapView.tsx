@@ -211,7 +211,7 @@ export default function MapView({ results, selectedDataset, onSelectDataset, bbo
   };
 
   return (
-    <div style={{ position: 'relative', borderRadius: '16px', border: '1px solid rgba(71, 85, 105, 0.3)', width: '100%', height: '580px' }}>
+    <div className="oq-card relative w-full h-[580px]">
       <MapContainer
         center={[20, 78]}
         zoom={3}
@@ -277,23 +277,25 @@ export default function MapView({ results, selectedDataset, onSelectDataset, bbo
       </MapContainer>
 
       {/* Style selector */}
-      <div style={{ position: 'absolute', top: '16px', left: '16px', zIndex: 1000 }}>
+      <div className="absolute top-4 left-4 z-[1000]">
         <select
           value={mapStyle}
           onChange={(e) => setMapStyle(e.target.value as MapStyle)}
-          style={{ padding: '8px 12px', fontSize: '12px', color: '#cbd5e1', borderRadius: '12px', cursor: 'pointer', background: 'rgba(15, 23, 42, 0.92)', border: '1px solid rgba(71, 85, 105, 0.5)', outline: 'none' }}
+          className="oq-card px-3 py-2 text-xs text-oq-200 rounded-xl cursor-pointer outline-none border-oq-600/50"
         >
           {Object.entries(MAP_STYLES).map(([key, val]) => (
-            <option key={key} value={key} style={{ background: '#0f172a', color: '#cbd5e1' }}>{val.name}</option>
+            <option key={key} value={key} className="bg-oq-900 text-oq-200">{val.name}</option>
           ))}
         </select>
       </div>
 
       {/* Draw controls */}
-      <div style={{ position: 'absolute', top: '16px', right: '16px', zIndex: 1000, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+      <div className="absolute top-4 right-4 z-[1000] flex flex-col gap-2">
         <button
           onClick={toggleDrawing}
-          style={{ padding: '8px 12px', borderRadius: '12px', fontSize: '12px', fontWeight: 500, cursor: 'pointer', background: isDrawing ? '#4c6ef5' : 'rgba(15, 23, 42, 0.92)', color: isDrawing ? 'white' : '#94a3b8', border: isDrawing ? '1px solid #4c6ef5' : '1px solid rgba(71, 85, 105, 0.5)', display: 'flex', alignItems: 'center', gap: '6px', boxShadow: '0 4px 12px rgba(0,0,0,0.3)' }}
+          className={`oq-card px-3 py-2 rounded-xl text-xs font-medium cursor-pointer flex items-center gap-1.5 border transition-all ${
+            isDrawing ? 'border-lime/50 text-lime' : 'border-oq-600/50 text-oq-300 hover:text-oq-200'
+          }`}
         >
           <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -303,7 +305,7 @@ export default function MapView({ results, selectedDataset, onSelectDataset, bbo
         {bbox && (
           <button
             onClick={() => { onBboxChange(null); setDrawBbox(null); }}
-            style={{ padding: '8px 12px', borderRadius: '12px', fontSize: '12px', fontWeight: 500, cursor: 'pointer', background: 'rgba(15, 23, 42, 0.92)', color: '#f87171', border: '1px solid rgba(71, 85, 105, 0.5)', boxShadow: '0 4px 12px rgba(0,0,0,0.3)' }}
+            className="oq-card px-3 py-2 rounded-xl text-xs font-medium cursor-pointer text-semantic-error border-oq-600/50"
           >
             Clear BBOX
           </button>
@@ -312,14 +314,14 @@ export default function MapView({ results, selectedDataset, onSelectDataset, bbo
 
       {/* Dataset count */}
       {results.length > 0 && (
-        <div style={{ position: 'absolute', bottom: '16px', left: '16px', zIndex: 1000, borderRadius: '12px', padding: '6px 12px', fontSize: '12px', color: '#94a3b8', background: 'rgba(15, 23, 42, 0.9)', border: '1px solid rgba(71, 85, 105, 0.3)' }}>
+        <div className="absolute bottom-4 left-4 z-[1000] oq-card px-3 py-1.5 text-xs text-oq-300">
           {results.length} datasets shown
         </div>
       )}
 
       {/* Drawing hint */}
       {isDrawing && (
-        <div style={{ position: 'absolute', bottom: '16px', right: '16px', zIndex: 1000, borderRadius: '12px', padding: '6px 12px', fontSize: '12px', color: '#60a5fa', background: 'rgba(15, 23, 42, 0.9)', border: '1px solid rgba(76, 110, 245, 0.3)' }}>
+        <div className="absolute bottom-4 right-4 z-[1000] oq-card px-3 py-1.5 text-xs text-lime border-lime/30">
           Click and drag on the map to select an area
         </div>
       )}

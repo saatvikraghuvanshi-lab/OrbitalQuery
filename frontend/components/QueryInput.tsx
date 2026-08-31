@@ -64,25 +64,19 @@ export default function QueryInput({ onAnalyze, loading }: QueryInputProps) {
       <div className="relative z-10 flex flex-col items-center justify-center w-full h-full px-4">
         {/* Title block */}
         <div className="text-center mb-10">
-          <h2 className="text-4xl font-semibold text-white mb-3 tracking-tight">
+          <h2 className="text-4xl font-semibold text-[var(--color-text-primary)] mb-3 tracking-tight">
             Ask a question about Earth
           </h2>
-          <p className="text-base font-medium" style={{ color: '#94a3b8' }}>
+          <p className="text-base font-medium text-[var(--color-text-secondary)]">
             Query satellite imagery across Sentinel, Landsat &amp; MODIS archives
           </p>
         </div>
 
         {/* Search bar — glow border */}
         <div
-          className="w-full max-w-3xl rounded-2xl p-1 flex items-center transition-all mb-8"
-          style={{
-            background: 'rgba(15, 19, 30, 0.95)',
-            backdropFilter: 'blur(16px)',
-            border: '1px solid rgba(255,255,255,0.12)',
-            boxShadow: '0 0 0 1px rgba(79, 110, 245, 0.12), 0 8px 40px rgba(0,0,0,0.5), 0 0 60px rgba(79, 110, 245, 0.06)',
-          }}
+          className="w-full max-w-3xl rounded-2xl p-1 flex items-center transition-all mb-8 bg-[var(--color-bg-elevated)] border border-[var(--color-accent-border)] focus-within:border-[var(--color-accent)]"
         >
-          <div className="pl-5 pr-3 text-blue-400/70">
+          <div className="pl-5 pr-3 text-[var(--color-accent)]">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
@@ -94,7 +88,7 @@ export default function QueryInput({ onAnalyze, loading }: QueryInputProps) {
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
             placeholder='Try "Hyderabad urban expansion 2021 vs 2025"'
-            className="w-full bg-transparent border-none text-slate-200 placeholder-slate-500 focus:ring-0 outline-none text-base py-3.5"
+            className="w-full bg-transparent border-none text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:ring-0 outline-none text-base py-3.5"
             disabled={loading}
           />
           <button
@@ -102,9 +96,9 @@ export default function QueryInput({ onAnalyze, loading }: QueryInputProps) {
             disabled={!query.trim() || loading}
             className="mr-2 p-2.5 rounded-xl transition-all duration-200 disabled:opacity-20 disabled:cursor-not-allowed hover:scale-105"
             style={{
-              background: query.trim() && !loading ? 'rgba(79, 110, 245, 0.3)' : 'transparent',
-              color: query.trim() && !loading ? '#a5b4fc' : '#475569',
-              border: query.trim() && !loading ? '1px solid rgba(79, 110, 245, 0.4)' : '1px solid transparent',
+              background: query.trim() && !loading ? 'var(--color-accent)' : 'transparent',
+              color: query.trim() && !loading ? 'var(--color-bg-deep)' : 'var(--color-text-muted)',
+              border: query.trim() && !loading ? '1px solid var(--color-accent-border)' : '1px solid transparent',
             }}
             title="Submit query"
           >
@@ -121,13 +115,9 @@ export default function QueryInput({ onAnalyze, loading }: QueryInputProps) {
               key={`${shuffleKey}-${s.text}`}
               onClick={() => { setQuery(s.text); onAnalyze(s.text); }}
               disabled={loading}
-              className="group px-4 py-2 rounded-full text-[12px] font-medium text-slate-400
-                hover:text-white hover:bg-white/[0.06]
-                transition-all duration-150 disabled:opacity-40 flex items-center gap-2"
-              style={{
-                background: 'rgba(255, 255, 255, 0.03)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-              }}
+              className="group px-4 py-2 rounded-full text-[12px] font-medium text-[var(--color-text-secondary)]
+                hover:text-[var(--color-text-primary)] hover:bg-[var(--color-accent-dim)]
+                transition-all duration-150 disabled:opacity-40 flex items-center gap-2 border border-[var(--color-accent-border)] bg-[var(--color-bg-elevated)]"
             >
               <span className="text-xs opacity-60">{s.icon}</span>
               <span>{s.text}</span>
@@ -137,9 +127,8 @@ export default function QueryInput({ onAnalyze, loading }: QueryInputProps) {
             onClick={handleShuffle}
             disabled={loading}
             className="p-2 rounded-full
-              hover:bg-white/[0.06]
-              transition-all duration-150 text-slate-500 hover:text-slate-300"
-            style={{ border: '1px solid rgba(255, 255, 255, 0.1)' }}
+              hover:bg-[var(--color-accent-dim)]
+              transition-all duration-150 text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] border border-[var(--color-accent-border)] bg-[var(--color-bg-elevated)]"
             title="Refresh suggestions"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -150,8 +139,8 @@ export default function QueryInput({ onAnalyze, loading }: QueryInputProps) {
 
         {/* Footer — grounded, higher contrast */}
         <div className="text-center mt-4">
-          <p className="text-sm font-medium" style={{ color: '#7c8ba1' }}>
-            OrbitalQuery — Powered by <span className="text-slate-300">Bhoonidhi (ISRO)</span>, Copernicus &amp; Sentinel data.
+          <p className="text-sm font-medium text-[var(--color-text-muted)]">
+            OrbitalQuery — Powered by <span className="text-[var(--color-text-primary)]">Bhoonidhi (ISRO)</span>, Copernicus &amp; Sentinel data.
           </p>
         </div>
       </div>

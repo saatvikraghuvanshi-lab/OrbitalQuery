@@ -236,15 +236,15 @@ export default function SearchBar({ onSearch, loading, onToggleFilters, showFilt
     <form onSubmit={(e) => { e.preventDefault(); handleSubmit(); }} className="max-w-3xl mx-auto">
       <div ref={wrapperRef} className="relative group">
         {/* Glow ring */}
-        <div className="absolute -inset-0.5 bg-gradient-to-r from-blue-500/20 via-purple-500/20 to-cyan-500/20 rounded-2xl opacity-0 group-focus-within:opacity-100 transition-opacity duration-500 blur-sm z-0" />
+        <div className="absolute -inset-0.5 bg-gradient-to-r from-[var(--color-purple-dim)] via-[var(--color-accent-dim)] to-[var(--color-purple-dim)] rounded-2xl opacity-0 group-focus-within:opacity-100 transition-opacity duration-500 blur-sm z-0" />
 
-        <div className="relative flex items-center glass rounded-2xl overflow-hidden glow-blue z-10">
+        <div className="relative flex items-center bg-[var(--color-bg-elevated)] border border-[var(--color-accent-border)] rounded-2xl overflow-hidden z-10">
           {/* Search icon */}
-          <div className="pl-5 pr-2">
+          <div className="pl-5 pr-2 text-[var(--color-text-muted)]">
             {loading ? (
-              <div className="w-5 h-5 border-2 border-blue-400/30 border-t-blue-400 rounded-full animate-spin" />
+              <div className="w-5 h-5 border-2 border-[var(--color-accent)]/30 border-t-[var(--color-accent)] rounded-full animate-spin" />
             ) : (
-              <svg className="w-5 h-5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
             )}
@@ -259,7 +259,7 @@ export default function SearchBar({ onSearch, loading, onToggleFilters, showFilt
             onKeyDown={handleKeyDown}
             onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
             placeholder='Try "deforestation near Assam" or "glacier retreat Himalayas"...'
-            className="flex-1 bg-transparent py-4 px-2 text-white placeholder-slate-500 outline-none text-sm sm:text-base"
+            className="flex-1 bg-transparent py-4 px-2 text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] outline-none text-sm sm:text-base"
             disabled={loading}
             autoComplete="off"
           />
@@ -269,7 +269,7 @@ export default function SearchBar({ onSearch, loading, onToggleFilters, showFilt
             <button
               type="button"
               onClick={() => { setQuery(''); setSuggestions([]); setShowSuggestions(false); inputRef.current?.focus(); }}
-              className="p-2 text-slate-500 hover:text-slate-300 transition-colors"
+              className="p-2 text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] transition-colors"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -282,7 +282,7 @@ export default function SearchBar({ onSearch, loading, onToggleFilters, showFilt
             type="button"
             onClick={onToggleFilters}
             className={`p-2.5 mr-1 rounded-xl transition-all duration-200 ${
-              showFilters ? 'bg-blue-500/20 text-blue-400' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-700/50'
+              showFilters ? 'bg-[var(--color-accent-dim)] text-[var(--color-accent)]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-hover)]'
             }`}
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -294,10 +294,7 @@ export default function SearchBar({ onSearch, loading, onToggleFilters, showFilt
           <button
             type="submit"
             disabled={loading || !query.trim()}
-            className="mr-3 px-5 py-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500
-              disabled:from-slate-700 disabled:to-slate-700 disabled:text-slate-500
-              text-white text-sm font-medium rounded-xl transition-all duration-200
-              shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30"
+            className="mr-3 px-5 py-2 bg-[var(--color-accent)] text-[var(--color-bg-deep)] text-sm font-medium rounded-xl transition-all duration-200 hover:bg-[var(--color-accent-hover)] disabled:bg-[var(--color-bg-hover)] disabled:text-[var(--color-text-muted)]"
           >
             {loading ? 'Searching...' : 'Search'}
           </button>
@@ -305,9 +302,9 @@ export default function SearchBar({ onSearch, loading, onToggleFilters, showFilt
 
         {/* ─── Autocomplete Dropdown ─────────────────────────────── */}
         {showSuggestions && suggestions.length > 0 && (
-          <div className="absolute top-full left-0 right-0 mt-2 glass rounded-2xl overflow-hidden z-50 shadow-2xl shadow-black/30 border border-slate-700/30">
-            <div className="px-3 py-2 border-b border-slate-700/30">
-              <span className="text-[10px] text-slate-500 uppercase tracking-wider font-medium">
+          <div className="absolute top-full left-0 right-0 mt-2 bg-[var(--color-bg-card)] border border-[rgba(163,246,63,0.10)] rounded-2xl overflow-hidden z-50 shadow-2xl shadow-black/30">
+            <div className="px-3 py-2 border-b border-[rgba(163,246,63,0.10)]">
+              <span className="text-[10px] text-[var(--color-text-muted)] uppercase tracking-wider font-medium">
                 Suggestions
               </span>
             </div>
@@ -336,25 +333,25 @@ export default function SearchBar({ onSearch, loading, onToggleFilters, showFilt
                   onMouseEnter={() => setSelectedIdx(idx)}
                   className={`w-full px-4 py-2.5 text-left flex items-center gap-3 transition-all duration-100 ${
                     isSelected
-                      ? 'bg-blue-500/10 text-white'
-                      : 'text-slate-300 hover:bg-slate-800/50'
+                      ? 'bg-[var(--color-accent-dim)] text-[var(--color-text-primary)]'
+                      : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-accent-dim)]'
                   }`}
                 >
                   <span className="text-sm flex-shrink-0">{icon}</span>
                   <span className="text-sm flex-1 truncate">
-                    {before}<span className="text-blue-400 font-medium">{match}</span>{after}
+                    {before}<span className="text-[var(--color-accent)] font-medium">{match}</span>{after}
                   </span>
-                  <svg className={`w-3.5 h-3.5 flex-shrink-0 text-slate-600 transition-transform ${isSelected ? 'translate-x-0.5' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <svg className={`w-3.5 h-3.5 flex-shrink-0 text-[var(--color-text-muted)] transition-transform ${isSelected ? 'translate-x-0.5' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                   </svg>
                 </button>
               );
             })}
-            <div className="px-3 py-1.5 border-t border-slate-700/30 flex items-center justify-between">
-              <span className="text-[10px] text-slate-600">
+            <div className="px-3 py-1.5 border-t border-[rgba(163,246,63,0.10)] flex items-center justify-between">
+              <span className="text-[10px] text-[var(--color-text-muted)]">
                 ↑↓ navigate • ↵ select • esc close
               </span>
-              <span className="text-[10px] text-slate-600">
+              <span className="text-[10px] text-[var(--color-text-muted)]">
                 {suggestions.length} suggestions
               </span>
             </div>

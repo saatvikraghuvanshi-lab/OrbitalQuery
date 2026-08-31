@@ -22,15 +22,16 @@ function formatDate(dateStr: string | null): string {
 }
 
 function getProviderBadge(provider: string) {
+  const base = 'bg-oq-700/40 text-oq-200 border-oq-600/30';
   if (provider.includes('Copernicus') || provider.includes('ESA'))
-    return { color: 'bg-blue-500/15 text-blue-400 border-blue-500/30', label: 'Copernicus/ESA' };
+    return { color: base, label: 'Copernicus/ESA' };
   if (provider.includes('NASA'))
-    return { color: 'bg-orange-500/15 text-orange-400 border-orange-500/30', label: 'NASA' };
+    return { color: base, label: 'NASA' };
   if (provider.includes('USGS'))
-    return { color: 'bg-green-500/15 text-green-400 border-green-500/30', label: 'USGS/NASA' };
+    return { color: base, label: 'USGS/NASA' };
   if (provider.includes('USDA'))
-    return { color: 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30', label: 'USDA' };
-  return { color: 'bg-purple-500/15 text-purple-400 border-purple-500/30', label: provider };
+    return { color: base, label: 'USDA' };
+  return { color: base, label: provider };
 }
 
 export default function DatasetDetail({ dataset, onClose, onExportJSON, onExportCSV, onCompareToggle, isComparing }: DatasetDetailProps) {
@@ -81,27 +82,27 @@ export default function DatasetDetail({ dataset, onClose, onExportJSON, onExport
       : null);
 
   return (
-    <div className="glass rounded-2xl overflow-hidden border border-blue-500/20">
+    <div className="oq-card overflow-hidden">
       {/* Header */}
-      <div className="px-4 py-3 border-b border-slate-700/30 flex items-start justify-between gap-3">
+      <div className="px-4 py-3 border-b border-[var(--color-accent-border)] flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
             <span className={`text-[10px] px-2 py-0.5 rounded-md border font-medium ${badge.color}`}>
               {badge.label}
             </span>
             {dataset.score != null && (
-              <span className="text-[10px] font-mono text-slate-500">
+              <span className="text-[10px] font-mono text-[var(--color-text-muted)]">
                 {Math.round(dataset.score * 100)}% match
               </span>
             )}
           </div>
-          <h3 className="text-sm font-bold text-slate-100 leading-tight">
+          <h3 className="text-sm font-bold text-[var(--color-text-primary)] leading-tight">
             {dataset.title}
           </h3>
         </div>
         <button
           onClick={onClose}
-          className="p-1 rounded-lg hover:bg-slate-700/50 text-slate-500 hover:text-slate-300 transition-colors shrink-0"
+          className="p-1 rounded-lg hover:bg-[var(--color-bg-hover)] text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] transition-colors shrink-0"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -110,15 +111,15 @@ export default function DatasetDetail({ dataset, onClose, onExportJSON, onExport
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-slate-700/30">
+      <div className="flex border-b border-[var(--color-accent-border)]">
         {(['metadata', 'preview', 'download'] as const).map(tab => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
             className={`flex-1 px-3 py-2 text-[11px] font-medium capitalize transition-colors ${
               activeTab === tab
-                ? 'text-blue-400 border-b-2 border-blue-400'
-                : 'text-slate-500 hover:text-slate-300'
+                ? 'text-[var(--color-accent)] border-b-2 border-[var(--color-accent)]'
+                : 'text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)]'
             }`}
           >
             {tab === 'metadata' && '📋 '}
@@ -135,7 +136,7 @@ export default function DatasetDetail({ dataset, onClose, onExportJSON, onExport
           <div className="space-y-3">
             {/* Description */}
             {dataset.description && (
-              <p className="text-xs text-slate-400 leading-relaxed">
+              <p className="text-xs text-[var(--color-text-muted)] leading-relaxed">
                 {dataset.description}
               </p>
             )}
@@ -152,18 +153,18 @@ export default function DatasetDetail({ dataset, onClose, onExportJSON, onExport
                 { label: 'Acquired', value: formatDate(dataset.startDate) },
                 { label: 'End Date', value: formatDate(dataset.endDate) },
               ].filter(item => item.value).map(item => (
-                <div key={item.label} className="bg-slate-800/30 rounded-lg p-2">
-                  <div className="text-[10px] text-slate-600 mb-0.5">{item.label}</div>
-                  <div className="text-[11px] text-slate-300 font-medium">{item.value}</div>
+                <div key={item.label} className="bg-[var(--color-bg-elevated)] rounded-lg p-2">
+                  <div className="text-[10px] text-[var(--color-text-muted)] mb-0.5">{item.label}</div>
+                  <div className="text-[11px] text-[var(--color-text-secondary)] font-medium">{item.value}</div>
                 </div>
               ))}
             </div>
 
             {/* Geometry info */}
             {dataset.centroidLat != null && dataset.centroidLng != null && (
-              <div className="bg-slate-800/30 rounded-lg p-2">
-                <div className="text-[10px] text-slate-600 mb-0.5">Centroid</div>
-                <div className="text-[11px] text-slate-300 font-mono">
+              <div className="bg-[var(--color-bg-elevated)] rounded-lg p-2">
+                <div className="text-[10px] text-[var(--color-text-muted)] mb-0.5">Centroid</div>
+                <div className="text-[11px] text-[var(--color-text-secondary)] font-mono">
                   {dataset.centroidLat.toFixed(4)}°, {dataset.centroidLng.toFixed(4)}°
                 </div>
               </div>
@@ -171,9 +172,9 @@ export default function DatasetDetail({ dataset, onClose, onExportJSON, onExport
 
             {/* BBOX */}
             {dataset.bbox && (
-              <div className="bg-slate-800/30 rounded-lg p-2">
-                <div className="text-[10px] text-slate-600 mb-0.5">Bounding Box</div>
-                <div className="text-[11px] text-slate-300 font-mono">
+              <div className="bg-[var(--color-bg-elevated)] rounded-lg p-2">
+                <div className="text-[10px] text-[var(--color-text-muted)] mb-0.5">Bounding Box</div>
+                <div className="text-[11px] text-[var(--color-text-secondary)] font-mono">
                   [{Array.isArray(dataset.bbox) ? dataset.bbox.map((v: number) => v.toFixed(2)).join(', ') : '—'}]
                 </div>
               </div>
@@ -181,9 +182,9 @@ export default function DatasetDetail({ dataset, onClose, onExportJSON, onExport
 
             {/* STAC ID */}
             {dataset.stacId && (
-              <div className="bg-slate-800/30 rounded-lg p-2">
-                <div className="text-[10px] text-slate-600 mb-0.5">STAC Item ID</div>
-                <div className="text-[11px] text-slate-300 font-mono truncate">{dataset.stacId}</div>
+              <div className="bg-[var(--color-bg-elevated)] rounded-lg p-2">
+                <div className="text-[10px] text-[var(--color-text-muted)] mb-0.5">STAC Item ID</div>
+                <div className="text-[11px] text-[var(--color-text-secondary)] font-mono truncate">{dataset.stacId}</div>
               </div>
             )}
           </div>
@@ -192,7 +193,7 @@ export default function DatasetDetail({ dataset, onClose, onExportJSON, onExport
         {activeTab === 'preview' && (
           <div className="space-y-3">
             {dataset.previewUrl && !imgError ? (
-              <div className="rounded-xl overflow-hidden border border-slate-700/30">
+              <div className="rounded-xl overflow-hidden border border-[var(--color-accent-border)]">
                 <img
                   src={dataset.previewUrl}
                   alt={dataset.title}
@@ -202,17 +203,17 @@ export default function DatasetDetail({ dataset, onClose, onExportJSON, onExport
                 />
               </div>
             ) : (
-              <div className="rounded-xl border border-slate-700/30 bg-slate-800/30 p-8 text-center">
-                <svg className="w-12 h-12 mx-auto text-slate-600 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
+              <div className="rounded-xl border border-[var(--color-accent-border)] bg-[var(--color-bg-elevated)] p-8 text-center">
+                <svg className="w-12 h-12 mx-auto text-[var(--color-text-muted)] mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.41a2.25 2.25 0 013.182 0l2.909 2.91M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" />
                 </svg>
-                <p className="text-xs text-slate-500">Preview not available for this dataset</p>
+                <p className="text-xs text-[var(--color-text-muted)]">Preview not available for this dataset</p>
                 {primaryLink && (
                   <a
                     href={primaryLink.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-block mt-3 px-3 py-1.5 text-[11px] bg-blue-600/20 text-blue-400 rounded-lg border border-blue-500/20 hover:bg-blue-600/30 transition-colors"
+                    className="inline-block mt-3 px-3 py-1.5 text-[11px] bg-[var(--color-purple-dim)] text-[var(--color-purple)] rounded-lg border border-[var(--color-purple-border)] hover:bg-[var(--color-purple-dim)] transition-colors"
                   >
                     View on {primaryLink.label} →
                   </a>
@@ -221,8 +222,8 @@ export default function DatasetDetail({ dataset, onClose, onExportJSON, onExport
             )}
 
             {/* Visualization info */}
-            <div className="bg-slate-800/30 rounded-lg p-3">
-              <div className="text-[10px] text-slate-600 mb-1">Visualization Bands</div>
+            <div className="bg-[var(--color-bg-elevated)] rounded-lg p-3">
+              <div className="text-[10px] text-[var(--color-text-muted)] mb-1">Visualization Bands</div>
               <div className="flex flex-wrap gap-1.5">
                 {dataset.collection?.includes('sentinel-2') && (
                   <>
@@ -259,22 +260,22 @@ export default function DatasetDetail({ dataset, onClose, onExportJSON, onExport
                 href={primaryLink.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-3 p-3 rounded-xl bg-slate-800/30 hover:bg-slate-800/50 border border-slate-700/30 transition-colors group"
+                className="flex items-center gap-3 p-3 rounded-xl bg-[var(--color-bg-elevated)] hover:bg-[var(--color-bg-hover)] border border-[var(--color-accent-border)] transition-colors group"
               >
-                <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center shrink-0">
-                  <svg className="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <div className="w-8 h-8 rounded-lg bg-[var(--color-accent-dim)] flex items-center justify-center shrink-0">
+                  <svg className="w-4 h-4 text-[var(--color-accent)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
                   </svg>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-[11px] font-medium text-slate-300 group-hover:text-white transition-colors">
+                  <div className="text-[11px] font-medium text-[var(--color-text-secondary)] group-hover:text-[var(--color-text-primary)] transition-colors">
                     {primaryLink.label}
                   </div>
-                  <div className="text-[10px] text-slate-600 truncate">
+                  <div className="text-[10px] text-[var(--color-text-muted)] truncate">
                     {primaryLink.desc}
                   </div>
                 </div>
-                <svg className="w-4 h-4 text-slate-600 group-hover:text-slate-400 transition-colors shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <svg className="w-4 h-4 text-[var(--color-text-muted)] group-hover:text-[var(--color-text-secondary)] transition-colors shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
                 </svg>
               </a>
@@ -286,22 +287,22 @@ export default function DatasetDetail({ dataset, onClose, onExportJSON, onExport
                 href={bhoonidhiLink.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-3 p-3 rounded-xl bg-slate-800/30 hover:bg-slate-800/50 border border-slate-700/30 transition-colors group"
+                className="flex items-center gap-3 p-3 rounded-xl bg-[var(--color-bg-elevated)] hover:bg-[var(--color-bg-hover)] border border-[var(--color-accent-border)] transition-colors group"
               >
-                <div className="w-8 h-8 rounded-lg bg-orange-500/10 flex items-center justify-center shrink-0">
-                  <svg className="w-4 h-4 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <div className="w-8 h-8 rounded-lg bg-[var(--color-accent-dim)] flex items-center justify-center shrink-0">
+                  <svg className="w-4 h-4 text-[var(--color-accent)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 0v3.75m-16.5-3.75v3.75m16.5 0v3.75C20.25 16.153 16.556 18 12 18s-8.25-1.847-8.25-4.125v-3.75m16.5 0c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125" />
                   </svg>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-[11px] font-medium text-slate-300 group-hover:text-white transition-colors">
+                  <div className="text-[11px] font-medium text-[var(--color-text-secondary)] group-hover:text-[var(--color-text-primary)] transition-colors">
                     {bhoonidhiLink.label}
                   </div>
-                  <div className="text-[10px] text-slate-600 truncate">
+                  <div className="text-[10px] text-[var(--color-text-muted)] truncate">
                     {bhoonidhiLink.desc}
                   </div>
                 </div>
-                <svg className="w-4 h-4 text-slate-600 group-hover:text-slate-400 transition-colors shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <svg className="w-4 h-4 text-[var(--color-text-muted)] group-hover:text-[var(--color-text-secondary)] transition-colors shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
                 </svg>
               </a>
@@ -313,40 +314,40 @@ export default function DatasetDetail({ dataset, onClose, onExportJSON, onExport
                 href={stacApiUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-3 p-3 rounded-xl bg-slate-800/30 hover:bg-slate-800/50 border border-slate-700/30 transition-colors group"
+                className="flex items-center gap-3 p-3 rounded-xl bg-[var(--color-bg-elevated)] hover:bg-[var(--color-bg-hover)] border border-[var(--color-accent-border)] transition-colors group"
               >
-                <div className="w-8 h-8 rounded-lg bg-purple-500/10 flex items-center justify-center shrink-0">
-                  <svg className="w-4 h-4 text-purple-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <div className="w-8 h-8 rounded-lg bg-[var(--color-purple-dim)] flex items-center justify-center shrink-0">
+                  <svg className="w-4 h-4 text-[var(--color-purple)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
                   </svg>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-[11px] font-medium text-slate-300 group-hover:text-white transition-colors">
+                  <div className="text-[11px] font-medium text-[var(--color-text-secondary)] group-hover:text-[var(--color-text-primary)] transition-colors">
                     STAC API (Raw JSON)
                   </div>
-                  <div className="text-[10px] text-slate-600 truncate">
+                  <div className="text-[10px] text-[var(--color-text-muted)] truncate">
                     Machine-readable metadata for developers
                   </div>
                 </div>
-                <svg className="w-4 h-4 text-slate-600 group-hover:text-slate-400 transition-colors shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <svg className="w-4 h-4 text-[var(--color-text-muted)] group-hover:text-[var(--color-text-secondary)] transition-colors shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
                 </svg>
               </a>
             )}
 
             {/* Export buttons */}
-            <div className="border-t border-slate-700/30 pt-3 mt-3">
-              <div className="text-[10px] text-slate-600 mb-2">Export Metadata</div>
+            <div className="border-t border-[var(--color-accent-border)] pt-3 mt-3">
+              <div className="text-[10px] text-[var(--color-text-muted)] mb-2">Export Metadata</div>
               <div className="flex gap-2">
                 <button
                   onClick={() => onExportJSON(dataset)}
-                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800/30 hover:bg-slate-800/50 border border-slate-700/30 text-[11px] text-slate-400 hover:text-slate-300 transition-colors"
+                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-[var(--color-bg-elevated)] hover:bg-[var(--color-bg-hover)] border border-[var(--color-accent-border)] text-[11px] text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] transition-colors"
                 >
                   <span>{ }</span> Export JSON
                 </button>
                 <button
                   onClick={() => onExportCSV(dataset)}
-                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800/30 hover:bg-slate-800/50 border border-slate-700/30 text-[11px] text-slate-400 hover:text-slate-300 transition-colors"
+                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-[var(--color-bg-elevated)] hover:bg-[var(--color-bg-hover)] border border-[var(--color-accent-border)] text-[11px] text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] transition-colors"
                 >
                   <span>📄</span> Export CSV
                 </button>
@@ -357,14 +358,14 @@ export default function DatasetDetail({ dataset, onClose, onExportJSON, onExport
       </div>
 
       {/* Footer actions */}
-      <div className="px-4 py-3 border-t border-slate-700/30 flex gap-2">
+      <div className="px-4 py-3 border-t border-[var(--color-accent-border)] flex gap-2">
         {onCompareToggle && (
           <button
             onClick={() => onCompareToggle(dataset)}
             className={`flex-1 px-3 py-2 rounded-xl text-[11px] font-medium transition-all duration-200 border ${
               isComparing
-                ? 'bg-purple-500/20 text-purple-400 border-purple-500/30'
-                : 'bg-slate-800/30 text-slate-400 border-slate-700/30 hover:text-slate-300 hover:border-slate-600/50'
+                ? 'bg-[var(--color-purple-dim)] text-[var(--color-purple)] border-[var(--color-purple-border)]'
+                : 'bg-[var(--color-bg-elevated)] text-[var(--color-text-muted)] border-[var(--color-accent-border)] hover:text-[var(--color-text-secondary)] hover:border-[var(--color-accent-border)]'
             }`}
           >
             {isComparing ? '✓ Comparing' : '⚖️ Compare'}
@@ -372,7 +373,7 @@ export default function DatasetDetail({ dataset, onClose, onExportJSON, onExport
         )}
         <button
           onClick={() => onExportJSON(dataset)}
-          className="flex-1 px-3 py-2 rounded-xl text-[11px] font-medium bg-slate-800/30 text-slate-400 border border-slate-700/30 hover:text-slate-300 hover:border-slate-600/50 transition-all duration-200"
+          className="flex-1 px-3 py-2 rounded-xl text-[11px] font-medium bg-[var(--color-bg-elevated)] text-[var(--color-text-muted)] border border-[var(--color-accent-border)] hover:text-[var(--color-text-secondary)] hover:border-[var(--color-accent-border)] transition-all duration-200"
         >
           📋 Copy Metadata
         </button>

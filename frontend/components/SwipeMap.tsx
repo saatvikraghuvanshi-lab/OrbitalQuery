@@ -201,7 +201,7 @@ export default function SwipeMap({
 
   return (
     <div
-      className="relative w-full rounded-xl overflow-hidden border border-slate-700/30 select-none"
+      className="relative w-full rounded-xl overflow-hidden border border-[var(--color-accent-border)] select-none"
       style={{ height: '520px' }}
       onMouseMove={handleMouseMove}
       onMouseUp={handlePointerUp}
@@ -254,10 +254,10 @@ export default function SwipeMap({
       {/* Legend */}
       <div className="absolute bottom-3 left-3 z-[1001] flex items-center gap-3 px-3 py-1.5 rounded-lg bg-black/60 backdrop-blur-sm border border-white/10 text-[10px]">
         <span className="flex items-center gap-1.5 text-blue-300"><span className="w-2 h-2 rounded-full bg-blue-400" /> Before</span>
-        <span className="text-slate-500">|</span>
+        <span className="text-[var(--color-text-muted)]">|</span>
         <span className="flex items-center gap-1.5 text-orange-300"><span className="w-2 h-2 rounded-full bg-orange-400" /> After</span>
-        <span className="text-slate-500">|</span>
-        <span className="text-slate-400">Drag divider to compare</span>
+        <span className="text-[var(--color-text-muted)]">|</span>
+        <span className="text-[var(--color-text-muted)]">Drag divider to compare</span>
       </div>
     </div>
   );

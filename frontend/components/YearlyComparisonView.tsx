@@ -34,8 +34,8 @@ export default function YearlyComparisonView({ result }: Props) {
 
   if (!years.length) {
     return (
-      <div className="bg-slate-800/30 rounded-xl border border-slate-700/30 p-8 text-center">
-        <div className="text-slate-400 text-sm">No data available for the selected year range</div>
+      <div className="oq-card p-8 text-center border-oq-700/30">
+        <div className="text-oq-200 text-sm">No data available for the selected year range</div>
       </div>
     );
   }
@@ -48,61 +48,61 @@ export default function YearlyComparisonView({ result }: Props) {
           style={{ background: `${config.color}20`, color: config.color, border: `1px solid ${config.color}30` }}>
           {result.index_name} — {config.label}
         </div>
-        <h2 className="text-xl font-bold text-white mb-1">
+        <h2 className="text-xl font-bold text-oq-50 mb-1">
           {result.aoi_name} — Yearly {result.index_name} Trend
         </h2>
-        <p className="text-xs text-slate-400">
+        <p className="text-xs text-oq-300">
           {years[0].year} → {years[years.length - 1].year} · {years.length} years · {result.collection}
         </p>
       </div>
 
       {/* Trend Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div className="bg-slate-800/40 rounded-xl p-4 border border-slate-700/30">
-          <div className="text-[10px] text-slate-400 uppercase tracking-wider font-medium mb-1">Trend</div>
+        <div className="oq-card p-4">
+          <div className="text-[10px] text-oq-300 uppercase tracking-wider font-medium mb-1">Trend</div>
           <div className="text-lg font-bold" style={{ color: trend.direction === 'increasing' ? '#22c55e' : trend.direction === 'decreasing' ? '#ef4444' : '#94a3b8' }}>
             {trend.direction === 'increasing' ? '↗ Increasing' : trend.direction === 'decreasing' ? '↘ Decreasing' : '→ Stable'}
           </div>
-          <div className="text-[10px] text-slate-400 mt-1">R² = {trend.r_squared.toFixed(2)}</div>
+          <div className="text-[10px] text-oq-300 mt-1">R² = {trend.r_squared.toFixed(2)}</div>
         </div>
-        <div className="bg-slate-800/40 rounded-xl p-4 border border-slate-700/30">
-          <div className="text-[10px] text-slate-400 uppercase tracking-wider font-medium mb-1">Start ({years[0].year})</div>
-          <div className="text-2xl font-bold text-slate-200">{trend.start_value.toFixed(4)}</div>
-          <div className="text-[10px] text-slate-400 mt-1">{result.index_name} mean</div>
+        <div className="oq-card p-4">
+          <div className="text-[10px] text-oq-300 uppercase tracking-wider font-medium mb-1">Start ({years[0].year})</div>
+          <div className="text-2xl font-bold text-oq-50">{trend.start_value.toFixed(4)}</div>
+          <div className="text-[10px] text-oq-300 mt-1">{result.index_name} mean</div>
         </div>
-        <div className="bg-slate-800/40 rounded-xl p-4 border border-slate-700/30">
-          <div className="text-[10px] text-slate-400 uppercase tracking-wider font-medium mb-1">End ({years[years.length - 1].year})</div>
+        <div className="oq-card p-4">
+          <div className="text-[10px] text-oq-300 uppercase tracking-wider font-medium mb-1">End ({years[years.length - 1].year})</div>
           <div className="text-2xl font-bold" style={{ color: config.color }}>{trend.end_value.toFixed(4)}</div>
-          <div className="text-[10px] text-slate-400 mt-1">{result.index_name} mean</div>
+          <div className="text-[10px] text-oq-300 mt-1">{result.index_name} mean</div>
         </div>
-        <div className="bg-slate-800/40 rounded-xl p-4 border border-slate-700/30">
-          <div className="text-[10px] text-slate-400 uppercase tracking-wider font-medium mb-1">Total Change</div>
+        <div className="oq-card p-4">
+          <div className="text-[10px] text-oq-300 uppercase tracking-wider font-medium mb-1">Total Change</div>
           <div className="text-2xl font-bold" style={{ color: trend.total_change > 0 ? '#22c55e' : trend.total_change < 0 ? '#ef4444' : '#94a3b8' }}>
             {trend.total_change > 0 ? '+' : ''}{(trend.total_change * 100).toFixed(2)}%
           </div>
-          <div className="text-[10px] text-slate-400 mt-1">{trend.slope_per_year > 0 ? '+' : ''}{(trend.slope_per_year * 100).toFixed(3)}% per year</div>
+          <div className="text-[10px] text-oq-300 mt-1">{trend.slope_per_year > 0 ? '+' : ''}{(trend.slope_per_year * 100).toFixed(3)}% per year</div>
         </div>
       </div>
 
       {/* Timeline Chart */}
-      <div className="bg-slate-800/30 rounded-xl border border-slate-700/30 p-5">
-        <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-4">
+      <div className="oq-card p-5">
+        <h3 className="text-xs font-semibold text-oq-100 uppercase tracking-wider mb-4">
           {result.index_name} Time Series
         </h3>
         <div className="relative" style={{ height: '280px' }}>
           {/* Y-axis labels */}
-          <div className="absolute left-0 top-0 bottom-8 w-12 flex flex-col justify-between text-[10px] text-slate-500 text-right pr-2">
+          <div className="absolute left-0 top-0 bottom-8 w-12 flex flex-col justify-between text-[10px] text-oq-400 text-right pr-2">
             <span>{chartData?.maxVal.toFixed(2)}</span>
             <span>{((chartData?.maxVal || 0) + (chartData?.minVal || 0)) / 2}</span>
             <span>{chartData?.minVal.toFixed(2)}</span>
           </div>
           
           {/* Chart area */}
-          <div className="absolute left-14 right-4 top-0 bottom-8 border-l border-b border-slate-700/50">
+          <div className="absolute left-14 right-4 top-0 bottom-8 border-l border-b border-oq-700/50">
             {/* Grid lines */}
             <div className="absolute inset-0">
               {[0, 1, 2, 3, 4].map(i => (
-                <div key={i} className="absolute w-full border-t border-slate-700/20" style={{ top: `${i * 25}%` }} />
+                <div key={i} className="absolute w-full border-t border-oq-700/20" style={{ top: `${i * 25}%` }} />
               ))}
             </div>
 
@@ -154,7 +154,7 @@ export default function YearlyComparisonView({ result }: Props) {
                       x={`${x}%`}
                       y={`${yPos - 8}%`}
                       textAnchor="middle"
-                      className="fill-slate-300"
+                      className="fill-oq-200"
                       fontSize="10"
                       fontWeight="600"
                     >
@@ -167,7 +167,7 @@ export default function YearlyComparisonView({ result }: Props) {
           </div>
 
           {/* X-axis labels */}
-          <div className="absolute left-14 right-4 bottom-0 flex justify-between text-[10px] text-slate-400">
+          <div className="absolute left-14 right-4 bottom-0 flex justify-between text-[10px] text-oq-300">
             {years.map(y => (
               <span key={y.year}>{y.year}</span>
             ))}
@@ -176,16 +176,16 @@ export default function YearlyComparisonView({ result }: Props) {
       </div>
 
       {/* Year-by-Year Table */}
-      <div className="bg-slate-800/30 rounded-xl border border-slate-700/30 overflow-hidden">
-        <div className="px-5 py-3 border-b border-slate-700/30">
-          <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+      <div className="oq-card overflow-hidden">
+        <div className="px-5 py-3 border-b border-oq-700/30">
+          <h3 className="text-xs font-semibold text-oq-100 uppercase tracking-wider">
             Year-by-Year Data
           </h3>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-[10px] text-slate-400 uppercase tracking-wider border-b border-slate-700/30">
+              <tr className="text-[10px] text-oq-300 uppercase tracking-wider border-b border-oq-700/30">
                 <th className="px-4 py-2 text-left">Year</th>
                 <th className="px-4 py-2 text-left">Date</th>
                 <th className="px-4 py-2 text-right">{result.index_name} Mean</th>
@@ -198,33 +198,33 @@ export default function YearlyComparisonView({ result }: Props) {
               {years.map((y, i) => {
                 const yoy = trend.year_over_year?.find(t => t.to_year === y.year);
                 return (
-                  <tr key={y.year} className="border-b border-slate-700/20 hover:bg-slate-700/20">
-                    <td className="px-4 py-2.5 font-medium text-slate-200">{y.year}</td>
-                    <td className="px-4 py-2.5 text-slate-400 font-mono text-xs">
+                  <tr key={y.year} className="border-b border-oq-700/20 hover:bg-oq-800/30">
+                    <td className="px-4 py-2.5 font-medium text-oq-50">{y.year}</td>
+                    <td className="px-4 py-2.5 text-oq-300 font-mono text-xs">
                       {y.date ? new Date(y.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'}
                     </td>
                     <td className="px-4 py-2.5 text-right font-mono" style={{ color: config.color }}>
                       {y.index_mean.toFixed(4)}
                     </td>
-                    <td className="px-4 py-2.5 text-right text-slate-400 font-mono text-xs">
+                    <td className="px-4 py-2.5 text-right text-oq-300 font-mono text-xs">
                       ±{y.index_std.toFixed(4)}
                     </td>
                     <td className="px-4 py-2.5 text-right">
                       <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${
-                        y.cloud_cover < 10 ? 'bg-green-500/20 text-green-400' :
-                        y.cloud_cover < 25 ? 'bg-yellow-500/20 text-yellow-400' :
-                        'bg-red-500/20 text-red-400'
+                        y.cloud_cover < 10 ? 'bg-semantic-success/20 text-semantic-success' :
+                        y.cloud_cover < 25 ? 'bg-semantic-warning/20 text-semantic-warning' :
+                        'bg-semantic-error/20 text-semantic-error'
                       }`}>
                         {y.cloud_cover.toFixed(1)}%
                       </span>
                     </td>
                     <td className="px-4 py-2.5 text-right">
                       {yoy ? (
-                        <span className={`text-xs font-medium ${yoy.change > 0 ? 'text-green-400' : yoy.change < 0 ? 'text-red-400' : 'text-slate-400'}`}>
+                        <span className={`text-xs font-medium ${yoy.change > 0 ? 'text-semantic-success' : yoy.change < 0 ? 'text-semantic-error' : 'text-oq-300'}`}>
                           {yoy.change > 0 ? '+' : ''}{(yoy.change * 100).toFixed(2)}%
                         </span>
                       ) : (
-                        <span className="text-slate-500 text-xs">—</span>
+                        <span className="text-oq-400 text-xs">—</span>
                       )}
                     </td>
                   </tr>
@@ -236,28 +236,28 @@ export default function YearlyComparisonView({ result }: Props) {
       </div>
 
       {/* Methodology */}
-      <div className="bg-slate-800/30 rounded-xl border border-slate-700/30 p-5">
-        <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-3">
+      <div className="oq-card p-5">
+        <h3 className="text-xs font-semibold text-oq-100 uppercase tracking-wider mb-3">
           Methodology
         </h3>
-        <div className="text-xs text-slate-300 space-y-2">
+        <div className="text-xs text-oq-200 space-y-2">
           <p>
-            <span className="text-slate-400">Index:</span>{' '}
-            <span className="font-mono text-slate-200">{result.index_name}</span>
+            <span className="text-oq-300">Index:</span>{' '}
+            <span className="font-mono text-oq-50">{result.index_name}</span>
             {' — '}
-            <span className="text-slate-400">Mean value computed from best low-cloud scene per year (growing season: Apr-Sep)</span>
+            <span className="text-oq-300">Mean value computed from best low-cloud scene per year (growing season: Apr-Sep)</span>
           </p>
           <p>
-            <span className="text-slate-400">Trend:</span>{' '}
-            <span className="text-slate-200">Linear regression with R² = {trend.r_squared.toFixed(3)}</span>
+            <span className="text-oq-300">Trend:</span>{' '}
+            <span className="text-oq-50">Linear regression with R² = {trend.r_squared.toFixed(3)}</span>
             {' · '}
-            <span className="text-slate-400">Slope: {trend.slope_per_year > 0 ? '+' : ''}{(trend.slope_per_year * 100).toFixed(4)}% per year</span>
+            <span className="text-oq-300">Slope: {trend.slope_per_year > 0 ? '+' : ''}{(trend.slope_per_year * 100).toFixed(4)}% per year</span>
           </p>
           <p>
-            <span className="text-slate-400">Sensor:</span>{' '}
-            <span className="text-slate-200">{result.collection}</span>
+            <span className="text-oq-300">Sensor:</span>{' '}
+            <span className="text-oq-50">{result.collection}</span>
             {' · '}
-            <span className="text-slate-400">Cloud threshold: &lt;20%</span>
+            <span className="text-oq-300">Cloud threshold: &lt;20%</span>
           </p>
         </div>
       </div>

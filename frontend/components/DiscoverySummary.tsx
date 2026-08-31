@@ -215,9 +215,9 @@ export default function DiscoverySummary({
 
   if (summaries.length === 0) {
     return (
-      <div className="bg-slate-800/30 rounded-xl border border-slate-700/30 p-6 text-center">
+      <div className="oq-card p-6 text-center">
         <div className="text-2xl mb-2">📦</div>
-        <p className="text-xs text-slate-400">
+        <p className="text-xs text-oq-300">
           {datasets.length === 0
             ? 'Draw a bounding box on the map to discover available datasets'
             : 'No datasets found for this area'}
@@ -231,15 +231,15 @@ export default function DiscoverySummary({
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+          <h3 className="text-xs font-semibold text-oq-200 uppercase tracking-wider">
             Available Data
           </h3>
-          <p className="text-[10px] text-slate-500 mt-0.5">
+          <p className="text-[10px] text-oq-300 mt-0.5">
             {datasets.length} observations across {summaries.length} collection{summaries.length > 1 ? 's' : ''}
           </p>
         </div>
         {bbox && (
-          <div className="text-[10px] text-slate-500 font-mono">
+          <div className="text-[10px] text-oq-300 font-mono">
             [{bbox.west.toFixed(1)}, {bbox.south.toFixed(1)}, {bbox.east.toFixed(1)}, {bbox.north.toFixed(1)}]
           </div>
         )}
@@ -255,8 +255,8 @@ export default function DiscoverySummary({
               onClick={() => onSelectCollection(isSelected ? null : group.collection)}
               className={`w-full text-left rounded-xl border transition-all duration-200 ${
                 isSelected
-                  ? 'border-blue-500/50 bg-blue-500/8 shadow-lg shadow-blue-500/5'
-                  : 'border-slate-700/30 bg-slate-800/20 hover:bg-slate-800/40 hover:border-slate-600/50'
+                  ? 'border-[var(--color-accent-border)] bg-[var(--color-accent-dim)] shadow-lg shadow-lime/5'
+                  : 'border-oq-600/30 bg-oq-800/20 hover:bg-oq-700/40 hover:border-[var(--color-accent-border)]'
               }`}
             >
               <div className="p-3.5">
@@ -269,7 +269,7 @@ export default function DiscoverySummary({
                     {group.meta.icon} {group.meta.label}
                   </span>
                   {group.isBestMatch && (
-                    <span className="inline-flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                    <span className="inline-flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded-md bg-lime/15 text-lime border border-lime/30">
                       ★ Best match
                     </span>
                   )}
@@ -278,24 +278,24 @@ export default function DiscoverySummary({
                 {/* Stats grid */}
                 <div className="grid grid-cols-3 gap-x-4 gap-y-1.5 mb-2">
                   <div>
-                    <div className="text-[9px] text-slate-500 uppercase">Observations</div>
-                    <div className="text-[12px] text-slate-200 font-semibold">{group.observationCount}</div>
+                    <div className="text-[9px] text-oq-300 uppercase">Observations</div>
+                    <div className="text-[12px] text-oq-50 font-semibold">{group.observationCount}</div>
                   </div>
                   <div>
-                    <div className="text-[9px] text-slate-500 uppercase">Resolution</div>
-                    <div className="text-[12px] text-slate-200 font-semibold">{group.meta.resolution}</div>
+                    <div className="text-[9px] text-oq-300 uppercase">Resolution</div>
+                    <div className="text-[12px] text-oq-50 font-semibold">{group.meta.resolution}</div>
                   </div>
                   <div>
-                    <div className="text-[9px] text-slate-500 uppercase">Sensor</div>
-                    <div className="text-[12px] text-slate-200 font-semibold">{group.meta.sensor}</div>
+                    <div className="text-[9px] text-oq-300 uppercase">Sensor</div>
+                    <div className="text-[12px] text-oq-50 font-semibold">{group.meta.sensor}</div>
                   </div>
                 </div>
 
                 {/* Date coverage */}
-                <div className="flex items-center gap-3 text-[10px] text-slate-400 mb-1.5">
+                <div className="flex items-center gap-3 text-[10px] text-oq-300 mb-1.5">
                   <span>📅 {formatDateRange(group.dateRange.earliest, group.dateRange.latest)}</span>
                   {group.avgCloudCover !== null && (
-                    <span className={group.avgCloudCover < 15 ? 'text-green-400' : group.avgCloudCover < 25 ? 'text-amber-400' : 'text-red-400'}>
+                    <span className={group.avgCloudCover < 15 ? 'text-semantic-success' : group.avgCloudCover < 25 ? 'text-semantic-warning' : 'text-semantic-error'}>
                       ☁ {group.avgCloudCover.toFixed(0)}% avg
                     </span>
                   )}
@@ -303,20 +303,20 @@ export default function DiscoverySummary({
 
                 {/* Platforms */}
                 {group.platforms.length > 0 && (
-                  <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
+                  <div className="flex items-center gap-1.5 text-[10px] text-oq-300">
                     {group.platforms.map(p => (
-                      <span key={p} className="px-1.5 py-0.5 rounded bg-slate-700/30 text-slate-400">{p}</span>
+                      <span key={p} className="px-1.5 py-0.5 rounded bg-oq-700/30 text-oq-300">{p}</span>
                     ))}
                   </div>
                 )}
 
                 {/* Bands (collapsed) */}
                 {isSelected && group.meta.bands.length > 0 && (
-                  <div className="mt-2.5 pt-2.5 border-t border-slate-700/30">
-                    <div className="text-[9px] text-slate-500 uppercase tracking-wider mb-1.5">Available bands</div>
+                  <div className="mt-2.5 pt-2.5 border-t border-oq-600/30">
+                    <div className="text-[9px] text-oq-300 uppercase tracking-wider mb-1.5">Available bands</div>
                     <div className="flex flex-wrap gap-1">
                       {group.meta.bands.map(band => (
-                        <span key={band} className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-slate-800/50 text-slate-300 border border-slate-700/30">
+                        <span key={band} className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-oq-800/50 text-oq-200 border border-oq-600/30">
                           {band}
                         </span>
                       ))}
@@ -327,17 +327,17 @@ export default function DiscoverySummary({
                 {/* Score bar */}
                 <div className="mt-2">
                   <div className="flex items-center justify-between mb-0.5">
-                    <span className="text-[9px] text-slate-500">Availability score</span>
-                    <span className="text-[9px] text-slate-400 font-mono">{group.score}/100</span>
+                    <span className="text-[9px] text-oq-300">Availability score</span>
+                    <span className="text-[9px] text-oq-200 font-mono">{group.score}/100</span>
                   </div>
-                  <div className="h-1 bg-slate-700/50 rounded-full overflow-hidden">
+                  <div className="h-1 bg-oq-700/50 rounded-full overflow-hidden">
                     <div
                       className="h-full rounded-full transition-all"
                       style={{
                         width: `${group.score}%`,
                         background: group.isBestMatch
-                          ? 'linear-gradient(90deg, #f59e0b, #f97316)'
-                          : 'linear-gradient(90deg, #3b82f6, #06b6d4)',
+                          ? 'linear-gradient(90deg, #8B6CF6, #6F58C7)'
+                          : 'linear-gradient(90deg, #A3F63F, #7EBF32)',
                       }}
                     />
                   </div>

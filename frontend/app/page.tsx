@@ -13,11 +13,14 @@ import DatasetDetailPanel from '@/components/DatasetDetailPanel';
 import DiscoverySummary from '@/components/DiscoverySummary';
 import { useAnalysis } from '@/hooks/useAnalysis';
 import ShaderBackground from '@/components/ShaderBackground';
+import AnalysisStepper from '@/components/AnalysisStepper';
+import TerminalLog from '@/components/TerminalLog';
+import AnalysisErrorScreen from '@/components/AnalysisErrorScreen';
 
 const MapView = dynamic(() => import('@/components/MapView'), {
   ssr: false,
   loading: () => (
-    <div className="w-full h-full rounded-2xl bg-slate-900 border border-slate-700/30 flex items-center justify-center text-slate-500 text-sm">
+    <div className="w-full h-full rounded-2xl bg-[var(--color-bg-card)] border border-[var(--color-accent-border)] flex items-center justify-center text-[var(--color-text-muted)] text-sm">
       Loading map...
     </div>
   ),
@@ -30,6 +33,15 @@ export interface BoundingBox {
 }
 
 type Tab = 'ask' | 'showcase' | 'discover';
+
+const PHASE_LABELS: Record<string, string> = {
+  planning: 'Understanding your query',
+  searching: 'Discovering satellite data',
+  ranking: 'Ranking candidate datasets',
+  processing: 'Analyzing observations',
+  deciding: 'Detecting changes',
+  explaining: 'Generating insights',
+};
 
 // Types for Dataset Discovery (preserved for backward compat)
 export interface DatasetResult {
@@ -204,15 +216,15 @@ function HomePageContent() {
   }, [tab, allDatasets.length]);
 
   if (!mounted) return (
-    <div className="h-screen flex items-center justify-center" style={{ background: '#0a0e1a' }}>
-      <div style={{ color: '#64748b', fontSize: '14px' }}>Loading OrbitalQuery...</div>
+    <div className="h-screen flex items-center justify-center oq-bg">
+      <div className="text-[var(--color-text-muted)] text-sm">Loading OrbitalQuery...</div>
     </div>
   );
 
   // ── Analysis Workflow View ──────────────────────────────────────
 
   if (tab === 'ask') {  return (
-    <div className="h-screen flex flex-col overflow-hidden" style={{ background: '#0a0e1a' }}>
+    <div className="h-screen flex flex-col overflow-hidden oq-bg">
         <ShaderBackground />
         <Header activeTab={tab} onNavigate={setTab} />
 
@@ -221,97 +233,39 @@ function HomePageContent() {
         )}
 
         {step !== 'idle' && step !== 'complete' && step !== 'error' && (
-          <div className="flex-1 overflow-y-auto">
-            <div className="max-w-4xl mx-auto px-4 py-8 flex flex-col items-center w-full">
-              {/* Back button — centered */}
-              <button onClick={analysis.reset} className="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-300 transition-colors mb-8">
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-                </svg>
-                New Analysis
-              </button>
-
-              {/* Progress Steps — centered with SVG icons */}
-              <div className="flex items-center justify-center gap-1 mb-3">
-                {[{ key: 'planning', label: 'Plan' }, { key: 'searching', label: 'Search' }, { key: 'ranking', label: 'Rank' }, { key: 'processing', label: 'Process' }, { key: 'deciding', label: 'Detect' }, { key: 'explaining', label: 'Report' }].map(({ key, label }, i) => {
-                  const isActive = key === step;
-                  const stepIdx = ['planning', 'searching', 'ranking', 'processing', 'deciding', 'explaining'].indexOf(step);
-                  const isDone = stepIdx > i;
-                  return (
-                    <div key={key} className="flex items-center gap-1">
-                      <div className="flex flex-col items-center">
-                        <div className={`w-9 h-9 rounded-full flex items-center justify-center transition-all ${
-                          isActive ? 'bg-blue-500 text-white animate-pulse shadow-lg shadow-blue-500/30' :
-                          isDone ? 'bg-green-500/20 text-green-400 border border-green-500/30' :
-                          'bg-slate-800 text-slate-600 border border-slate-700/30'
-                        }`}>
-                          {isDone ? (
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-                          ) : (
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d={
-                                key === 'planning' ? 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2' :
-                                key === 'searching' ? 'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z' :
-                                key === 'ranking' ? 'M3 4h18M3 8h18M3 12h12M3 16h8' :
-                                key === 'processing' ? 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z' :
-                                key === 'deciding' ? 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z' :
-                                'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z'
-                              } />
-                            </svg>
-                          )}
-                        </div>
-                        <span className={`text-[9px] mt-1 font-medium ${isActive ? 'text-blue-400' : isDone ? 'text-green-400/60' : 'text-slate-600'}`}>{label}</span>
-                      </div>
-                      {i < 5 && <div className={`w-6 h-0.5 mt-[-12px] ${isDone ? 'bg-green-500/30' : 'bg-slate-700/50'}`} />}
-                    </div>
-                  );
-                })}
+          <div className="flex-1 overflow-hidden">
+            <div className="max-w-7xl mx-auto px-6 py-6 h-full flex flex-col">
+              {/* Header */}
+              <div className="flex items-center justify-between mb-5">
+                <button onClick={analysis.reset} className="flex items-center gap-2 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] transition-colors">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                  </svg>
+                  New Analysis
+                </button>
+                <span className="text-[11px] text-[var(--color-text-muted)] font-medium truncate max-w-[60%]">{analysis.state.query}</span>
               </div>
 
-              {/* Active step label — shows real backend data */}
-              <div className="text-center mb-8">
-                <div className="text-sm text-slate-300 font-medium">
-                  {step === 'planning' && 'Understanding your query'}
-                  {step === 'searching' && 'Discovering satellite data'}
-                  {step === 'ranking' && 'Ranking candidate datasets'}
-                  {step === 'processing' && 'Analyzing observations'}
-                  {step === 'deciding' && 'Detecting changes'}
-                  {step === 'explaining' && 'Generating insights'}
-                </div>
-                {/* Real detail from backend */}
+              {/* Stepper header */}
+              <AnalysisStepper current={step} />
+
+              {/* Active phase indicator */}
+              <div className="mt-4 mb-5 text-center">
+                <div className="text-sm font-semibold text-[var(--color-text-primary)]">{PHASE_LABELS[step] || ''}</div>
                 {analysis.state.detail && (
-                  <div className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
-                    {analysis.state.detail}
-                  </div>
+                  <div className="text-xs text-[var(--color-text-muted)] mt-1">{analysis.state.detail}</div>
                 )}
               </div>
 
-              {/* Real backend processing steps — shown when available */}
-              {analysis.state.processingSteps.length > 0 && (
-                <div className="w-full max-w-2xl mb-6">
-                  <div className="bg-slate-800/30 rounded-xl border border-slate-700/30 px-4 py-3">
-                    <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-2 font-medium">Processing log</div>
-                    <div className="space-y-1">
-                      {analysis.state.processingSteps.map((ps, i) => (
-                        <div key={i} className="flex items-start gap-2 text-[10px]">
-                          <span className="text-green-400/60 mt-0.5 flex-shrink-0">✓</span>
-                          <span className="text-slate-400 min-w-0">
-                            <span className="text-slate-300 font-medium">{ps.step.replace(/_/g, ' ')}</span>
-                            {ps.detail && <span className="text-slate-600 ml-1.5 block sm:inline">{ps.detail.length > 80 ? ps.detail.slice(0, 80) + '...' : ps.detail}</span>}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+              {/* Dashboard grid */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 min-h-0">
+                {/* Left: terminal log */}
+                <div className="col-span-12 lg:col-span-7 flex flex-col min-h-0">
+                  <TerminalLog steps={analysis.state.processingSteps} currentDetail={analysis.state.detail} />
                 </div>
-              )}
-
-              {/* Partial Results — centered, balanced layout */}
-              <div className="w-full grid grid-cols-1 lg:grid-cols-3 gap-4">
-                <div className="lg:col-span-2">
+                {/* Right: plan + evidence */}
+                <div className="col-span-12 lg:col-span-5 flex flex-col gap-4 overflow-y-auto min-h-0">
                   {analysis.state.plan && <AnalysisPlanView plan={analysis.state.plan} />}
-                </div>
-                <div className="lg:col-span-1">
                   {analysis.state.scenes.length > 0 && <EvidencePanel scenes={analysis.state.scenes} />}
                 </div>
               </div>
@@ -320,16 +274,13 @@ function HomePageContent() {
         )}
 
         {step === 'error' && (
-          <div className="max-w-3xl mx-auto px-4 py-12">
-            <div className="glass rounded-2xl border border-red-500/20 p-6 text-center">
-              <div className="text-3xl mb-3">❌</div>
-              <h3 className="text-sm font-bold text-red-400 mb-2">Analysis Failed</h3>
-              <p className="text-xs text-slate-500 mb-4">{analysis.state.error}</p>
-              <button onClick={analysis.reset} className="px-4 py-2 rounded-xl bg-slate-800/50 text-xs text-slate-400 hover:text-slate-300 transition-colors">
-                Try Again
-              </button>
-            </div>
-          </div>
+          <AnalysisErrorScreen
+            error={analysis.state.error || 'Analysis failed'}
+            code={analysis.state.errorCode}
+            query={analysis.state.query}
+            onRetry={() => analysis.analyze(analysis.state.query)}
+            onModify={analysis.reset}
+          />
         )}
 
         {step === 'complete' && analysis.state.result && (
@@ -337,7 +288,7 @@ function HomePageContent() {
             <div className="w-full max-w-[95vw] mx-auto px-4 py-6">
               {/* Back button — centered */}
               <div className="flex justify-center mb-4">
-                <button onClick={analysis.reset} className="flex items-center gap-2 text-sm text-slate-500 hover:text-slate-300 transition-colors">
+                <button onClick={analysis.reset} className="flex items-center gap-2 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] transition-colors">
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
                   </svg>
@@ -347,10 +298,10 @@ function HomePageContent() {
 
               {/* Query summary */}
               <div className="mb-4 text-center">
-                <h2 className="text-lg font-bold text-slate-200">
+                <h2 className="text-lg font-bold text-[var(--color-text-primary)]">
                   &quot;{analysis.state.query}&quot;
                 </h2>
-                <p className="text-xs text-slate-500 mt-1">
+                <p className="text-xs text-[var(--color-text-muted)] mt-1">
                   {(analysis.state.result as any)?.metrics?.fallbackMode ? 'Dataset search complete — full analysis engine is waking up' : 'Temporal comparison complete'}
                 </p>
               </div>
@@ -379,7 +330,7 @@ function HomePageContent() {
 
   if (tab === 'showcase') {
     return (
-      <div className="h-screen flex flex-col overflow-hidden" style={{ background: '#0a0e1a' }}>
+      <div className="h-screen flex flex-col overflow-hidden oq-bg">
         <Header activeTab={tab} onNavigate={setTab} />
         <div className="flex-1 overflow-y-auto">
           <ShowcaseQueries onSelect={(query) => {
@@ -402,7 +353,7 @@ function HomePageContent() {
     return true;
   });
 
-  const selectedDiscoverDataset = filteredDatasets.find(d => d.id === selectedDiscoverId) || null;
+  const selectedDiscoverDataset = filteredDatasets.find(ds => ds.id === selectedDiscoverId) || null;
 
   const discoverMapViewResults: DatasetResult[] = selectedDiscoverDataset ? [{
     id: selectedDiscoverDataset.id,
@@ -427,19 +378,19 @@ function HomePageContent() {
   }] : [];
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden" style={{ background: '#0a0e1a' }}>
+    <div className="h-screen flex flex-col overflow-hidden oq-bg">
       <Header activeTab={tab} onNavigate={setTab} />
 
       {/* Compact filter bar */}
       <div className="px-6 mb-3 w-full">
-        <div className="glass rounded-xl border border-slate-700/30 px-5 py-3">
+        <div className="oq-card px-5 py-3">
           <div className="flex flex-wrap items-center gap-4">
             <div className="flex items-center gap-2">
-              <label className="text-[10px] text-slate-500 uppercase tracking-wider font-medium">Provider</label>
+              <label className="text-[10px] text-[var(--color-text-muted)] uppercase tracking-wider font-medium">Provider</label>
               <select
                 value={discoverProvider}
                 onChange={(e) => setDiscoverProvider(e.target.value)}
-                className="bg-slate-800/50 border border-slate-700/50 rounded-lg px-3 py-1.5 text-xs text-slate-300 focus:border-blue-500/50 focus:outline-none"
+                className="bg-[var(--color-bg-elevated)] border border-[var(--color-accent-border)] rounded-lg px-3 py-1.5 text-xs text-[var(--color-text-secondary)] focus:border-[var(--color-accent)] focus:outline-none"
               >
                 <option value="">All Providers</option>
                 <option value="Copernicus">Copernicus/ESA</option>
@@ -448,11 +399,11 @@ function HomePageContent() {
               </select>
             </div>
             <div className="flex items-center gap-2">
-              <label className="text-[10px] text-slate-500 uppercase tracking-wider font-medium">Collection</label>
+              <label className="text-[10px] text-[var(--color-text-muted)] uppercase tracking-wider font-medium">Collection</label>
               <select
                 value={discoverCollection}
                 onChange={(e) => setDiscoverCollection(e.target.value)}
-                className="bg-slate-800/50 border border-slate-700/50 rounded-lg px-3 py-1.5 text-xs text-slate-300 focus:border-blue-500/50 focus:outline-none"
+                className="bg-[var(--color-bg-elevated)] border border-[var(--color-accent-border)] rounded-lg px-3 py-1.5 text-xs text-[var(--color-text-secondary)] focus:border-[var(--color-accent)] focus:outline-none"
               >
                 <option value="">All Collections</option>
                 <option value="sentinel-2">Sentinel-2 L2A</option>
@@ -460,7 +411,7 @@ function HomePageContent() {
                 <option value="landsat">Landsat C2 L2</option>
               </select>
             </div>
-            <div className="ml-auto text-[11px] text-slate-400 font-medium">
+            <div className="ml-auto text-[11px] text-[var(--color-text-muted)] font-medium">
               {filteredDatasets.length} datasets
             </div>
           </div>
@@ -471,7 +422,7 @@ function HomePageContent() {
       <div className="px-6 pb-8 w-full">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4" style={{ height: 'calc(100vh - 160px)', minHeight: '500px' }}>
           {/* Map — 2/3 width */}
-          <div className="lg:col-span-2 rounded-2xl overflow-hidden border border-slate-700/30">
+          <div className="lg:col-span-2 rounded-2xl overflow-hidden border border-[var(--color-accent-border)]">
             <MapView
               results={discoverMapViewResults}
               selectedDataset={selectedDiscoverDataset as any}
@@ -479,20 +430,20 @@ function HomePageContent() {
                 if (ds) setSelectedDiscoverId(ds.id);
               }}
               bbox={discoverBbox}
-              onBboxChange={(bbox) => setDiscoverBbox(bbox as BoundingBox | null)}
+              onBboxChange={(bbox: BoundingBox | null) => setDiscoverBbox(bbox)}
             />
           </div>
 
           {/* Right panel — Dataset List or Detail */}
-          <div className="lg:col-span-1 rounded-2xl border border-slate-700/30 bg-slate-900/50 overflow-hidden flex flex-col">
+          <div className="lg:col-span-1 rounded-2xl border border-[var(--color-accent-border)] bg-[var(--color-bg-card)] overflow-hidden flex flex-col">
             {bboxDetail ? (
               /* Detail view */
               <>
                 {/* Back button */}
-                <div className="px-4 py-2 border-b border-slate-700/30 flex-shrink-0">
+                <div className="px-4 py-2 border-b border-[var(--color-accent-border)] flex-shrink-0">
                   <button
                     onClick={() => { setBboxDetail(null); setSelectedDiscoverId(null); }}
-                    className="flex items-center gap-1.5 text-[11px] text-slate-400 hover:text-slate-200 transition-colors"
+                    className="flex items-center gap-1.5 text-[11px] text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] transition-colors"
                   >
                     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
@@ -516,7 +467,7 @@ function HomePageContent() {
               <>
                 {/* Discovery Summary — grouped availability + best match */}
                 {discoverBbox && filteredDatasets.length > 0 && (
-                  <div className="px-4 py-3 border-b border-slate-700/30 flex-shrink-0">
+                  <div className="px-4 py-3 border-b border-[var(--color-accent-border)] flex-shrink-0">
                     <DiscoverySummary
                       datasets={filteredDatasets}
                       bbox={discoverBbox}
@@ -530,11 +481,11 @@ function HomePageContent() {
                 )}
 
                 {/* Dataset list header */}
-                <div className="px-4 py-3 border-b border-slate-700/30 flex-shrink-0">
-                  <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+                <div className="px-4 py-3 border-b border-[var(--color-accent-border)] flex-shrink-0">
+                  <h3 className="text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider">
                     {discoverBbox ? `${filteredDatasets.length} Observations${selectedDiscoverCollection ? ` in ${selectedDiscoverCollection}` : ''}` : 'Available Datasets'}
                   </h3>
-                  <p className="text-[10px] text-slate-500 mt-0.5">
+                  <p className="text-[10px] text-[var(--color-text-muted)] mt-0.5">
                     {discoverBbox ? 'Click an observation for details and analysis options' : 'Click a dataset to view details + analyze'}
                   </p>
                 </div>
@@ -542,7 +493,7 @@ function HomePageContent() {
                   <DatasetList
                     datasets={filteredDatasets}
                     selectedId={selectedDiscoverId}
-                    onSelect={(ds) => {
+                    onSelect={(ds: Dataset) => {
                       setSelectedDiscoverId(ds.id);
                       setBboxDetail(ds);
                       if (ds.bbox && ds.bbox.length === 4) {

@@ -24,7 +24,7 @@ export default function ShaderBackground() {
       <div
         className="fixed inset-0 z-0 pointer-events-none"
         style={{
-          background: 'radial-gradient(ellipse at 50% 80%, #0000a3 0%, #0D1B2A 50%, #0a0e1a 100%)',
+          background: 'radial-gradient(ellipse at 50% 80%, rgba(163,246,63,0.04) 0%, transparent 55%), radial-gradient(ellipse at 80% 20%, rgba(139,108,246,0.03) 0%, transparent 50%), var(--color-bg-deep)',
           opacity: 0.4,
         }}
       />
@@ -50,9 +50,9 @@ export default function ShaderBackground() {
           cDistance={2.8}
           cPolarAngle={80}
           cameraZoom={9.1}
-          color1="#0D1B2A"
-          color2="#0000a3"
-          color3="#000086"
+          color1="#08120B"
+          color2="#A3F63F"
+          color3="#8B6CF6"
           positionX={0}
           positionY={0}
           positionZ={0}

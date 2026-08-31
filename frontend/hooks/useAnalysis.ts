@@ -2,6 +2,15 @@
 
 import { useState, useCallback } from 'react';
 
+class AnalysisError extends Error {
+  code: string | null;
+  constructor(message: string, code: string | null = null) {
+    super(message);
+    this.name = 'AnalysisError';
+    this.code = code;
+  }
+}
+
 // ── Types ───────────────────────────────────────────────────────
 
 export interface AnalysisPlan {
@@ -102,6 +111,7 @@ export interface AnalysisState {
   scenes: SceneInfo[];
   result: TemporalComparisonResult | null;
   error: string | null;
+  errorCode: string | null;
   /** Real detail string shown below the step label */
   detail: string | null;
   /** Real processing steps from the backend */
@@ -118,6 +128,7 @@ export function useAnalysis() {
     scenes: [],
     result: null,
     error: null,
+    errorCode: null,
     detail: null,
     processingSteps: [],
   });
@@ -130,6 +141,7 @@ export function useAnalysis() {
       scenes: [],
       result: null,
       error: null,
+      errorCode: null,
       detail: null,
       processingSteps: [],
     });
@@ -163,24 +175,24 @@ export function useAnalysis() {
       try {
         data = await res.json();
       } catch {
-        throw new Error('Backend is unreachable. Please ensure the analysis service is running.');
+        throw new AnalysisError('Backend is unreachable. Please ensure the analysis service is running.', 'HTTP 000');
       }
 
       if (!res.ok) {
         const errMsg = data?.detail || data?.message || data?.error || `Analysis failed (${res.status})`;
         if (errMsg.includes('starting up') || errMsg.includes('unavailable') || errMsg.includes('invalid response') || errMsg.includes('PYTHON_UNAVAILABLE')) {
-          throw new Error('🛰️ The analysis engine is waking up from sleep (Render free tier). Please try again in 30-60 seconds.');
+          throw new AnalysisError('🛰️ The analysis engine is waking up from sleep (Render free tier). Please try again in 30-60 seconds.', 'HTTP 503');
         }
-        throw new Error(errMsg);
+        throw new AnalysisError(errMsg, `HTTP ${res.status}`);
       }
 
       if (data.status === 'error' && !data.plan) {
-        throw new Error(data.message || (data.errors?.[0]) || 'Query could not be processed. Please describe what you want to analyze.');
+        throw new AnalysisError(data.message || (data.errors?.[0]) || 'Query could not be processed. Please describe what you want to analyze.', 'ANALYSIS');
       }
 
       const plan = data.plan;
       if (!plan) {
-        throw new Error('No analysis plan was generated. Please provide a location and phenomenon (e.g. "Flood impact in Jaipur from July to September 2024").');
+        throw new AnalysisError('No analysis plan was generated. Please provide a location and phenomenon (e.g. "Flood impact in Jaipur from July to September 2024").', 'ANALYSIS');
       }
 
       // ── Phase 3: Plan received — show what was understood ─
@@ -259,6 +271,7 @@ export function useAnalysis() {
         ...prev,
         step: 'error',
         error: err.message || 'Analysis failed',
+        errorCode: (err as any)?.code ?? null,
         detail: null,
       }));
     }

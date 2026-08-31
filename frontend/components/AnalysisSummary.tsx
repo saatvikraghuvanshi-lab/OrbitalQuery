@@ -34,17 +34,17 @@ interface StructuredFinding {
 // ── Phenomenon display config ─────────────────────────────────
 
 const PHENOMENON_CONFIG: Record<string, { color: string; label: string; indexLabel: string }> = {
-  urban_expansion: { color: '#a855f7', label: 'Urban Expansion', indexLabel: 'NDBI' },
+  urban_expansion: { color: '#8B6CF6', label: 'Urban Expansion', indexLabel: 'NDBI' },
   vegetation_change: { color: '#22c55e', label: 'Vegetation Change', indexLabel: 'NDVI' },
   deforestation: { color: '#ef4444', label: 'Deforestation', indexLabel: 'NDVI' },
-  flood_impact: { color: '#3b82f6', label: 'Flood Impact', indexLabel: 'NDWI' },
+  flood_impact: { color: '#60a5fa', label: 'Flood Impact', indexLabel: 'NDWI' },
   water_change: { color: '#06b6d4', label: 'Water Body Change', indexLabel: 'NDWI' },
   burn_severity: { color: '#f97316', label: 'Burn Severity', indexLabel: 'NBR' },
   snow_cover: { color: '#e2e8f0', label: 'Snow Cover', indexLabel: 'NDSI' },
   glacier_retreat: { color: '#67e8f9', label: 'Glacier Retreat', indexLabel: 'NDSI' },
   coastal_erosion: { color: '#0ea5e9', label: 'Coastal Erosion', indexLabel: 'NDWI' },
-  soil_moisture: { color: '#d97706', label: 'Soil Moisture', indexLabel: 'NDVI' },
-  land_cover_change: { color: '#8b5cf6', label: 'Land Cover Change', indexLabel: 'NDVI' },
+  soil_moisture: { color: '#fbbf24', label: 'Soil Moisture', indexLabel: 'NDVI' },
+  land_cover_change: { color: '#8B6CF6', label: 'Land Cover Change', indexLabel: 'NDVI' },
 };
 
 // ── Helpers ──────────────────────────────────────────────────────
@@ -189,7 +189,7 @@ export default function AnalysisSummary({ result }: AnalysisSummaryProps) {
   return (
     <div className="space-y-4">
       {/* ── 1. EXECUTIVE FINDING ─────────────────────────────── */}
-      <div className="bg-slate-800/40 rounded-2xl border border-slate-700/30 p-6">
+      <div className="oq-card p-6">
         {/* Phenomenon badge + location */}
         <div className="flex items-center gap-3 mb-3">
           <div
@@ -198,41 +198,41 @@ export default function AnalysisSummary({ result }: AnalysisSummaryProps) {
           >
             {config.label}
           </div>
-          <span className="text-[11px] text-slate-400">
+          <span className="text-[11px] text-[var(--color-text-muted)]">
             {findings.location} · {findings.timeRange}
           </span>
         </div>
 
         {/* Headline — the most important thing on the page */}
-        <h2 className="text-lg font-bold text-white leading-snug mb-2">
+        <h2 className="text-lg font-bold text-[var(--color-text-primary)] leading-snug mb-2">
           {findings.headline}
         </h2>
 
         {/* Summary — one sentence */}
-        <p className="text-sm text-slate-300 leading-relaxed" style={{ maxWidth: '80ch' }}>
+        <p className="text-sm text-[var(--color-text-secondary)] leading-relaxed" style={{ maxWidth: '80ch' }}>
           {findings.summary}
         </p>
 
         {/* Primary metric — the most important number */}
         <div className="mt-5 flex items-end gap-6">
           <div>
-            <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-1 font-medium">Primary Finding</div>
+            <div className="text-[10px] text-[var(--color-text-muted)] uppercase tracking-wider mb-1 font-medium">Primary Finding</div>
             {findings.primaryMetric.available ? (
               <div className="flex items-baseline gap-2">
                 <span className="text-3xl font-bold" style={{ color: config.color }}>
                   {findings.primaryMetric.value}
                 </span>
-                <span className="text-sm text-slate-400">{findings.primaryMetric.label}</span>
+                <span className="text-sm text-[var(--color-text-muted)]">{findings.primaryMetric.label}</span>
               </div>
             ) : (
-              <div className="text-sm text-slate-500 italic">Quantification unavailable</div>
+              <div className="text-sm text-[var(--color-text-muted)] italic">Quantification unavailable</div>
             )}
           </div>
 
           {/* Direction indicator */}
           {isAvailable(result.metrics?.direction) && (
             <div className="pb-1">
-              <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-1 font-medium">Direction</div>
+              <div className="text-[10px] text-[var(--color-text-muted)] uppercase tracking-wider mb-1 font-medium">Direction</div>
               <div className="flex items-center gap-1.5">
                 <span
                   className="inline-block w-0 h-0 border-l-[5px] border-r-[5px] border-b-[8px] border-l-transparent border-r-transparent"
@@ -241,7 +241,7 @@ export default function AnalysisSummary({ result }: AnalysisSummaryProps) {
                     transform: ['loss', 'degradation', 'retreat', 'erosion', 'shrinking', 'burned', 'drier'].includes(result.metrics.direction) ? 'rotate(180deg)' : 'none',
                   }}
                 />
-                <span className="text-sm text-slate-200 font-medium capitalize">{result.metrics.direction}</span>
+                <span className="text-sm text-[var(--color-text-secondary)] font-medium capitalize">{result.metrics.direction}</span>
               </div>
             </div>
           )}
@@ -249,36 +249,36 @@ export default function AnalysisSummary({ result }: AnalysisSummaryProps) {
       </div>
 
       {/* ── 2. CONFIDENCE & DATA SOURCES (collapsible) ──────── */}
-      <details className="bg-slate-800/30 rounded-xl border border-slate-700/30 overflow-hidden group">
-        <summary className="px-5 py-3.5 text-xs font-semibold text-slate-200 uppercase tracking-wider cursor-pointer hover:text-white transition-colors flex items-center justify-between">
+      <details className="oq-card overflow-hidden group">
+        <summary className="px-5 py-3.5 text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider cursor-pointer hover:text-[var(--color-text-primary)] transition-colors flex items-center justify-between">
           <span className="flex items-center gap-2">
-            <svg className="w-3.5 h-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <svg className="w-3.5 h-3.5 text-[var(--color-text-muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
             </svg>
             Confidence & Data Sources
           </span>
-          <svg className="w-4 h-4 text-slate-500 group-open:rotate-180 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <svg className="w-4 h-4 text-[var(--color-text-muted)] group-open:rotate-180 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
           </svg>
         </summary>
         <div className="px-5 pb-4 space-y-4">
           {/* Confidence */}
           <div>
-            <div className="text-[10px] text-slate-400 uppercase tracking-wider font-medium mb-1.5">Confidence Assessment</div>
-            <p className="text-xs text-slate-300 leading-relaxed">{findings.confidence}</p>
+            <div className="text-[10px] text-[var(--color-text-muted)] uppercase tracking-wider font-medium mb-1.5">Confidence Assessment</div>
+            <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed">{findings.confidence}</p>
           </div>
 
           {/* Data Sources */}
           {findings.dataSources.length > 0 && (
             <div>
-              <div className="text-[10px] text-slate-400 uppercase tracking-wider font-medium mb-2">Data Sources</div>
+              <div className="text-[10px] text-[var(--color-text-muted)] uppercase tracking-wider font-medium mb-2">Data Sources</div>
               <div className="space-y-1.5">
                 {findings.dataSources.map((src, i) => (
                   <div key={i} className="flex items-start gap-2 text-xs">
-                    <span className="w-1.5 h-1.5 rounded-full bg-slate-600 mt-1.5 flex-shrink-0" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-accent)] mt-1.5 flex-shrink-0" />
                     <div>
-                      <span className="text-slate-200 font-medium">{src.name}</span>
-                      <span className="text-slate-500 ml-1.5">{src.role}</span>
+                      <span className="text-[var(--color-text-primary)] font-medium">{src.name}</span>
+                      <span className="text-[var(--color-text-muted)] ml-1.5">{src.role}</span>
                     </div>
                   </div>
                 ))}
@@ -289,10 +289,10 @@ export default function AnalysisSummary({ result }: AnalysisSummaryProps) {
           {/* Limitations */}
           {findings.limitations.length > 0 && (
             <div>
-              <div className="text-[10px] text-slate-400 uppercase tracking-wider font-medium mb-2">Limitations</div>
+              <div className="text-[10px] text-[var(--color-text-muted)] uppercase tracking-wider font-medium mb-2">Limitations</div>
               <div className="flex flex-wrap gap-1.5">
                 {findings.limitations.map((lim, i) => (
-                  <span key={i} className="inline-flex items-center gap-1 text-[10px] text-slate-400 bg-slate-700/30 px-2 py-1 rounded-md border border-slate-600/20">
+                  <span key={i} className="inline-flex items-center gap-1 text-[10px] text-[var(--color-text-muted)] bg-oq-700/40 px-2 py-1 rounded-md border border-oq-600/30">
                     <span className="text-amber-400/70">⚠</span> {lim}
                   </span>
                 ))}
@@ -304,11 +304,11 @@ export default function AnalysisSummary({ result }: AnalysisSummaryProps) {
 
       {/* ── 3. CHANGE REGIONS (if available) ────────────────── */}
       {findings.changeRegions.length > 0 && (
-        <div className="bg-slate-800/30 rounded-xl border border-slate-700/30 p-4">
-          <div className="text-[10px] text-slate-400 uppercase tracking-wider font-medium mb-2">Key Findings</div>
+        <div className="oq-card p-4">
+          <div className="text-[10px] text-[var(--color-text-muted)] uppercase tracking-wider font-medium mb-2">Key Findings</div>
           <div className="space-y-1.5">
             {findings.changeRegions.map((finding, i) => (
-              <div key={i} className="flex items-start gap-2 text-xs text-slate-300">
+              <div key={i} className="flex items-start gap-2 text-xs text-[var(--color-text-secondary)]">
                 <span className="mt-0.5 flex-shrink-0" style={{ color: config.color }}>▸</span>
                 <span>{finding}</span>
               </div>
