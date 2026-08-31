@@ -9,13 +9,13 @@ interface QueryInputProps {
 
 const ALL_SUGGESTIONS = [
   { text: 'Chennai coastal erosion 2018 vs 2025', icon: '🌊', category: 'Coastal' },
-  { text: 'Kerala flood impact August 2024', icon: '🌧️', category: 'Flood' },
-  { text: 'Sundarbans deforestation 2019 vs 2024', icon: '🌳', category: 'Forest' },
-  { text: 'Himalayan glacier retreat 2018 vs 2025', icon: '🏔️', category: 'Glacier' },
+  { text: 'Kerala flood impact August 2024', icon: '🌧', category: 'Flood' },
+  { text: 'Sundarbans deforestation 2019 vs 2024', icon: '🌲', category: 'Forest' },
+  { text: 'Himalayan glacier retreat 2018 vs 2025', icon: '🏔', category: 'Glacier' },
   { text: 'Mumbai coastal change 2020 vs 2025', icon: '🌊', category: 'Coastal' },
-  { text: 'Delhi urban sprawl 2019 vs 2025', icon: '🏙️', category: 'Urban' },
-  { text: 'Hyderabad urban expansion 2021 vs 2025', icon: '🏙️', category: 'Urban' },
-  { text: 'Amazon forest change 2020 vs 2025', icon: '🌳', category: 'Forest' },
+  { text: 'Delhi urban sprawl 2019 vs 2025', icon: '🏙', category: 'Urban' },
+  { text: 'Hyderabad urban expansion 2021 vs 2025', icon: '🏙', category: 'Urban' },
+  { text: 'Amazon forest change 2020 vs 2025', icon: '🌲', category: 'Forest' },
   { text: 'California wildfire burn severity 2023', icon: '🔥', category: 'Fire' },
   { text: 'Assam vegetation change 2019 vs 2025', icon: '🌾', category: 'Vegetation' },
 ];
@@ -32,19 +32,13 @@ function shuffleArray<T>(arr: T[]): T[] {
 export default function QueryInput({ onAnalyze, loading }: QueryInputProps) {
   const [query, setQuery] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
-  const [visibleSuggestions, setVisibleSuggestions] = useState(() =>
-    shuffleArray(ALL_SUGGESTIONS).slice(0, 6)
-  );
+  const [visibleSuggestions, setVisibleSuggestions] = useState(() => shuffleArray(ALL_SUGGESTIONS).slice(0, 6));
   const [shuffleKey, setShuffleKey] = useState(0);
 
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
+  useEffect(() => { inputRef.current?.focus(); }, []);
 
   const handleSubmit = () => {
-    if (query.trim() && !loading) {
-      onAnalyze(query.trim());
-    }
+    if (query.trim() && !loading) onAnalyze(query.trim());
   };
 
   const handleShuffle = useCallback(() => {
@@ -54,30 +48,21 @@ export default function QueryInput({ onAnalyze, loading }: QueryInputProps) {
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center relative">
-      {/* Concentric rings decoration */}
-      <div className="absolute inset-0 pointer-events-none flex items-center justify-center opacity-10">
-        <div className="w-[1100px] h-[1100px] border border-white/5 rounded-full absolute" />
-        <div className="w-[800px] h-[800px] border border-white/5 rounded-full absolute" />
-        <div className="w-[500px] h-[500px] border border-white/5 rounded-full absolute" />
-      </div>
-
       <div className="relative z-10 flex flex-col items-center justify-center w-full h-full px-4">
-        {/* Title block */}
-        <div className="text-center mb-10">
-          <h2 className="text-4xl font-semibold text-[var(--color-text-primary)] mb-3 tracking-tight">
+        {/* Title */}
+        <div className="text-center mb-8">
+          <h2 className="text-headline text-oq-50 mb-2 tracking-tight">
             Ask a question about Earth
           </h2>
-          <p className="text-base font-medium text-[var(--color-text-secondary)]">
+          <p className="text-body text-oq-200">
             Query satellite imagery across Sentinel, Landsat &amp; MODIS archives
           </p>
         </div>
 
-        {/* Search bar — glow border */}
-        <div
-          className="w-full max-w-3xl rounded-2xl p-1 flex items-center transition-all mb-8 bg-[var(--color-bg-elevated)] border border-[var(--color-accent-border)] focus-within:border-[var(--color-accent)]"
-        >
-          <div className="pl-5 pr-3 text-[var(--color-accent)]">
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        {/* Search bar */}
+        <div className="w-full max-w-2xl rounded-lg p-[1px] flex items-center transition-all mb-6 bg-oq-700/40 border border-oq-600/50 focus-within:border-lime/40 focus-within:shadow-[0_0_0_1px_rgba(163,246,63,0.15)]">
+          <div className="pl-4 pr-2 text-lime">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
           </div>
@@ -88,61 +73,54 @@ export default function QueryInput({ onAnalyze, loading }: QueryInputProps) {
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
             placeholder='Try "Hyderabad urban expansion 2021 vs 2025"'
-            className="w-full bg-transparent border-none text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:ring-0 outline-none text-base py-3.5"
+            className="w-full bg-transparent border-none text-oq-50 placeholder:text-oq-300 focus:ring-0 outline-none text-sm py-3"
             disabled={loading}
           />
           <button
             onClick={handleSubmit}
             disabled={!query.trim() || loading}
-            className="mr-2 p-2.5 rounded-xl transition-all duration-200 disabled:opacity-20 disabled:cursor-not-allowed hover:scale-105"
+            className="mr-1.5 p-2 rounded-md transition-all disabled:opacity-20 disabled:cursor-not-allowed"
             style={{
               background: query.trim() && !loading ? 'var(--color-accent)' : 'transparent',
               color: query.trim() && !loading ? 'var(--color-bg-deep)' : 'var(--color-text-muted)',
-              border: query.trim() && !loading ? '1px solid var(--color-accent-border)' : '1px solid transparent',
             }}
             title="Submit query"
           >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
             </svg>
           </button>
         </div>
 
-        {/* Suggestion chips — clean, sharp borders */}
-        <div className="w-full max-w-3xl flex flex-wrap justify-center items-center gap-2 mb-8">
+        {/* Suggestion chips */}
+        <div className="w-full max-w-2xl flex flex-wrap justify-center gap-1.5 mb-6">
           {visibleSuggestions.map((s) => (
             <button
               key={`${shuffleKey}-${s.text}`}
               onClick={() => { setQuery(s.text); onAnalyze(s.text); }}
               disabled={loading}
-              className="group px-4 py-2 rounded-full text-[12px] font-medium text-[var(--color-text-secondary)]
-                hover:text-[var(--color-text-primary)] hover:bg-[var(--color-accent-dim)]
-                transition-all duration-150 disabled:opacity-40 flex items-center gap-2 border border-[var(--color-accent-border)] bg-[var(--color-bg-elevated)]"
+              className="px-3 py-1.5 rounded-md text-[11px] font-medium text-oq-200 hover:text-oq-50 hover:bg-oq-700/50 transition-all disabled:opacity-40 flex items-center gap-1.5 border border-oq-600/40 bg-oq-800/40"
             >
-              <span className="text-xs opacity-60">{s.icon}</span>
+              <span className="text-[11px] opacity-50">{s.icon}</span>
               <span>{s.text}</span>
             </button>
           ))}
           <button
             onClick={handleShuffle}
             disabled={loading}
-            className="p-2 rounded-full
-              hover:bg-[var(--color-accent-dim)]
-              transition-all duration-150 text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] border border-[var(--color-accent-border)] bg-[var(--color-bg-elevated)]"
+            className="p-1.5 rounded-md hover:bg-oq-700/50 transition-all text-oq-300 hover:text-oq-100 border border-oq-600/40 bg-oq-800/40"
             title="Refresh suggestions"
           >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
           </button>
         </div>
 
-        {/* Footer — grounded, higher contrast */}
-        <div className="text-center mt-4">
-          <p className="text-sm font-medium text-[var(--color-text-muted)]">
-            OrbitalQuery — Powered by <span className="text-[var(--color-text-primary)]">Bhoonidhi (ISRO)</span>, Copernicus &amp; Sentinel data.
-          </p>
-        </div>
+        {/* Footer */}
+        <p className="text-[11px] text-oq-300 font-medium">
+          Powered by <span className="text-oq-100">Bhoonidhi (ISRO)</span>, Copernicus &amp; Sentinel data
+        </p>
       </div>
     </div>
   );

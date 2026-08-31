@@ -12,7 +12,6 @@ import DatasetList, { Dataset } from '@/components/DatasetList';
 import DatasetDetailPanel from '@/components/DatasetDetailPanel';
 import DiscoverySummary from '@/components/DiscoverySummary';
 import { useAnalysis } from '@/hooks/useAnalysis';
-import ShaderBackground from '@/components/ShaderBackground';
 import AnalysisStepper from '@/components/AnalysisStepper';
 import TerminalLog from '@/components/TerminalLog';
 import AnalysisErrorScreen from '@/components/AnalysisErrorScreen';
@@ -235,24 +234,8 @@ function HomePageContent() {
   // ── Analysis Workflow View ──────────────────────────────────────
 
   if (tab === 'ask') {  return (
-    <div className="h-screen flex flex-col overflow-hidden relative">
-      {/* Topographic background with dark/blur overlay */}
-      <div className="fixed inset-0 z-0 pointer-events-none">
-        <div
-          className="absolute inset-0 opacity-30"
-          style={{
-            backgroundImage: `url('https://images.unsplash.com/photo-1564167714675-6f2156b2bce4?q=80&w=2400&auto=format&fit=crop')`,
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
-            filter: 'blur(8px)',
-          }}
-        />
-        <div className="absolute inset-0 bg-[var(--color-bg-deep)]/80 backdrop-blur-sm" />
-      </div>
-
-      <div className="relative z-10 h-screen flex flex-col overflow-hidden">
-        <ShaderBackground />
-        <Header activeTab={tab} onNavigate={setTab} onHome={() => setView('home')} />
+    <div className="h-screen flex flex-col overflow-hidden oq-bg">
+      <Header activeTab={tab} onNavigate={setTab} onHome={() => setView('home')} />
 
         {step === 'idle' && (
           <QueryInput onAnalyze={analysis.analyze} loading={false} />
@@ -260,31 +243,31 @@ function HomePageContent() {
 
         {step !== 'idle' && step !== 'complete' && step !== 'error' && (
           <div className="flex-1 overflow-hidden">
-            <div className="max-w-7xl mx-auto px-6 py-6 h-full flex flex-col">
+            <div className="max-w-[1400px] mx-auto px-6 py-5 h-full flex flex-col">
               {/* Header */}
-              <div className="flex items-center justify-between mb-5">
-                <button onClick={analysis.reset} className="flex items-center gap-2 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] transition-colors">
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <div className="flex items-center justify-between mb-4">
+                <button onClick={analysis.reset} className="flex items-center gap-1.5 text-[11px] text-oq-300 hover:text-lime transition-colors font-medium">
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
                   </svg>
                   New Analysis
                 </button>
-                <span className="text-[11px] text-[var(--color-text-muted)] font-medium truncate max-w-[60%]">{analysis.state.query}</span>
+                <span className="text-[11px] text-oq-300 font-mono truncate max-w-[60%]">{analysis.state.query}</span>
               </div>
 
-              {/* Stepper header */}
+              {/* Stepper */}
               <AnalysisStepper current={step} />
 
-              {/* Active phase indicator */}
-              <div className="mt-4 mb-5 text-center">
-                <div className="text-sm font-semibold text-[var(--color-text-primary)]">{PHASE_LABELS[step] || ''}</div>
+              {/* Active phase */}
+              <div className="mt-3 mb-4 text-center">
+                <div className="text-[13px] font-semibold text-oq-100">{PHASE_LABELS[step] || ''}</div>
                 {analysis.state.detail && (
-                  <div className="text-xs text-[var(--color-text-muted)] mt-1">{analysis.state.detail}</div>
+                  <div className="text-[11px] text-oq-300 mt-0.5 font-mono">{analysis.state.detail}</div>
                 )}
               </div>
 
               {/* Dashboard grid */}
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 min-h-0">
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1 min-h-0">
                 {/* Left: terminal log */}
                 <div className="col-span-12 lg:col-span-7 flex flex-col min-h-0">
                   <TerminalLog steps={analysis.state.processingSteps} currentDetail={analysis.state.detail} />
@@ -311,75 +294,49 @@ function HomePageContent() {
 
         {step === 'complete' && analysis.state.result && (
           <div className="flex-1 overflow-y-auto">
-            <div className="w-full max-w-[95vw] mx-auto px-4 py-6">
-              {/* Back button — centered */}
-              <div className="flex justify-center mb-4">
-                <button onClick={analysis.reset} className="flex items-center gap-2 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] transition-colors">
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <div className="w-full max-w-[1400px] mx-auto px-6 py-5">
+              {/* Back button + query */}
+              <div className="flex items-center justify-between mb-4">
+                <button onClick={analysis.reset} className="flex items-center gap-1.5 text-[11px] text-oq-300 hover:text-lime transition-colors font-medium">
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
                   </svg>
                   New Analysis
                 </button>
-              </div>
-
-              {/* Query summary */}
-              <div className="mb-4 text-center">
-                <h2 className="text-lg font-bold text-[var(--color-text-primary)]">
-                  &quot;{analysis.state.query}&quot;
-                </h2>
-                <p className="text-xs text-[var(--color-text-muted)] mt-1">
-                  {(analysis.state.result as any)?.metrics?.fallbackMode ? 'Dataset search complete — full analysis engine is waking up' : 'Temporal comparison complete'}
-                </p>
+                <span className="text-[11px] text-oq-300 font-mono truncate max-w-[60%]">{analysis.state.query}</span>
               </div>
 
               {/* Fallback notice */}
               {(analysis.state.result as any)?.metrics?.fallbackMode && (
                 <div className="mb-4 mx-auto max-w-2xl">
-                  <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-4 py-3 text-center">
-                    <p className="text-xs text-amber-300">
-                      ⚡ Running in quick-search mode — the full analysis engine is starting up. You can try the full analysis again in 30-60 seconds.
+                  <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg px-4 py-2.5 text-center">
+                    <p className="text-[11px] text-amber-300">
+                      Running in quick-search mode — the full analysis engine is starting up. Try again in 30-60 seconds.
                     </p>
                   </div>
                 </div>
               )}
 
-              {/* The temporal comparison result */}
+              {/* Temporal comparison result */}
               <TemporalComparisonView result={analysis.state.result} />
             </div>
           </div>
-         )}
-       </div>
-     </div>
-     );
-   }
+        )}
+      </div>
+    );
+  }
 
   // ── Showcase View ─────────────────────────────────────────────
 
   if (tab === 'showcase') {
     return (
-      <div className="h-screen flex flex-col overflow-hidden relative">
-        {/* Topographic background with dark/blur overlay */}
-        <div className="fixed inset-0 z-0 pointer-events-none">
-          <div
-            className="absolute inset-0 opacity-30"
-            style={{
-              backgroundImage: `url('https://images.unsplash.com/photo-1564167714675-6f2156b2bce4?q=80&w=2400&auto=format&fit=crop')`,
-              backgroundSize: 'cover',
-              backgroundPosition: 'center',
-              filter: 'blur(8px)',
-            }}
-          />
-          <div className="absolute inset-0 bg-[var(--color-bg-deep)]/80 backdrop-blur-sm" />
-        </div>
-
-        <div className="relative z-10 h-screen flex flex-col overflow-hidden">
-          <Header activeTab={tab} onNavigate={setTab} onHome={() => setView('home')} />
-          <div className="flex-1 overflow-y-auto">
-            <ShowcaseQueries onSelect={(query) => {
-              setTab('ask');
-              analysis.analyze(query);
-            }} />
-          </div>
+      <div className="h-screen flex flex-col overflow-hidden oq-bg">
+        <Header activeTab={tab} onNavigate={setTab} onHome={() => setView('home')} />
+        <div className="flex-1 overflow-y-auto">
+          <ShowcaseQueries onSelect={(query) => {
+            setTab('ask');
+            analysis.analyze(query);
+          }} />
         </div>
       </div>
     );

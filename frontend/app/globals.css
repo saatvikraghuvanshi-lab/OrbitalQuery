@@ -6,117 +6,158 @@
 
 @layer base {
   :root {
-    /* OrbitalQuery palette */
-    --color-bg-deep: #050A07;
-    --color-bg-base: #08120B;
-    --color-bg-elevated: #0D1A11;
-    --color-bg-card: #122117;
-    --color-bg-hover: #17291B;
+    /* OrbitalQuery — Mission Control palette */
+    --color-bg-deep: #040806;
+    --color-bg-base: #070E0A;
+    --color-bg-elevated: #0C1610;
+    --color-bg-card: #101E15;
+    --color-bg-hover: #152719;
     --color-accent: #A3F63F;
     --color-accent-hover: #B8FF63;
     --color-accent-muted: #7EBF32;
-    --color-accent-dim: rgba(163,246,63,0.12);
-    --color-accent-border: rgba(163,246,63,0.16);
+    --color-accent-dim: rgba(163,246,63,0.10);
+    --color-accent-border: rgba(163,246,63,0.14);
     --color-purple: #8B6CF6;
     --color-purple-muted: #6F58C7;
-    --color-purple-dim: rgba(139,108,246,0.12);
-    --color-purple-border: rgba(139,108,246,0.16);
-    --color-text-primary: #F2F5F0;
-    --color-text-secondary: #A7B2A8;
-    --color-text-muted: #68766C;
+    --color-purple-dim: rgba(139,108,246,0.10);
+    --color-purple-border: rgba(139,108,246,0.14);
+    --color-cyan: #22D3EE;
+    --color-cyan-dim: rgba(34,211,238,0.10);
+    --color-cyan-border: rgba(34,211,238,0.14);
+    --color-orange: #F97316;
+    --color-orange-dim: rgba(249,115,22,0.10);
+    --color-text-primary: #F0F4F1;
+    --color-text-secondary: #A0ADA4;
+    --color-text-muted: #5E6E63;
 
-    /* shadcn/ui compatibility (dark theme = OrbitalQuery) */
-    --background: 130 42% 5%;
-    --foreground: 95 10% 95%;
-    --card: 130 28% 9%;
-    --card-foreground: 95 10% 95%;
-    --popover: 130 28% 9%;
-    --popover-foreground: 95 10% 95%;
+    /* Semantic colors */
+    --color-before: #60A5FA;
+    --color-after: #FB923C;
+    --color-change: #8B6CF6;
+    --color-success: #A3F63F;
+    --color-warning: #FBBF24;
+    --color-error: #F87171;
+
+    /* shadcn/ui compatibility */
+    --background: 140 50% 3%;
+    --foreground: 140 8% 95%;
+    --card: 140 30% 7%;
+    --card-foreground: 140 8% 95%;
+    --popover: 140 30% 7%;
+    --popover-foreground: 140 8% 95%;
     --primary: 88 92% 58%;
-    --primary-foreground: 130 42% 5%;
-    --secondary: 130 24% 11%;
-    --secondary-foreground: 95 10% 95%;
-    --muted: 130 18% 12%;
-    --muted-foreground: 130 7% 41%;
-    --accent: 130 18% 12%;
-    --accent-foreground: 95 10% 95%;
+    --primary-foreground: 140 50% 3%;
+    --secondary: 140 20% 9%;
+    --secondary-foreground: 140 8% 95%;
+    --muted: 140 15% 10%;
+    --muted-foreground: 140 7% 38%;
+    --accent: 140 15% 10%;
+    --accent-foreground: 140 8% 95%;
     --destructive: 0 84% 60%;
     --destructive-foreground: 210 40% 98%;
-    --border: 130 15% 17%;
-    --input: 130 15% 17%;
+    --border: 140 12% 14%;
+    --input: 140 12% 14%;
     --ring: 88 92% 58%;
-    --radius: 0.75rem;
+    --radius: 0.5rem;
   }
 }
 
 body {
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
   background: var(--color-bg-deep);
   color: var(--color-text-primary);
   min-height: 100vh;
   overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* Orbital brand background — near-black with restrained green glow */
+/* ── Orbital brand background ── */
 .oq-bg {
   background:
-    radial-gradient(ellipse at 50% 0%, rgba(163,246,63,0.04) 0%, transparent 55%),
-    radial-gradient(ellipse at 80% 20%, rgba(139,108,246,0.03) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 0%, rgba(163,246,63,0.03) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 20%, rgba(139,108,246,0.02) 0%, transparent 40%),
     var(--color-bg-deep);
 }
 
-/* Subtle topo texture */
-.topo-bg {
-  background-image: repeating-radial-gradient(
-    circle at 0 0,
-    transparent 0,
-    rgba(163,246,63,0.015) 10px,
-    transparent 11px,
-    transparent 20px
-  );
-}
-
-/* Glass panel — green-tinted, subtle */
+/* ── Glass panel ── */
 .glass-panel {
-  background: rgba(13,26,17,0.7);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(163,246,63,0.08);
+  background: rgba(12,22,16,0.80);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(163,246,63,0.06);
 }
 
-/* Card — scientific instrument panel */
+/* ── Card — instrument panel ── */
 .oq-card {
   background: var(--color-bg-card);
-  border: 1px solid rgba(163,246,63,0.10);
-  border-radius: 0.75rem;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.25), 0 4px 12px rgba(0,0,0,0.2);
+  border: 1px solid rgba(163,246,63,0.08);
+  border-radius: 0.5rem;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.30), 0 2px 8px rgba(0,0,0,0.20);
 }
 
-/* Terminal panel */
+/* ── Terminal panel ── */
 .terminal-panel {
-  background: #0D1117;
-  border: 1px solid #30363D;
-  border-radius: 0.75rem;
+  background: #0A0F0D;
+  border: 1px solid rgba(163,246,63,0.08);
+  border-radius: 0.5rem;
 }
 
-/* Scrollbar */
+/* ── Scrollbar ── */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: rgba(13,26,17,0.5);
+  background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(104,118,108,0.35);
-  border-radius: 4px;
+  background: rgba(94,110,99,0.30);
+  border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(163,246,63,0.25);
+  background: rgba(163,246,63,0.20);
 }
 
-/* Selection */
+/* ── Selection ── */
 ::selection {
-  background: rgba(163,246,63,0.25);
+  background: rgba(163,246,63,0.20);
   color: var(--color-text-primary);
+}
+
+/* ── Leaflet overrides for dark theme ── */
+.leaflet-control-attribution {
+  background: rgba(4,8,6,0.8) !important;
+  color: var(--color-text-muted) !important;
+  font-size: 9px !important;
+}
+.leaflet-control-attribution a {
+  color: var(--color-text-secondary) !important;
+}
+.leaflet-control-zoom a {
+  background: rgba(12,22,16,0.9) !important;
+  color: var(--color-text-secondary) !important;
+  border-color: rgba(163,246,63,0.1) !important;
+}
+.leaflet-control-zoom a:hover {
+  background: rgba(16,30,21,0.95) !important;
+  color: var(--color-accent) !important;
+}
+
+/* ── Focus ring ── */
+*:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* ── Smooth transitions ── */
+button, a, input, select {
+  transition-property: color, background-color, border-color, box-shadow, opacity, transform;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
+
+/* ── Mono utility ── */
+.font-mono {
+  font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, SFMono-Regular, Menlo, monospace;
 }

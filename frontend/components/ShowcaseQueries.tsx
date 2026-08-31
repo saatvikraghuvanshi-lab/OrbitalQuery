@@ -1,80 +1,29 @@
 'use client';
 
 import {
-  Earth,
-  Building2,
-  CloudRain,
-  TreePine,
-  Scissors,
-  Waves,
-  Mountain,
-  Droplets,
-  Flame,
-  Snowflake,
-  Sprout,
-  MapPin,
+  Building2, CloudRain, TreePine, Scissors, Waves, Mountain, Droplets, Flame, Snowflake, Sprout, MapPin, Globe,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
-interface ShowcaseQuery {
-  query: string;
-  phenomenon: string;
-}
+interface ShowcaseQuery { query: string; phenomenon: string; }
+interface Category { title: string; subtitle: string; icon: LucideIcon; queries: ShowcaseQuery[]; color: string; }
 
-interface Category {
-  title: string;
-  subtitle: string;
-  icon: LucideIcon;
-  queries: ShowcaseQuery[];
-}
-
-// Phenomenon → Lucide icon mapping
 const PHENOMENON_ICONS: Record<string, LucideIcon> = {
-  urban_expansion: Building2,
-  flood_impact: CloudRain,
-  vegetation_change: TreePine,
-  deforestation: Scissors,
-  coastal_erosion: Waves,
-  glacier_retreat: Mountain,
-  water_change: Droplets,
-  burn_severity: Flame,
-  snow_cover: Snowflake,
-  soil_moisture: Sprout,
+  urban_expansion: Building2, flood_impact: CloudRain, vegetation_change: TreePine,
+  deforestation: Scissors, coastal_erosion: Waves, glacier_retreat: Mountain,
+  water_change: Droplets, burn_severity: Flame, snow_cover: Snowflake, soil_moisture: Sprout,
 };
 
-// Phenomenon → subtle tint color (used for icon background)
 const PHENOMENON_COLORS: Record<string, string> = {
-  urban_expansion: '#a855f7',
-  flood_impact: '#3b82f6',
-  vegetation_change: '#22c55e',
-  deforestation: '#ef4444',
-  coastal_erosion: '#0ea5e9',
-  glacier_retreat: '#67e8f9',
-  water_change: '#06b6d4',
-  burn_severity: '#f97316',
-  snow_cover: '#e2e8f0',
-  soil_moisture: '#d97706',
+  urban_expansion: '#8B6CF6', flood_impact: '#60A5FA', vegetation_change: '#22C55E',
+  deforestation: '#EF4444', coastal_erosion: '#0EA5E9', glacier_retreat: '#67E8F9',
+  water_change: '#06B6D4', burn_severity: '#F97316', snow_cover: '#CBD5E1', soil_moisture: '#D97706',
 };
-
-function PhenomenonIcon({ phenomenon }: { phenomenon: string }) {
-  const Icon = PHENOMENON_ICONS[phenomenon] || Earth;
-  const color = PHENOMENON_COLORS[phenomenon] || '#94a3b8';
-
-  return (
-    <div
-      className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
-      style={{ background: `${color}12` }}
-    >
-      <Icon className="w-[18px] h-[18px]" style={{ color }} strokeWidth={1.75} />
-    </div>
-  );
-}
 
 const SHOWCASE_CATEGORIES: Category[] = [
   {
-    title: 'India',
-    subtitle: 'Real-world EO analysis queries for Indian locations',
-    icon: MapPin,
+    title: 'India', subtitle: 'Real-world EO analysis queries for Indian locations',
+    icon: MapPin, color: '#A3F63F',
     queries: [
       { query: 'Hyderabad urban expansion 2021 vs 2025', phenomenon: 'urban_expansion' },
       { query: 'Kerala flood impact August 2024', phenomenon: 'flood_impact' },
@@ -91,9 +40,8 @@ const SHOWCASE_CATEGORIES: Category[] = [
     ],
   },
   {
-    title: 'International',
-    subtitle: 'Global Earth observation analysis queries',
-    icon: Earth,
+    title: 'International', subtitle: 'Global Earth observation analysis queries',
+    icon: Globe, color: '#8B6CF6',
     queries: [
       { query: 'Amazon deforestation 2018 vs 2025', phenomenon: 'deforestation' },
       { query: 'Jakarta urban expansion 2019 vs 2025', phenomenon: 'urban_expansion' },
@@ -107,23 +55,17 @@ const SHOWCASE_CATEGORIES: Category[] = [
   },
 ];
 
-interface ShowcaseQueriesProps {
-  onSelect: (query: string) => void;
-}
-
-export default function ShowcaseQueries({ onSelect }: ShowcaseQueriesProps) {
+export default function ShowcaseQueries({ onSelect }: { onSelect: (query: string) => void }) {
   return (
-    <div className="w-full max-w-6xl mx-auto px-4 py-8">
-      {/* Hero */}
-      <div className="text-center mb-10">
-        <div className="flex items-center justify-center gap-3 mb-3">
-          <Earth className="w-8 h-8 text-purple stroke-[1.5]" />
-          <h2 className="text-3xl font-bold text-oq-50">Explore Earth</h2>
+    <div className="w-full max-w-5xl mx-auto px-6 py-8">
+      {/* Header */}
+      <div className="mb-8">
+        <div className="flex items-center gap-2 mb-1">
+          <Globe className="w-5 h-5 text-purple" strokeWidth={1.75} />
+          <h2 className="text-headline text-oq-50">Explore Earth&apos;s Change</h2>
         </div>
-        <p className="text-sm text-oq-300 max-w-xl mx-auto">
-          Click any query below to run a real temporal comparison analysis.
-          OrbitalQuery will discover satellite imagery, compute spectral indices,
-          and generate change metrics automatically.
+        <p className="text-body text-oq-200 max-w-xl">
+          Click any query to run a real temporal comparison analysis. OrbitalQuery discovers satellite imagery, computes spectral indices, and generates change metrics.
         </p>
       </div>
 
@@ -131,36 +73,39 @@ export default function ShowcaseQueries({ onSelect }: ShowcaseQueriesProps) {
       {SHOWCASE_CATEGORIES.map((category) => {
         const CatIcon = category.icon;
         return (
-          <div key={category.title} className="mb-10">
-            <div className="mb-4">
-              <h3 className="text-lg font-semibold text-oq-50 flex items-center gap-2">
-                <CatIcon className="w-5 h-5 text-oq-300" strokeWidth={1.75} />
-                {category.title}
-              </h3>
-              <p className="text-xs text-oq-300">{category.subtitle}</p>
+          <div key={category.title} className="mb-8">
+            <div className="flex items-center gap-2 mb-3">
+              <CatIcon className="w-4 h-4" style={{ color: category.color }} strokeWidth={1.75} />
+              <h3 className="text-sm font-semibold text-oq-50">{category.title}</h3>
+              <span className="text-[10px] text-oq-300">·</span>
+              <span className="text-[11px] text-oq-300">{category.subtitle}</span>
             </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {category.queries.map((q) => (
-                <button
-                  key={q.query}
-                  onClick={() => onSelect(q.query)}
-                  className="group text-left p-4 rounded-xl border border-oq-600/30 bg-oq-800/20
-                    hover:bg-oq-700/40 hover:border-[var(--color-accent-border)] transition-all duration-200 oq-card"
-                >
-                  <div className="flex items-start gap-3">
-                    <PhenomenonIcon phenomenon={q.phenomenon} />
-                    <div className="min-w-0">
-                      <div className="text-sm font-medium text-oq-200 group-hover:text-oq-50 transition-colors leading-tight">
-                        {q.query}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+              {category.queries.map((q) => {
+                const Icon = PHENOMENON_ICONS[q.phenomenon] || MapPin;
+                const color = PHENOMENON_COLORS[q.phenomenon] || '#94A3B8';
+                return (
+                  <button
+                    key={q.query}
+                    onClick={() => onSelect(q.query)}
+                    className="group text-left p-3 rounded-lg border border-oq-600/30 bg-oq-800/20 hover:bg-oq-700/40 hover:border-oq-600/50 transition-all oq-card"
+                  >
+                    <div className="flex items-start gap-2.5">
+                      <div className="w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0" style={{ background: `${color}12` }}>
+                        <Icon className="w-4 h-4" style={{ color }} strokeWidth={1.75} />
                       </div>
-                      <div className="text-[10px] text-oq-300 mt-1 capitalize">
-                        {q.phenomenon.replace(/_/g, ' ')}
+                      <div className="min-w-0">
+                        <div className="text-[13px] font-medium text-oq-100 group-hover:text-oq-50 transition-colors leading-tight">
+                          {q.query}
+                        </div>
+                        <div className="text-[10px] text-oq-300 mt-0.5 capitalize">
+                          {q.phenomenon.replace(/_/g, ' ')}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </button>
-              ))}
+                  </button>
+                );
+              })}
             </div>
           </div>
         );
