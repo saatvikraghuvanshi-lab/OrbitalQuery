@@ -175,7 +175,7 @@ export default function ShowcaseQueries({ onSelect }: { onSelect: (query: string
 
   return (
     <div className="w-full min-h-full" style={{ background: '#050907' }}>
-      <div className="max-w-[1280px] mx-auto px-8 py-10">
+      <div className="max-w-[1360px] mx-auto px-10 py-10">
 
         {/* ── Page Header ──────────────────────────────────── */}
         <div className="mb-8">
@@ -292,25 +292,25 @@ export default function ShowcaseQueries({ onSelect }: { onSelect: (query: string
               return (
                 <div key={group.key}>
                   {/* Group header */}
-                  <div className="flex items-center gap-3 mb-4">
+                  <div className="flex items-center gap-3 mb-5">
                     <div
-                      className="w-1 h-4 rounded-full"
+                      className="w-[3px] h-[14px] rounded-full"
                       style={{ background: GROUP_DIVIDER_COLORS[group.key] || '#68756E' }}
                     />
-                    <h3 className="text-[11px] uppercase tracking-[0.12em] font-semibold text-oq-200">
+                    <h3 className="text-[11px] uppercase tracking-[0.12em] font-semibold text-oq-200 leading-none">
                       {group.label}
                     </h3>
                     <div className="flex-1 h-px bg-oq-700/20" />
                   </div>
 
                   {/* Categories in group */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-5">
+                  <div className="grid grid-cols-3 gap-x-10 gap-y-6">
                     {cats.map((cat) => {
                       const Icon = cat.icon;
                       return (
                         <div key={cat.title}>
                           {/* Category title */}
-                          <div className="flex items-center gap-1.5 mb-2">
+                          <div className="flex items-center gap-2 mb-2.5">
                             <Icon className="w-3 h-3" style={{ color: cat.color }} strokeWidth={2} />
                             <span
                               className="text-[10px] font-semibold uppercase tracking-wider"
