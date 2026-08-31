@@ -16,6 +16,7 @@ import ShaderBackground from '@/components/ShaderBackground';
 import AnalysisStepper from '@/components/AnalysisStepper';
 import TerminalLog from '@/components/TerminalLog';
 import AnalysisErrorScreen from '@/components/AnalysisErrorScreen';
+import MarketingHomepage from '@/components/MarketingHomepage';
 
 const MapView = dynamic(() => import('@/components/MapView'), {
   ssr: false,
@@ -87,6 +88,7 @@ export interface SearchResponse {
 
 function HomePageContent() {
   const [tab, setTab] = useState<Tab>('ask');
+  const [view, setView] = useState<'home' | 'app'>('home');
   const analysis = useAnalysis();
 
   // Hydration guard
@@ -220,6 +222,15 @@ function HomePageContent() {
       <div className="text-[var(--color-text-muted)] text-sm">Loading OrbitalQuery...</div>
     </div>
   );
+
+  if (view === 'home') {
+    return (
+      <MarketingHomepage
+        onLaunchAsk={() => { setView('app'); setTab('ask'); }}
+        onNavigate={(t) => { setView('app'); setTab(t); }}
+      />
+    );
+  }
 
   // ── Analysis Workflow View ──────────────────────────────────────
 
