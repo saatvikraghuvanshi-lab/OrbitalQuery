@@ -444,14 +444,19 @@ function HomePageContent() {
       <Header activeTab={tab} onNavigate={setTab} />
 
       {/* Filter bar */}
-      <div className="border-b border-oq-700/30 bg-oq-950/50">
-        <div className="max-w-[1600px] mx-auto px-5 h-10 flex items-center gap-4">
+      <div style={{ borderBottom: '1px solid #17251C', background: '#09110D' }}>
+        <div className="max-w-[1600px] mx-auto px-5 h-12 flex items-center gap-5">
           <div className="flex items-center gap-2">
-            <span className="text-[9px] text-oq-300 uppercase tracking-wider font-medium">Provider</span>
+            <span className="text-[10px] uppercase tracking-wider font-medium" style={{ color: '#68756E' }}>Provider</span>
             <select
               value={discoverProvider}
               onChange={(e) => setDiscoverProvider(e.target.value)}
-              className="bg-oq-800/50 border border-oq-700/30 rounded px-2.5 py-1 text-[11px] text-oq-100 focus:border-lime/30 focus:outline-none"
+              className="rounded-md px-2.5 py-1.5 text-[12px] focus:outline-none"
+              style={{
+                background: '#0D1712',
+                border: '1px solid #17251C',
+                color: '#F1F5F2',
+              }}
             >
               <option value="">All</option>
               <option value="Copernicus">Copernicus</option>
@@ -459,13 +464,18 @@ function HomePageContent() {
               <option value="Planetary Computer">Planetary Computer</option>
             </select>
           </div>
-          <div className="w-px h-4 bg-oq-700/30" />
+          <div className="w-px h-4" style={{ background: '#17251C' }} />
           <div className="flex items-center gap-2">
-            <span className="text-[9px] text-oq-300 uppercase tracking-wider font-medium">Collection</span>
+            <span className="text-[10px] uppercase tracking-wider font-medium" style={{ color: '#68756E' }}>Collection</span>
             <select
               value={discoverCollection}
               onChange={(e) => setDiscoverCollection(e.target.value)}
-              className="bg-oq-800/50 border border-oq-700/30 rounded px-2.5 py-1 text-[11px] text-oq-100 focus:border-lime/30 focus:outline-none"
+              className="rounded-md px-2.5 py-1.5 text-[12px] focus:outline-none"
+              style={{
+                background: '#0D1712',
+                border: '1px solid #17251C',
+                color: '#F1F5F2',
+              }}
             >
               <option value="">All</option>
               <option value="sentinel-2">Sentinel-2 L2A</option>
@@ -473,8 +483,8 @@ function HomePageContent() {
               <option value="landsat">Landsat C2 L2</option>
             </select>
           </div>
-          <div className="w-px h-4 bg-oq-700/30" />
-          <span className="text-[10px] text-oq-300 font-mono">{filteredDatasets.length} datasets</span>
+          <div className="w-px h-4" style={{ background: '#17251C' }} />
+          <span className="text-[11px] font-mono" style={{ color: '#68756E' }}>{filteredDatasets.length} datasets</span>
         </div>
       </div>
 
@@ -492,13 +502,16 @@ function HomePageContent() {
         </div>
 
         {/* Right panel */}
-        <div className="w-[340px] border-l border-oq-700/30 bg-oq-950 flex flex-col overflow-hidden flex-shrink-0">
+        <div className="w-[340px] flex flex-col overflow-hidden flex-shrink-0" style={{ borderLeft: '1px solid #17251C', background: '#09110D' }}>
           {bboxDetail ? (
             <>
-              <div className="px-4 py-2.5 border-b border-oq-700/30 flex items-center gap-2 flex-shrink-0">
+              <div className="px-4 py-2.5 flex items-center gap-2 flex-shrink-0" style={{ borderBottom: '1px solid #17251C' }}>
                 <button
                   onClick={() => { setBboxDetail(null); setSelectedDiscoverId(null); }}
-                  className="flex items-center gap-1 text-[10px] text-oq-300 hover:text-lime transition-colors font-medium"
+                  className="flex items-center gap-1 text-[10px] font-medium transition-colors"
+                  style={{ color: '#68756E' }}
+                  onMouseEnter={(e) => { e.currentTarget.style.color = '#A3E635'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.color = '#68756E'; }}
                 >
                   <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
                   Back
@@ -515,10 +528,10 @@ function HomePageContent() {
           ) : (
             <>
               {/* Panel header */}
-              <div className="px-4 py-3 border-b border-oq-700/30 flex-shrink-0">
+              <div className="px-4 py-3 flex-shrink-0" style={{ borderBottom: '1px solid #17251C' }}>
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-semibold text-oq-100 uppercase tracking-wider">Datasets</span>
-                  <span className="text-[10px] text-oq-300 font-mono">{filteredDatasets.length} observations</span>
+                  <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: '#A7B3AA' }}>Datasets</span>
+                  <span className="text-[10px] font-mono" style={{ color: '#68756E' }}>{filteredDatasets.length} observations</span>
                 </div>
               </div>
               {/* Discovery summary when bbox drawn */}

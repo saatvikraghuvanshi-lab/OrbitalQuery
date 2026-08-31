@@ -50,7 +50,6 @@ export default function DatasetDetailPanel({ dataset, onClose, onAnalyze }: Prop
   const dateStr = dataset.date ? new Date(dataset.date).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '—';
   const bboxStr = dataset.bbox ? `[${dataset.bbox.map(b => b.toFixed(3)).join(', ')}]` : '—';
 
-  // Compute a simple availability score from metadata
   const score = (() => {
     let s = 50;
     if (dataset.cloudCover != null && dataset.cloudCover < 20) s += 20;
@@ -62,63 +61,82 @@ export default function DatasetDetailPanel({ dataset, onClose, onAnalyze }: Prop
   })();
 
   return (
-    <div className="h-full overflow-y-auto">
+    <div className="h-full overflow-y-auto" style={{ background: '#09110D' }}>
       {/* Featured dataset */}
-      <div className="px-4 py-3 border-b border-oq-700/30">
-        <div className="flex items-center gap-2 mb-2">
-          <span className="text-[10px] font-semibold text-oq-100 uppercase tracking-wider">Featured Dataset</span>
+      <div className="px-4 py-3" style={{ borderBottom: '1px solid #17251C' }}>
+        <div className="text-[9px] uppercase tracking-wider font-medium mb-1.5" style={{ color: '#68756E' }}>
+          Featured Dataset
         </div>
-        <h3 className="text-[13px] font-bold text-oq-50 leading-tight">
+        <h3 className="text-[14px] font-semibold leading-tight mb-1" style={{ color: '#F1F5F2' }}>
           {cleanTitle(dataset.title, dataset.collection)}
         </h3>
-        <div className="flex items-center gap-2 mt-1">
-          <span className="text-[10px] text-oq-200">{info.description}</span>
-        </div>
+        <p className="text-[11px] leading-relaxed" style={{ color: '#68756E' }}>
+          {info.description}
+        </p>
 
-        {/* Resolution + type */}
+        {/* Resolution + provider */}
         <div className="flex items-center gap-3 mt-2">
-          <span className="text-[10px] text-oq-200 font-medium">{info.resolution}</span>
-          <span className="text-oq-500">·</span>
-          <span className="text-[10px] text-oq-300">{dataset.provider}</span>
+          <span className="text-[11px] font-medium" style={{ color: '#A7B3AA' }}>{info.resolution}</span>
+          <span style={{ color: '#17251C' }}>·</span>
+          <span className="text-[11px]" style={{ color: '#68756E' }}>{dataset.provider}</span>
         </div>
 
         {/* Availability score */}
         <div className="mt-3">
           <div className="flex items-center justify-between mb-1">
-            <span className="text-[9px] text-oq-300 uppercase tracking-wider font-medium">Availability</span>
-            <span className="text-[10px] text-lime font-mono font-bold">{score} / 100</span>
+            <span className="text-[9px] uppercase tracking-wider font-medium" style={{ color: '#68756E' }}>Availability</span>
+            <span className="text-[11px] font-mono font-bold" style={{ color: '#A3E635' }}>{score} / 100</span>
           </div>
-          <div className="h-1 bg-oq-800/50 rounded-full overflow-hidden">
-            <div className="h-full rounded-full bg-lime/60" style={{ width: `${score}%` }} />
+          <div className="h-1 rounded-full overflow-hidden" style={{ background: '#0D1712' }}>
+            <div className="h-full rounded-full" style={{ width: `${score}%`, background: 'rgba(163,230,53,0.5)' }} />
           </div>
         </div>
       </div>
 
       {/* Available bands */}
-      <div className="px-4 py-3 border-b border-oq-700/30">
-        <div className="text-[9px] text-oq-300 uppercase tracking-wider font-medium mb-2">Available Bands</div>
+      <div className="px-4 py-3" style={{ borderBottom: '1px solid #17251C' }}>
+        <div className="text-[9px] uppercase tracking-wider font-medium mb-2" style={{ color: '#68756E' }}>
+          Available Bands
+        </div>
         <div className="grid grid-cols-3 gap-1.5">
           {info.bands.map((band) => (
-            <div key={band.name} className="px-2 py-1 rounded bg-oq-800/30 border border-oq-700/15 text-center">
-              <div className="text-[10px] text-oq-100 font-mono font-medium">{band.name}</div>
-              <div className="text-[8px] text-oq-300">{band.label}</div>
+            <div
+              key={band.name}
+              className="px-2 py-1.5 rounded text-center"
+              style={{ background: '#0D1712', border: '1px solid #17251C' }}
+            >
+              <div className="text-[10px] font-mono font-medium" style={{ color: '#A7B3AA' }}>{band.name}</div>
+              <div className="text-[8px]" style={{ color: '#68756E' }}>{band.label}</div>
             </div>
           ))}
         </div>
       </div>
 
       {/* Metadata */}
-      <div className="px-4 py-3 border-b border-oq-700/30">
+      <div className="px-4 py-3" style={{ borderBottom: '1px solid #17251C' }}>
         <div className="grid grid-cols-2 gap-x-3 gap-y-2">
-          <div><div className="text-[8px] text-oq-300 uppercase">Acquired</div><div className="text-[10px] text-oq-100">{dateStr}</div></div>
-          <div><div className="text-[8px] text-oq-300 uppercase">Cloud</div><div className="text-[10px] text-oq-100 font-mono">{dataset.cloudCover != null ? `${dataset.cloudCover.toFixed(1)}%` : '—'}</div></div>
-          <div className="col-span-2"><div className="text-[8px] text-oq-300 uppercase">BBox</div><div className="text-[9px] text-oq-200 font-mono break-all">{bboxStr}</div></div>
+          <div>
+            <div className="text-[8px] uppercase" style={{ color: '#68756E' }}>Acquired</div>
+            <div className="text-[11px]" style={{ color: '#A7B3AA' }}>{dateStr}</div>
+          </div>
+          <div>
+            <div className="text-[8px] uppercase" style={{ color: '#68756E' }}>Cloud</div>
+            <div className="text-[11px] font-mono" style={{ color: '#A7B3AA' }}>
+              {dataset.cloudCover != null ? `${dataset.cloudCover.toFixed(1)}%` : '—'}
+            </div>
+          </div>
+          <div className="col-span-2">
+            <div className="text-[8px] uppercase" style={{ color: '#68756E' }}>BBox</div>
+            <div className="text-[10px] font-mono break-all" style={{ color: '#68756E' }}>{bboxStr}</div>
+          </div>
         </div>
       </div>
 
       {/* Quick analysis */}
       <div className="px-4 py-3">
-        <div className="text-[9px] text-oq-300 uppercase tracking-wider font-medium mb-2">Quick Analysis</div>
+        <div className="text-[9px] uppercase tracking-wider font-medium mb-2" style={{ color: '#68756E' }}>
+          Quick Analysis
+        </div>
         <div className="space-y-1">
           {['urban expansion', 'vegetation change', 'water body change'].map((s) => {
             const year = dataset.date ? new Date(dataset.date).getFullYear() : 2024;
@@ -126,9 +144,22 @@ export default function DatasetDetailPanel({ dataset, onClose, onAnalyze }: Prop
               <button
                 key={s}
                 onClick={() => onAnalyze(`${s} ${year - 3} vs ${year}`)}
-                className="w-full text-left px-2.5 py-1.5 rounded text-[10px] text-oq-200 bg-oq-800/20 hover:bg-oq-700/30 border border-oq-700/15 hover:border-oq-600/30 transition-all"
+                className="w-full text-left px-2.5 py-2 rounded-md text-[11px] transition-all"
+                style={{
+                  color: '#A7B3AA',
+                  background: '#0D1712',
+                  border: '1px solid #17251C',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = '#111E15';
+                  e.currentTarget.style.borderColor = '#29402F';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = '#0D1712';
+                  e.currentTarget.style.borderColor = '#17251C';
+                }}
               >
-                ▸ {s.charAt(0).toUpperCase() + s.slice(1)}
+                {s.charAt(0).toUpperCase() + s.slice(1)}
               </button>
             );
           })}
