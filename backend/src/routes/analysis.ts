@@ -1302,7 +1302,7 @@ router.post('/temporal-compare', optionalAuth, async (req: AuthRequest, res: Res
   const pythonUp = await isPythonServiceUp();
 
   if (pythonUp) {
-    const PYTHON_TIMEOUT = 60000;
+    const PYTHON_TIMEOUT = 45000; // 45s max — faster fail for cold starts
     const result = await callPythonService('POST', '/analysis/temporal-compare', pythonBody, 'temporal-compare', PYTHON_TIMEOUT);
 
     if (result.ok) {

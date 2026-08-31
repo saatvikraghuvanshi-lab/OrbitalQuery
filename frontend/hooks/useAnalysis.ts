@@ -158,61 +158,68 @@ export function useAnalysis() {
     }));
 
     try {
-      // ── Phase 1: Understanding query ─────────────────────
-      // Brief pause so user sees the "Understanding" step
-      await new Promise(r => setTimeout(r, 400));
+      // Brief pause so user sees the planning step
+      await new Promise(r => setTimeout(r, 200));
 
       setState(prev => ({ ...prev, step: 'searching', detail: 'Querying satellite archives...' }));
 
-      // ── Phase 2: Full pipeline (single backend call) ─────
-      const res = await fetch('/api/analysis/temporal-compare', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query }),
-      });
+      // ── Backend call with 35s timeout ─────────────────────
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 35000);
+
+      let res: Response;
+      try {
+        res = await fetch('/api/analysis/temporal-compare', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query }),
+          signal: controller.signal,
+        });
+      } catch (fetchErr: any) {
+        clearTimeout(timeout);
+        if (fetchErr.name === 'AbortError') {
+          throw new AnalysisError('Request timed out. The analysis engine may be starting up — try again in 30 seconds.', 'TIMEOUT');
+        }
+        throw new AnalysisError('Cannot reach the server. Check your connection and try again.', 'NETWORK');
+      }
+      clearTimeout(timeout);
 
       let data: any;
       try {
         data = await res.json();
       } catch {
-        throw new AnalysisError('Backend is unreachable. Please ensure the analysis service is running.', 'HTTP 000');
+        throw new AnalysisError('Invalid server response. The analysis engine may be starting up.', 'HTTP 000');
       }
 
       if (!res.ok) {
         const errMsg = data?.detail || data?.message || data?.error || `Analysis failed (${res.status})`;
-        if (errMsg.includes('starting up') || errMsg.includes('unavailable') || errMsg.includes('invalid response') || errMsg.includes('PYTHON_UNAVAILABLE')) {
-          throw new AnalysisError('🛰️ The analysis engine is waking up from sleep (Render free tier). Please try again in 30-60 seconds.', 'HTTP 503');
+        if (errMsg.includes('starting up') || errMsg.includes('unavailable') || errMsg.includes('PYTHON_UNAVAILABLE') || res.status === 502 || res.status === 503) {
+          throw new AnalysisError('The analysis engine is waking up from sleep. Please try again in 30-60 seconds.', 'HTTP 503');
         }
         throw new AnalysisError(errMsg, `HTTP ${res.status}`);
       }
 
       if (data.status === 'error' && !data.plan) {
-        throw new AnalysisError(data.message || (data.errors?.[0]) || 'Query could not be processed. Please describe what you want to analyze.', 'ANALYSIS');
+        throw new AnalysisError(data.message || 'Query could not be processed. Describe what you want to analyze.', 'ANALYSIS');
       }
 
       const plan = data.plan;
       if (!plan) {
-        throw new AnalysisError('No analysis plan was generated. Please provide a location and phenomenon (e.g. "Flood impact in Jaipur from July to September 2024").', 'ANALYSIS');
+        throw new AnalysisError('No analysis plan generated. Provide a location and phenomenon.', 'ANALYSIS');
       }
 
-      // ── Phase 3: Plan received — show what was understood ─
       const planDetail = [
         plan.phenomenon && `Phenomenon: ${plan.phenomenon.replace(/_/g, ' ')}`,
         plan.aoi && `Location: ${plan.aoi}`,
         plan.start_date && plan.end_date && `Period: ${plan.start_date} — ${plan.end_date}`,
-        plan.sensor && `Sensor: ${plan.sensor}`,
       ].filter(Boolean).join(' · ');
 
       setState(prev => ({ ...prev, step: 'ranking', plan, detail: planDetail || 'Plan created' }));
 
-      // ── Phase 4: Build result from backend response ───────
       const result: TemporalComparisonResult = data.result;
-
-      // Read real processing steps from backend
       const backendSteps = result?.processing_steps || [];
-
-      // Show ranking detail
       const sceneCount = [result?.scene_t1, result?.scene_t2].filter(Boolean).length;
+
       setState(prev => ({
         ...prev,
         step: 'processing',
@@ -222,10 +229,9 @@ export function useAnalysis() {
         processingSteps: backendSteps,
       }));
 
-      // Pause to show processing state and log
-      await new Promise(r => setTimeout(r, 1500));
+      // Brief pause to show processing
+      await new Promise(r => setTimeout(r, 600));
 
-      // ── Phase 5: Change detection ────────────────────────
       const changedPct = result?.metrics?.changed_pct;
       setState(prev => ({
         ...prev,
@@ -235,9 +241,8 @@ export function useAnalysis() {
           : 'Running change detection...',
       }));
 
-      await new Promise(r => setTimeout(r, 1000));
+      await new Promise(r => setTimeout(r, 400));
 
-      // ── Phase 6: Generate insight ────────────────────────
       const findingCount = result?.explanation?.key_findings?.length || 0;
       setState(prev => ({
         ...prev,
@@ -247,7 +252,7 @@ export function useAnalysis() {
           : 'Generating analysis summary...',
       }));
 
-      await new Promise(r => setTimeout(r, 1000));
+      await new Promise(r => setTimeout(r, 400));
 
       // ── Phase 7: Complete ────────────────────────────────
       const scenes: SceneInfo[] = [];
