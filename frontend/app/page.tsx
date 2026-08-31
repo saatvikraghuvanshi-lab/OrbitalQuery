@@ -381,136 +381,112 @@ function HomePageContent() {
     <div className="h-screen flex flex-col overflow-hidden oq-bg">
       <Header activeTab={tab} onNavigate={setTab} />
 
-      {/* Compact filter bar */}
-      <div className="px-6 mb-3 w-full">
-        <div className="oq-card px-5 py-3">
-          <div className="flex flex-wrap items-center gap-4">
-            <div className="flex items-center gap-2">
-              <label className="text-[10px] text-[var(--color-text-muted)] uppercase tracking-wider font-medium">Provider</label>
-              <select
-                value={discoverProvider}
-                onChange={(e) => setDiscoverProvider(e.target.value)}
-                className="bg-[var(--color-bg-elevated)] border border-[var(--color-accent-border)] rounded-lg px-3 py-1.5 text-xs text-[var(--color-text-secondary)] focus:border-[var(--color-accent)] focus:outline-none"
-              >
-                <option value="">All Providers</option>
-                <option value="Copernicus">Copernicus/ESA</option>
-                <option value="NASA">NASA</option>
-                <option value="Planetary Computer">Planetary Computer</option>
-              </select>
-            </div>
-            <div className="flex items-center gap-2">
-              <label className="text-[10px] text-[var(--color-text-muted)] uppercase tracking-wider font-medium">Collection</label>
-              <select
-                value={discoverCollection}
-                onChange={(e) => setDiscoverCollection(e.target.value)}
-                className="bg-[var(--color-bg-elevated)] border border-[var(--color-accent-border)] rounded-lg px-3 py-1.5 text-xs text-[var(--color-text-secondary)] focus:border-[var(--color-accent)] focus:outline-none"
-              >
-                <option value="">All Collections</option>
-                <option value="sentinel-2">Sentinel-2 L2A</option>
-                <option value="sentinel-1">Sentinel-1 GRD</option>
-                <option value="landsat">Landsat C2 L2</option>
-              </select>
-            </div>
-            <div className="ml-auto text-[11px] text-[var(--color-text-muted)] font-medium">
-              {filteredDatasets.length} datasets
-            </div>
+      {/* Filter bar */}
+      <div className="border-b border-oq-700/30 bg-oq-950/50">
+        <div className="max-w-[1600px] mx-auto px-5 h-10 flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <span className="text-[9px] text-oq-300 uppercase tracking-wider font-medium">Provider</span>
+            <select
+              value={discoverProvider}
+              onChange={(e) => setDiscoverProvider(e.target.value)}
+              className="bg-oq-800/50 border border-oq-700/30 rounded px-2.5 py-1 text-[11px] text-oq-100 focus:border-lime/30 focus:outline-none"
+            >
+              <option value="">All</option>
+              <option value="Copernicus">Copernicus</option>
+              <option value="NASA">NASA</option>
+              <option value="Planetary Computer">Planetary Computer</option>
+            </select>
           </div>
+          <div className="w-px h-4 bg-oq-700/30" />
+          <div className="flex items-center gap-2">
+            <span className="text-[9px] text-oq-300 uppercase tracking-wider font-medium">Collection</span>
+            <select
+              value={discoverCollection}
+              onChange={(e) => setDiscoverCollection(e.target.value)}
+              className="bg-oq-800/50 border border-oq-700/30 rounded px-2.5 py-1 text-[11px] text-oq-100 focus:border-lime/30 focus:outline-none"
+            >
+              <option value="">All</option>
+              <option value="sentinel-2">Sentinel-2 L2A</option>
+              <option value="sentinel-1">Sentinel-1 GRD</option>
+              <option value="landsat">Landsat C2 L2</option>
+            </select>
+          </div>
+          <div className="w-px h-4 bg-oq-700/30" />
+          <span className="text-[10px] text-oq-300 font-mono">{filteredDatasets.length} datasets</span>
         </div>
       </div>
 
-      {/* Main content: Map + Dataset List */}
-      <div className="px-6 pb-8 w-full">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4" style={{ height: 'calc(100vh - 160px)', minHeight: '500px' }}>
-          {/* Map — 2/3 width */}
-          <div className="lg:col-span-2 rounded-2xl overflow-hidden border border-[var(--color-accent-border)]">
-            <MapView
-              results={discoverMapViewResults}
-              selectedDataset={selectedDiscoverDataset as any}
-              onSelectDataset={(ds) => {
-                if (ds) setSelectedDiscoverId(ds.id);
-              }}
-              bbox={discoverBbox}
-              onBboxChange={(bbox: BoundingBox | null) => setDiscoverBbox(bbox)}
-            />
-          </div>
+      {/* Main: Map + Right panel */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Map — primary workspace */}
+        <div className="flex-1 relative">
+          <MapView
+            results={discoverMapViewResults}
+            selectedDataset={selectedDiscoverDataset as any}
+            onSelectDataset={(ds) => { if (ds) setSelectedDiscoverId(ds.id); }}
+            bbox={discoverBbox}
+            onBboxChange={(bbox: BoundingBox | null) => setDiscoverBbox(bbox)}
+          />
+        </div>
 
-          {/* Right panel — Dataset List or Detail */}
-          <div className="lg:col-span-1 rounded-2xl border border-[var(--color-accent-border)] bg-[var(--color-bg-card)] overflow-hidden flex flex-col">
-            {bboxDetail ? (
-              /* Detail view */
-              <>
-                {/* Back button */}
-                <div className="px-4 py-2 border-b border-[var(--color-accent-border)] flex-shrink-0">
-                  <button
-                    onClick={() => { setBboxDetail(null); setSelectedDiscoverId(null); }}
-                    className="flex items-center gap-1.5 text-[11px] text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] transition-colors"
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-                    </svg>
-                    Back to list
-                  </button>
+        {/* Right panel */}
+        <div className="w-[340px] border-l border-oq-700/30 bg-oq-950 flex flex-col overflow-hidden flex-shrink-0">
+          {bboxDetail ? (
+            <>
+              <div className="px-4 py-2.5 border-b border-oq-700/30 flex items-center gap-2 flex-shrink-0">
+                <button
+                  onClick={() => { setBboxDetail(null); setSelectedDiscoverId(null); }}
+                  className="flex items-center gap-1 text-[10px] text-oq-300 hover:text-lime transition-colors font-medium"
+                >
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+                  Back
+                </button>
+              </div>
+              <div className="flex-1 overflow-hidden">
+                <DatasetDetailPanel
+                  dataset={bboxDetail}
+                  onClose={() => { setBboxDetail(null); setSelectedDiscoverId(null); }}
+                  onAnalyze={(query) => { setTab('ask'); analysis.analyze(query); }}
+                />
+              </div>
+            </>
+          ) : (
+            <>
+              {/* Panel header */}
+              <div className="px-4 py-3 border-b border-oq-700/30 flex-shrink-0">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-semibold text-oq-100 uppercase tracking-wider">Datasets</span>
+                  <span className="text-[10px] text-oq-300 font-mono">{filteredDatasets.length} observations</span>
                 </div>
-                <div className="flex-1 overflow-hidden">
-                  <DatasetDetailPanel
-                    dataset={bboxDetail}
-                    onClose={() => { setBboxDetail(null); setSelectedDiscoverId(null); }}
-                    onAnalyze={(query) => {
-                      setTab('ask');
-                      analysis.analyze(query);
-                    }}
-                  />
-                </div>
-              </>
-            ) : (
-              /* List view */
-              <>
-                {/* Discovery Summary — grouped availability + best match */}
-                {discoverBbox && filteredDatasets.length > 0 && (
-                  <div className="px-4 py-3 border-b border-[var(--color-accent-border)] flex-shrink-0">
-                    <DiscoverySummary
-                      datasets={filteredDatasets}
-                      bbox={discoverBbox}
-                      onSelectCollection={(col) => {
-                        setSelectedDiscoverCollection(col);
-                        setDiscoverCollection(col ?? '');
-                      }}
-                      selectedCollection={selectedDiscoverCollection}
-                    />
-                  </div>
-                )}
-
-                {/* Dataset list header */}
-                <div className="px-4 py-3 border-b border-[var(--color-accent-border)] flex-shrink-0">
-                  <h3 className="text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider">
-                    {discoverBbox ? `${filteredDatasets.length} Observations${selectedDiscoverCollection ? ` in ${selectedDiscoverCollection}` : ''}` : 'Available Datasets'}
-                  </h3>
-                  <p className="text-[10px] text-[var(--color-text-muted)] mt-0.5">
-                    {discoverBbox ? 'Click an observation for details and analysis options' : 'Click a dataset to view details + analyze'}
-                  </p>
-                </div>
-                <div className="flex-1 overflow-hidden">
-                  <DatasetList
+              </div>
+              {/* Discovery summary when bbox drawn */}
+              {discoverBbox && filteredDatasets.length > 0 && (
+                <div className="px-4 py-2.5 border-b border-oq-700/30 flex-shrink-0">
+                  <DiscoverySummary
                     datasets={filteredDatasets}
-                    selectedId={selectedDiscoverId}
-                    onSelect={(ds: Dataset) => {
-                      setSelectedDiscoverId(ds.id);
-                      setBboxDetail(ds);
-                      if (ds.bbox && ds.bbox.length === 4) {
-                        setDiscoverBbox({
-                          north: ds.bbox[3],
-                          south: ds.bbox[1],
-                          east: ds.bbox[2],
-                          west: ds.bbox[0],
-                        });
-                      }
-                    }}
-                    loading={discoverBbox ? bboxLoading : datasetsLoading}
+                    bbox={discoverBbox}
+                    onSelectCollection={(col) => { setSelectedDiscoverCollection(col); setDiscoverCollection(col ?? ''); }}
+                    selectedCollection={selectedDiscoverCollection}
                   />
                 </div>
-              </>
-            )}
-          </div>
+              )}
+              {/* Observation list */}
+              <div className="flex-1 overflow-hidden">
+                <DatasetList
+                  datasets={filteredDatasets}
+                  selectedId={selectedDiscoverId}
+                  onSelect={(ds: Dataset) => {
+                    setSelectedDiscoverId(ds.id);
+                    setBboxDetail(ds);
+                    if (ds.bbox && ds.bbox.length === 4) {
+                      setDiscoverBbox({ north: ds.bbox[3], south: ds.bbox[1], east: ds.bbox[2], west: ds.bbox[0] });
+                    }
+                  }}
+                  loading={discoverBbox ? bboxLoading : datasetsLoading}
+                />
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>

@@ -29,76 +29,31 @@ interface DatasetListProps {
   loading?: boolean;
 }
 
-const PROVIDER_STYLES: Record<string, { bg: string; text: string; border: string; icon: string }> = {
-  'Copernicus': { bg: 'rgba(59,130,246,0.15)', text: '#60a5fa', border: 'rgba(59,130,246,0.3)', icon: '🇪🇺' },
-  'ESA': { bg: 'rgba(59,130,246,0.15)', text: '#60a5fa', border: 'rgba(59,130,246,0.3)', icon: '🇪🇺' },
-  'NASA': { bg: 'rgba(34,197,94,0.15)', text: '#4ade80', border: 'rgba(34,197,94,0.3)', icon: '🇺🇸' },
-  'USGS': { bg: 'rgba(34,197,94,0.15)', text: '#4ade80', border: 'rgba(34,197,94,0.3)', icon: '🇺🇸' },
-  'ISRO': { bg: 'rgba(249,115,22,0.15)', text: '#fb923c', border: 'rgba(249,115,22,0.3)', icon: '🇮🇳' },
-  'Sentinel': { bg: 'rgba(6,182,212,0.15)', text: '#22d3ee', border: 'rgba(6,182,212,0.3)', icon: '🛰️' },
-  'Landsat': { bg: 'rgba(20,184,166,0.15)', text: '#2dd4bf', border: 'rgba(20,184,166,0.3)', icon: '🛰️' },
-};
-
-function getProviderStyle(provider: string) {
-  const key = Object.keys(PROVIDER_STYLES).find(k =>
-    provider?.toLowerCase().includes(k.toLowerCase())
-  );
-  return key ? PROVIDER_STYLES[key] : { bg: 'rgba(148,163,184,0.12)', text: '#94a3b8', border: 'rgba(148,163,184,0.2)', icon: '📡' };
-}
-
-/** Extract a clean human-readable name from the STAC title/id */
-function cleanTitle(raw: string, collection?: string | null): string {
-  if (!raw) return 'Unknown Dataset';
-
-  // If it looks like a STAC ID (starts with S2, LC, etc.), build a clean name
-  if (/^(S2[AB]_|LC0[89]|SENTINEL1|MODIS_|VIIRS_)/.test(raw)) {
-    const coll = (collection || '').toLowerCase();
-    if (coll.includes('sentinel-2')) return 'Sentinel-2 L2A';
-    if (coll.includes('sentinel-1')) return 'Sentinel-1 GRD';
-    if (coll.includes('landsat')) return 'Landsat Collection 2';
-    if (coll.includes('modis')) return 'MODIS Terra';
-    if (coll.includes('viirs')) return 'VIIRS DNB';
-    return raw.substring(0, 30);
-  }
-
-  // Already human-readable — truncate if too long
-  return raw.length > 50 ? raw.substring(0, 47) + '...' : raw;
-}
-
-/** Get the short STAC ID for the secondary line */
-function shortStacId(raw: string): string | null {
-  if (/^(S2[AB]_|LC0[89]|SENTINEL1|MODIS_|VIIRS_)/.test(raw)) {
-    return raw.length > 40 ? raw.substring(0, 37) + '...' : raw;
-  }
-  return null;
-}
-
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return '—';
   try {
-    const d = new Date(dateStr);
-    return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-  } catch {
-    return dateStr;
-  }
+    return new Date(dateStr).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  } catch { return dateStr; }
 }
 
-function CloudBadge({ value }: { value: number }) {
-  const color = value < 10 ? '#4ade80' : value < 25 ? '#fbbf24' : '#f87171';
-  return (
-    <span className="inline-flex items-center gap-1 text-[10px] font-mono font-medium px-1.5 py-0.5 rounded"
-      style={{ background: `${color}15`, color, border: `1px solid ${color}30` }}>
-      ☁ {value.toFixed(0)}%
-    </span>
-  );
+function cleanTitle(raw: string, collection?: string | null): string {
+  if (!raw) return 'Unknown Dataset';
+  if (/^(S2[AB]_|LC0[89]|SENTINEL1|MODIS_|VIIRS_)/.test(raw)) {
+    const c = (collection || '').toLowerCase();
+    if (c.includes('sentinel-2')) return 'Sentinel-2 L2A';
+    if (c.includes('sentinel-1')) return 'Sentinel-1 GRD';
+    if (c.includes('landsat')) return 'Landsat Collection 2';
+    return raw.substring(0, 30);
+  }
+  return raw.length > 45 ? raw.substring(0, 42) + '…' : raw;
 }
 
 export default function DatasetList({ datasets, selectedId, onSelect, loading }: DatasetListProps) {
   if (loading) {
     return (
-      <div className="space-y-3 p-4">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="h-28 rounded-xl bg-oq-800/30 animate-pulse oq-card" />
+      <div className="space-y-1 p-3">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="h-16 rounded bg-oq-800/30 animate-pulse" />
         ))}
       </div>
     );
@@ -107,75 +62,54 @@ export default function DatasetList({ datasets, selectedId, onSelect, loading }:
   if (datasets.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-center p-6">
-        <div className="text-3xl mb-3">📦</div>
-        <h3 className="text-sm font-semibold text-oq-300 mb-1">No Datasets</h3>
-        <p className="text-xs text-oq-300">
-          Run a search in Ask to discover datasets, or adjust your filters.
-        </p>
+        <div className="text-[10px] text-oq-300 uppercase tracking-wider font-medium mb-1">No Datasets</div>
+        <p className="text-[10px] text-oq-300">Draw a bounding box on the map to search</p>
       </div>
     );
   }
 
   return (
     <ScrollArea className="h-full">
-      <div className="space-y-2 p-3">
+      <div className="p-2 space-y-[2px]">
         {datasets.map((ds) => {
-          const style = getProviderStyle(ds.provider);
           const isSelected = ds.id === selectedId;
           const displayTitle = cleanTitle(ds.title, ds.collection);
-          const stacId = shortStacId(ds.title);
 
           return (
             <button
               key={ds.id}
               onClick={() => onSelect(ds)}
-              className={`w-full text-left rounded-xl p-3.5 transition-all duration-200 border ${
+              className={`w-full text-left px-3 py-2 rounded transition-all ${
                 isSelected
-                  ? 'border-[var(--color-accent-border)] bg-[var(--color-accent-dim)] shadow-lg shadow-lime/5'
-                  : 'border-oq-600/30 bg-oq-800/20 hover:bg-oq-700/40 hover:border-[var(--color-accent-border)]'
+                  ? 'bg-lime/8 border border-lime/15'
+                  : 'hover:bg-oq-800/40 border border-transparent'
               }`}
             >
-              {/* Top row: provider badge + cloud */}
-              <div className="flex items-center justify-between mb-2">
-                <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-md"
-                  style={{ background: style.bg, color: style.text, border: `1px solid ${style.border}` }}>
-                  {style.icon} {ds.provider?.split('/')[0] || 'Unknown'}
-                </span>
-                {ds.cloudCover != null && <CloudBadge value={ds.cloudCover} />}
-              </div>
-
-              {/* Clean title */}
-              <h4 className="text-[13px] font-semibold text-oq-50 leading-tight mb-0.5">
-                {displayTitle}
-              </h4>
-
-              {/* STAC ID (secondary, smaller) */}
-              {stacId && (
-                <div className="text-[10px] text-oq-300 font-mono truncate mb-1.5">{stacId}</div>
-              )}
-
-              {/* Meta row */}
-              <div className="flex items-center gap-3 text-[10px] text-oq-300">
-                <span className="flex items-center gap-1">📅 {formatDate(ds.date)}</span>
-                {ds.bbox && (
-                  <span className="font-mono text-oq-300">
-                    📍 [{ds.bbox[0]?.toFixed(1)}, {ds.bbox[1]?.toFixed(1)}]
+              {/* Title + collection */}
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] text-oq-100 font-medium truncate leading-tight">{displayTitle}</span>
+                {ds.cloudCover != null && (
+                  <span className={`text-[9px] font-mono flex-shrink-0 ${ds.cloudCover < 10 ? 'text-green-400' : ds.cloudCover < 25 ? 'text-amber-400' : 'text-red-400'}`}>
+                    {ds.cloudCover.toFixed(0)}%
                   </span>
                 )}
               </div>
 
-              {/* Score bar */}
-              {ds.score != null && ds.score > 0 && (
-                <div className="mt-2">
-                  <div className="h-1 bg-oq-700/50 rounded-full overflow-hidden">
-                    <div
-                      className="h-full rounded-full transition-all"
-                      style={{ width: `${Math.min(ds.score, 100)}%`, background: 'linear-gradient(90deg, #A3F63F, #7EBF32)' }}
-                    />
-                  </div>
-                  <span className="text-[9px] text-oq-300 mt-0.5 block">
-                    Relevance: {ds.score.toFixed(0)}%
-                  </span>
+              {/* Meta row */}
+              <div className="flex items-center gap-2 mt-0.5">
+                <span className="text-[9px] text-oq-300 font-mono">{ds.collection}</span>
+                {ds.date && (
+                  <>
+                    <span className="text-oq-500">·</span>
+                    <span className="text-[9px] text-oq-300">{formatDate(ds.date)}</span>
+                  </>
+                )}
+              </div>
+
+              {/* Coordinates */}
+              {ds.bbox && ds.bbox.length === 4 && (
+                <div className="text-[8px] text-oq-400 font-mono mt-0.5">
+                  [{ds.bbox[0]?.toFixed(2)}, {ds.bbox[1]?.toFixed(2)}]
                 </div>
               )}
             </button>
