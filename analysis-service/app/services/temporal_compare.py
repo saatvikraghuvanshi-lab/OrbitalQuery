@@ -107,6 +107,9 @@ class TemporalComparisonResult:
     # Change detection
     change_detection: Optional[dict[str, Any]]
 
+    # Change mask visualization (base64-encoded PNGs)
+    change_visualizations: Optional[dict[str, Any]]
+
     # Computed metrics (the key numbers for the UI)
     metrics: dict[str, Any]
 
@@ -953,6 +956,67 @@ def run_temporal_comparison(
             "detail": f"algorithm={change_result.get('algorithm', 'unknown')}, changed={change_result.get('changed_pct', 0)}%",
         })
 
+    # ── Step 5b: Generate change mask visualization ──────────────
+    change_mask_b64 = None
+    diff_vis_b64 = None
+    if index_t1 and index_t2 and index_t1.value is not None and index_t2.value is not None:
+        try:
+            import io
+            from PIL import Image
+
+            t1_arr = index_t1.value
+            t2_arr = index_t2.value
+            min_h = min(t1_arr.shape[0], t2_arr.shape[0])
+            min_w = min(t1_arr.shape[1], t2_arr.shape[1])
+            t1_c = t1_arr[:min_h, :min_w]
+            t2_c = t2_arr[:min_h, :min_w]
+
+            valid = ~np.isnan(t1_c) & ~np.isnan(t2_c) & ~np.isinf(t1_c) & ~np.isinf(t2_c)
+            diff = np.where(valid, t2_c - t1_c, 0.0)
+
+            # -- Change mask visualization (green = increase, red = decrease) --
+            threshold = 0.1
+            change_mask = valid & (np.abs(diff) >= threshold)
+
+            mask_img = np.zeros((min_h, min_w, 4), dtype=np.uint8)
+            # Green for positive change (e.g. vegetation gain / water increase)
+            pos_mask = change_mask & (diff > 0)
+            mask_img[pos_mask, 0] = 16
+            mask_img[pos_mask, 1] = 185
+            mask_img[pos_mask, 2] = 129
+            mask_img[pos_mask, 3] = 200
+            # Red/orange for negative change (e.g. vegetation loss / urban expansion)
+            neg_mask = change_mask & (diff < 0)
+            mask_img[neg_mask, 0] = 239
+            mask_img[neg_mask, 1] = 68
+            mask_img[neg_mask, 2] = 68
+            mask_img[neg_mask, 3] = 200
+
+            mask_pil = Image.fromarray(mask_img, 'RGBA')
+            buf = io.BytesIO()
+            mask_pil.save(buf, format='PNG', optimize=True)
+            change_mask_b64 = buf.getvalue().hex()
+
+            # -- Difference visualization (blue-white-red diverging) --
+            diff_clipped = np.clip(diff, -1, 1)
+            diff_norm = ((diff_clipped + 1) / 2 * 255).astype(np.uint8)
+            diff_img = np.zeros((min_h, min_w, 3), dtype=np.uint8)
+            # Blue for decrease, white for neutral, red for increase
+            diff_img[:, :, 0] = np.where(diff > 0, diff_norm, 0)      # R
+            diff_img[:, :, 1] = np.where(valid, np.full_like(diff_norm, 200), 0)  # G
+            diff_img[:, :, 2] = np.where(diff < 0, diff_norm, 0)      # B
+            # Where not valid, make dark
+            diff_img[~valid] = [13, 23, 17]
+
+            diff_pil = Image.fromarray(diff_img, 'RGB')
+            buf2 = io.BytesIO()
+            diff_pil.save(buf2, format='PNG', optimize=True)
+            diff_vis_b64 = buf2.getvalue().hex()
+
+            logger.info("[%s] Generated change mask + difference visualization: %dx%d", index_name, min_w, min_h)
+        except Exception as e:
+            logger.warning("[%s] Visualization generation failed: %s", index_name, e)
+
     # ── Step 6: Compute metrics ───────────────────────────────────
     metrics = {}
     if index_t1 and index_t2:
@@ -1023,6 +1087,11 @@ def run_temporal_comparison(
         index_t1=index_t1,
         index_t2=index_t2,
         change_detection=change_result,
+        change_visualizations={
+            "change_mask_png": change_mask_b64,
+            "difference_png": diff_vis_b64,
+            "bbox": bbox,
+        } if change_mask_b64 else None,
         metrics=metrics,
         imagery=imagery,
         processing_steps=processing_steps,

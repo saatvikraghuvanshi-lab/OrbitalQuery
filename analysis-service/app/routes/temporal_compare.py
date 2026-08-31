@@ -162,6 +162,7 @@ async def temporal_compare(req: TemporalCompareRequest) -> TemporalCompareRespon
                 "total_pixels": result.index_t2.total_pixels,
             } if result.index_t2 else None,
             "change_detection": result.change_detection,
+            "change_visualizations": result.change_visualizations,
             "metrics": result.metrics,
             "imagery": result.imagery,
             "processing_steps": result.processing_steps,

@@ -31,7 +31,7 @@ const PHENOMENON_CONFIG: Record<string, { color: string; label: string; indexLab
   land_cover_change: { color: '#8B6CF6', label: 'Land Cover Change', indexLabel: 'NDVI' },
 };
 
-type ViewMode = 'side-by-side' | 'swipe' | 'difference';
+type ViewMode = 'side-by-side' | 'swipe' | 'difference' | 'change-mask';
 
 const GOOGLE_TILE = 'https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}';
 
@@ -319,6 +319,191 @@ function ProcessingPipeline({ steps }: { steps: Array<{ step: string; detail: st
 }
 
 // ══════════════════════════════════════════════════════════════
+// ── Three-Panel View (Before → After → Change) ──────────────
+// ══════════════════════════════════════════════════════════════
+function ThreePanelView({
+  bbox, sceneT1, sceneT2, thumbnailT1, thumbnailT2, sceneBboxT1, sceneBboxT2,
+  changeMaskB64, diffVisB64, changeVisBbox, config,
+}: {
+  bbox: number[];
+  sceneT1: SceneInfo | null; sceneT2: SceneInfo | null;
+  thumbnailT1?: string; thumbnailT2?: string;
+  sceneBboxT1?: any; sceneBboxT2?: any;
+  changeMaskB64: string | null;
+  diffVisB64: string | null;
+  changeVisBbox: number[] | null;
+  config: { color: string; label: string; indexLabel: string };
+}) {
+  const leftRef = useRef<HTMLDivElement>(null);
+  const centerRef = useRef<HTMLDivElement>(null);
+  const rightRef = useRef<HTMLDivElement>(null);
+  const leftMapRef = useRef<any>(null);
+  const centerMapRef = useRef<any>(null);
+  const [vizMode, setVizMode] = useState<'change-mask' | 'difference'>('change-mask');
+  const [loading, setLoading] = useState({ left: true, center: true });
+
+  useEffect(() => {
+    if (!leftRef.current || !centerRef.current || leftMapRef.current) return;
+    let cancelled = false;
+
+    import('leaflet').then(async (L) => {
+      if (cancelled || !leftRef.current || !centerRef.current) return;
+
+      const initBounds = parseBbox(sceneBboxT1) || parseBbox(sceneBboxT2) || bbox;
+      const [west, south, east, north] = initBounds;
+      const center: [number, number] = [(south + north) / 2, (west + east) / 2];
+      const latDiff = north - south;
+      const lngDiff = east - west;
+      const initZoom = Math.min(12, Math.max(6, Math.floor(Math.log2(360 / Math.max(latDiff, lngDiff)))));
+
+      const leftMap = L.map(leftRef.current, { center, zoom: initZoom, zoomControl: false, attributionControl: false });
+      L.tileLayer(GOOGLE_TILE, { maxZoom: 22, subdomains: ['0', '1', '2', '3'] }).addTo(leftMap);
+
+      const centerMap = L.map(centerRef.current, { center, zoom: initZoom, zoomControl: false, attributionControl: false });
+      L.tileLayer(GOOGLE_TILE, { maxZoom: 22, subdomains: ['0', '1', '2', '3'] }).addTo(centerMap);
+
+      const [leftResult, centerResult] = await Promise.all([
+        loadSatelliteTiles(leftMap, { L, sceneCollection: sceneT1?.collection, sceneItemId: sceneT1?.item_id, thumbnailUrl: thumbnailT1, sceneBbox: sceneBboxT1, aoiBbox: bbox, opacity: 0.9 }),
+        loadSatelliteTiles(centerMap, { L, sceneCollection: sceneT2?.collection, sceneItemId: sceneT2?.item_id, thumbnailUrl: thumbnailT2, sceneBbox: sceneBboxT2, aoiBbox: bbox, opacity: 0.9 }),
+      ]);
+
+      if (cancelled) return;
+      setLoading({ left: false, center: false });
+
+      const aoiBounds = boundsToLatLng(bbox);
+      L.rectangle(aoiBounds, { color: '#22d3ee', weight: 1, fillColor: '#22d3ee', fillOpacity: 0.03, dashArray: '6 3' }).addTo(leftMap);
+      L.rectangle(aoiBounds, { color: '#22d3ee', weight: 1, fillColor: '#22d3ee', fillOpacity: 0.03, dashArray: '6 3' }).addTo(centerMap);
+
+      leftMap.fitBounds(leftResult.bounds, { padding: [15, 15] });
+      centerMap.fitBounds(centerResult.bounds, { padding: [15, 15] });
+
+      setTimeout(() => { leftMap.invalidateSize(); centerMap.invalidateSize(); }, 100);
+
+      leftMap.on('move', () => {
+        centerMap.setView(leftMap.getCenter(), leftMap.getZoom(), { animate: false });
+      });
+      centerMap.on('move', () => {
+        leftMap.setView(centerMap.getCenter(), centerMap.getZoom(), { animate: false });
+      });
+
+      leftMapRef.current = leftMap;
+      centerMapRef.current = centerMap;
+    });
+
+    return () => {
+      cancelled = true;
+      leftMapRef.current?.remove();
+      centerMapRef.current?.remove();
+      leftMapRef.current = null;
+      centerMapRef.current = null;
+    };
+  }, [bbox, thumbnailT1, thumbnailT2, sceneBboxT1, sceneBboxT2]);
+
+  // Decode the visualization hex string to a data URL
+  const decodeVis = (hex: string | null): string | null => {
+    if (!hex) return null;
+    try {
+      const bytes = new Uint8Array(hex.match(/.{1,2}/g)!.map(b => parseInt(b, 16)));
+      const blob = new Blob([bytes], { type: 'image/png' });
+      return URL.createObjectURL(blob);
+    } catch { return null; }
+  };
+
+  const changeMaskUrl = decodeVis(changeMaskB64);
+  const diffVisUrl = decodeVis(diffVisB64);
+  const activeVisUrl = vizMode === 'change-mask' ? changeMaskUrl : diffVisUrl;
+  const visBbox = changeVisBbox || bbox;
+  const visBoundsStr = `${visBbox[1]},${visBbox[0]},${visBbox[3]},${visBbox[2]}`;
+
+  // Add/remove image overlay when viz changes
+  const overlayRef = useRef<any>(null);
+  useEffect(() => {
+    if (!centerMapRef.current || !activeVisUrl) return;
+    const map = centerMapRef.current;
+    if (overlayRef.current) {
+      map.removeLayer(overlayRef.current);
+      overlayRef.current = null;
+    }
+    const bounds: [[number, number], [number, number]] = [[visBbox[1], visBbox[0]], [visBbox[3], visBbox[2]]];
+    import('leaflet').then(({ default: L }) => {
+      const img = L.imageOverlay(activeVisUrl, bounds as any, { opacity: 0.75, zIndex: 450 }).addTo(map);
+      overlayRef.current = img;
+    });
+    return () => { if (overlayRef.current) { map.removeLayer(overlayRef.current); overlayRef.current = null; } };
+  }, [activeVisUrl, visBoundsStr]);
+
+  return (
+    <div className="relative">
+      {/* Visualization mode selector */}
+      <div className="absolute top-3 right-3 z-[1010]">
+        <div className="inline-flex bg-oq-950/85 backdrop-blur-sm rounded border border-oq-700/30 p-[2px]">
+          {(['change-mask', 'difference'] as const).map((mode) => (
+            <button key={mode} onClick={() => setVizMode(mode)}
+              className={`px-2.5 py-1 rounded text-[8px] font-semibold uppercase tracking-wider transition-all ${
+                vizMode === mode ? 'bg-lime text-oq-950' : 'text-oq-300 hover:text-oq-100'
+              }`}
+            >
+              {mode === 'change-mask' ? 'Change Mask' : 'Difference'}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Three panels */}
+      <div className="grid grid-cols-3 gap-[2px]" style={{ height: 'clamp(400px, 65vh, 700px)' }}>
+        {/* Before */}
+        <div className="relative rounded-l-lg overflow-hidden bg-oq-950">
+          <div ref={leftRef} className="absolute inset-0" />
+          <div className="absolute top-2 left-2 z-[1000] px-2 py-0.5 rounded text-[8px] font-bold uppercase tracking-widest bg-oq-950/80" style={{ color: '#60A5FA', border: '1px solid rgba(96,165,250,0.2)' }}>Before</div>
+          {loading.left && (
+            <div className="absolute inset-0 z-[1000] flex items-center justify-center bg-oq-950/60">
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded bg-oq-900/90 border border-oq-700/30">
+                <svg className="animate-spin h-3 w-3 text-lime" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                <span className="text-[9px] text-oq-200">Loading...</span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* After */}
+        <div className="relative overflow-hidden bg-oq-950">
+          <div ref={centerRef} className="absolute inset-0" />
+          <div className="absolute top-2 left-2 z-[1000] px-2 py-0.5 rounded text-[8px] font-bold uppercase tracking-widest bg-oq-950/80" style={{ color: '#FB923C', border: '1px solid rgba(251,146,60,0.2)' }}>After</div>
+          {loading.center && (
+            <div className="absolute inset-0 z-[1000] flex items-center justify-center bg-oq-950/60">
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded bg-oq-900/90 border border-oq-700/30">
+                <svg className="animate-spin h-3 w-3 text-lime" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                <span className="text-[9px] text-oq-200">Loading...</span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Change Detected */}
+        <div className="relative rounded-r-lg overflow-hidden bg-oq-950">
+          <div ref={rightRef} className="absolute inset-0 bg-oq-950" />
+          <div className="absolute top-2 left-2 z-[1000] px-2 py-0.5 rounded text-[8px] font-bold uppercase tracking-widest bg-oq-950/80" style={{ color: '#10B981', border: '1px solid rgba(16,185,129,0.2)' }}>Change Detected</div>
+          {activeVisUrl ? (
+            <img src={activeVisUrl} className="absolute inset-0 w-full h-full object-cover z-[500]" style={{ mixBlendMode: 'screen' }} alt="Change detection visualization" />
+          ) : (
+            <div className="absolute inset-0 flex flex-col items-center justify-center z-[500]">
+              <svg className="w-6 h-6 mb-1" style={{ color: '#68756E' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" /></svg>
+              <span className="text-[9px]" style={{ color: '#9CA3AF' }}>No visualization available</span>
+            </div>
+          )}
+          {/* Zoom controls */}
+          <div className="absolute bottom-2 right-2 z-[1000] flex flex-col rounded overflow-hidden border border-oq-700/30" style={{ padding: 10 }}>
+            <button onClick={() => { leftMapRef.current?.zoomIn(); centerMapRef.current?.zoomIn(); }} className="w-6 h-6 flex items-center justify-center text-oq-200 hover:text-lime bg-oq-950/70 backdrop-blur-sm rounded text-xs font-bold">+</button>
+            <div className="h-px bg-oq-700/30 my-0.5" />
+            <button onClick={() => { leftMapRef.current?.zoomOut(); centerMapRef.current?.zoomOut(); }} className="w-6 h-6 flex items-center justify-center text-oq-200 hover:text-lime bg-oq-950/70 backdrop-blur-sm rounded text-xs font-bold">−</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
 // ── Annual Trend Chart ──────────────────────────────────────
 // ══════════════════════════════════════════════════════════════
 function AnnualTrendChart({ result, config }: { result: TemporalComparisonResult; config: { color: string; indexLabel: string } }) {
@@ -420,6 +605,7 @@ export default function TemporalComparisonView({ result }: Props) {
                   {mode === 'side-by-side' && 'Side by Side'}
                   {mode === 'swipe' && 'Swipe'}
                   {mode === 'difference' && 'Difference'}
+                  {mode === 'change-mask' && 'Change Mask'}
                 </button>
               ))}
             </div>
@@ -452,6 +638,19 @@ export default function TemporalComparisonView({ result }: Props) {
               thumbnailT1={result.imagery?.period1?.thumbnail} thumbnailT2={result.imagery?.period2?.thumbnail}
               sceneBboxT1={result.imagery?.period1?.bbox || result.scene_t1?.bbox}
               sceneBboxT2={result.imagery?.period2?.bbox || result.scene_t2?.bbox}
+            />
+          )}
+          {viewMode === 'change-mask' && (
+            <ThreePanelView
+              bbox={result.aoi_bbox}
+              sceneT1={result.scene_t1} sceneT2={result.scene_t2}
+              thumbnailT1={result.imagery?.period1?.thumbnail} thumbnailT2={result.imagery?.period2?.thumbnail}
+              sceneBboxT1={result.imagery?.period1?.bbox || result.scene_t1?.bbox}
+              sceneBboxT2={result.imagery?.period2?.bbox || result.scene_t2?.bbox}
+              changeMaskB64={result.change_visualizations?.change_mask_png || null}
+              diffVisB64={result.change_visualizations?.difference_png || null}
+              changeVisBbox={result.change_visualizations?.bbox || null}
+              config={config}
             />
           )}
 

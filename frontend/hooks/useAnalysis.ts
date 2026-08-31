@@ -74,6 +74,7 @@ export interface TemporalComparisonResult {
   index_t1: IndexInfo | null;
   index_t2: IndexInfo | null;
   change_detection: Record<string, any> | null;
+  change_visualizations: { change_mask_png: string; difference_png: string; bbox: number[] } | null;
   metrics: Record<string, any>;
   imagery: {
     period1: Record<string, string>;
