@@ -22,7 +22,7 @@ DEFAULT_LIMIT = int(os.getenv("DEFAULT_LIMIT", "10"))
 
 # Server
 HOST = os.getenv("HOST", "0.0.0.0")
-PORT = int(os.getenv("PORT", "8000"))
+PORT = int(os.getenv("PORT", "8080"))
 
 # Allowed collections (Planetary Computer + Bhoonidhi + Copernicus)
 ALLOWED_COLLECTIONS = [
