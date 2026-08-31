@@ -122,27 +122,27 @@ export default function MarketingHomepage({ onLaunchAsk, onNavigate }: Marketing
 
             {/* Search input */}
             <div className="px-5 py-4 border-b border-oq-700/20">
-              <div className="text-[9px] text-oq-300 uppercase tracking-wider mb-2 font-medium">Ask OrbitalQuery</div>
+              <div className="text-[9px] text-[#9CA3AF] uppercase tracking-wider mb-2 font-medium">Ask OrbitalQuery</div>
               <div className="flex items-center gap-3 bg-oq-900/50 border border-oq-700/20 rounded px-4 py-3">
                 <svg className="w-4 h-4 text-oq-300 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                 <span className="text-[13px] text-oq-100 flex-1">{demoQuery}</span>
-                <button onClick={handleLaunch} className="text-[10px] text-lime font-semibold uppercase tracking-wider hover:text-lime-hover transition-colors">Run Query</button>
+                <button onClick={handleLaunch} className="text-[10px] font-semibold uppercase tracking-wider hover:opacity-80 transition-opacity flex items-center gap-1" style={{ color: '#4ADE80' }}>Run Query</button>
               </div>
             </div>
 
             {/* Interpretation */}
             <div className="px-5 py-4 border-b border-oq-700/20">
-              <div className="text-[9px] text-oq-300 uppercase tracking-wider mb-3 font-medium">Interpreted Query</div>
+              <div className="text-[9px] text-[#9CA3AF] uppercase tracking-wider mb-3 font-medium">Interpreted Query</div>
               <div className="grid grid-cols-3 gap-4">
-                <div><div className="text-[8px] text-oq-300 uppercase tracking-wider mb-0.5">Location</div><div className="text-[12px] text-oq-100 font-medium">Punjab</div></div>
-                <div><div className="text-[8px] text-oq-300 uppercase tracking-wider mb-0.5">Time</div><div className="text-[12px] text-oq-100 font-medium">2020 — 2025</div></div>
-                <div><div className="text-[8px] text-oq-300 uppercase tracking-wider mb-0.5">Topic</div><div className="text-[12px] text-oq-100 font-medium">Vegetation change</div></div>
+                <div><div className="text-[8px] text-[#9CA3AF] uppercase tracking-wider mb-0.5">Location</div><div className="text-[12px] text-oq-50 font-medium">Punjab</div></div>
+                <div><div className="text-[8px] text-[#9CA3AF] uppercase tracking-wider mb-0.5">Time</div><div className="text-[12px] text-oq-50 font-medium">2020 — 2025</div></div>
+                <div><div className="text-[8px] text-[#9CA3AF] uppercase tracking-wider mb-0.5">Topic</div><div className="text-[12px] text-oq-50 font-medium">Vegetation change</div></div>
               </div>
               <div className="mt-3">
-                <div className="text-[8px] text-oq-300 uppercase tracking-wider mb-1.5">Relevant Sources</div>
+                <div className="text-[8px] text-[#9CA3AF] uppercase tracking-wider mb-1.5">Relevant Sources</div>
                 <div className="flex gap-2">
                   {['Sentinel-2', 'Landsat', 'MODIS'].map(s => (
-                    <span key={s} className="px-2 py-0.5 rounded text-[9px] text-oq-200 bg-oq-800/40 border border-oq-700/15 font-mono">{s}</span>
+                    <span key={s} className="px-2.5 py-1 rounded text-[9px] font-mono" style={{ color: '#E5E7EB', background: '#111E15', border: '1px solid #2A3A2F' }}>{s}</span>
                   ))}
                 </div>
               </div>
@@ -151,23 +151,23 @@ export default function MarketingHomepage({ onLaunchAsk, onNavigate }: Marketing
             {/* Result */}
             <div className="px-5 py-4">
               <div className="flex items-center justify-between mb-3">
-                <div className="text-[9px] text-oq-300 uppercase tracking-wider font-medium">Results</div>
-                <div className="text-[10px] text-oq-300 font-mono">24 datasets</div>
+                <div className="text-[9px] text-[#9CA3AF] uppercase tracking-wider font-medium">Results</div>
+                <div className="text-[10px] text-[#9CA3AF] font-mono">24 datasets</div>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-stretch">
                 {/* Result card */}
-                <div className="p-4 rounded border border-oq-700/20 bg-oq-900/30">
-                  <div className="text-[9px] text-cat-vegetation font-semibold uppercase tracking-wider mb-1">Vegetation Change</div>
-                  <div className="text-[13px] text-oq-50 font-medium mb-1">Punjab · 2020–2025</div>
-                  <div className="text-[11px] text-oq-200 mb-2">Sentinel-2 · Multispectral · 10m</div>
-                  <button onClick={handleLaunch} className="text-[10px] text-lime font-semibold uppercase tracking-wider hover:text-lime-hover transition-colors">View Result</button>
+                <div className="p-4 rounded border border-oq-700/20 bg-oq-900/30 flex flex-col justify-between">
+                  <div>
+                    <div className="text-[9px] font-semibold uppercase tracking-wider mb-1" style={{ color: '#4ADE80' }}>Vegetation Change</div>
+                    <div className="text-[13px] text-oq-50 font-medium mb-1">Punjab · 2020–2025</div>
+                    <div className="text-[11px] text-oq-200 mb-2">Sentinel-2 · Multispectral · 10m</div>
+                  </div>
+                  <button onClick={handleLaunch} className="text-[10px] font-semibold uppercase tracking-wider hover:opacity-80 transition-opacity mt-1 self-start" style={{ color: '#4ADE80' }}>View Result</button>
                 </div>
                 {/* Map placeholder */}
-                <div className="rounded border border-oq-700/20 bg-oq-900/20 flex items-center justify-center overflow-hidden" style={{ height: '140px' }}>
-                  <div className="text-[10px] text-oq-400 flex flex-col items-center gap-1">
-                    <svg className="w-5 h-5 text-oq-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 6.75V15m6-6v8.25m.503 6.978l4.276-4.277a1.125 1.125 0 011.591 0L21 12.5V18a1.125 1.125 0 01-1.125 1.125H4.5A1.125 1.125 0 013.375 18V12.5L5.152 7.223a1.125 1.125 0 011.591 0L9 9.75" /></svg>
-                    <span>Punjab region — satellite view</span>
-                  </div>
+                <div className="rounded border border-oq-700/20 bg-oq-900/20 flex flex-col items-center justify-center overflow-hidden" style={{ minHeight: '140px' }}>
+                  <svg className="w-6 h-6 mb-1.5" style={{ color: '#68756E' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 6.75V15m6-6v8.25m.503 6.978l4.276-4.277a1.125 1.125 0 011.591 0L21 12.5V18a1.125 1.125 0 01-1.125 1.125H4.5A1.125 1.125 0 013.375 18V12.5L5.152 7.223a1.125 1.125 0 011.591 0L9 9.75" /></svg>
+                  <span className="text-[10px]" style={{ color: '#9CA3AF' }}>Punjab region — satellite view</span>
                 </div>
               </div>
             </div>
