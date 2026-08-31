@@ -1,3 +1,23 @@
+# OrbitalQuery — Deployment Guide
+
+## Option A: Vercel + Railway (Default)
+
+See the original Railway deployment below. Note: Railway free tier has 512MB RAM and sleeps after 15 minutes of inactivity.
+
+## Option B: Vercel + Render + HuggingFace Spaces (Recommended for Free Tier)
+
+**This is the recommended deployment for free hosting.** HuggingFace Spaces provides 2vCPU + 16GB RAM and never sleeps.
+
+See **[DEPLOY_HF.md](./DEPLOY_HF.md)** for the full step-by-step guide.
+
+Quick overview:
+1. Deploy Python analysis service to **HuggingFace Spaces** (Docker space, 16GB RAM, no sleep)
+2. Deploy Node.js backend to **Render** (free tier)
+3. Deploy frontend to **Vercel** (free tier)
+4. Update backend `PYTHON_SERVICE_URL` to point to HuggingFace Space
+
+---
+
 # OrbitalQuery — Vercel + Railway Deployment Guide
 
 ## Architecture

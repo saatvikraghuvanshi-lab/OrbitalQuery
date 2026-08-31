@@ -16,7 +16,7 @@ const PYTHON_SERVICE_URL =
   process.env.PYTHON_SERVICE_URL || 'http://localhost:8000';
 
 const PYTHON_SERVICE_TIMEOUT_MS = parseInt(
-  process.env.PYTHON_SERVICE_TIMEOUT_MS || '180000', // 3 minutes — allows Python cold-start on free tier
+  process.env.PYTHON_SERVICE_TIMEOUT_MS || '300000', // 5 minutes — matches HF Spaces timeout
   10,
 );
 

@@ -1299,7 +1299,7 @@ router.post('/temporal-compare', optionalAuth, async (req: AuthRequest, res: Res
 
   // Quick check: is Python service alive?
   const { callPythonService } = await import('../services/python-client');
-  const PYTHON_TIMEOUT = 180000; // 3 minutes — allows full cold-start + processing
+  const PYTHON_TIMEOUT = 300000; // 5 minutes — matches HF Spaces timeout
   const result = await callPythonService('POST', '/analysis/temporal-compare', pythonBody, 'temporal-compare', PYTHON_TIMEOUT);
 
   if (result.ok) {
