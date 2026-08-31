@@ -14,9 +14,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application
 COPY . .
 
-# HuggingFace Spaces sets PORT env var; default to 8000 for local dev
-ENV PORT=8000
-EXPOSE 8000
+# Cloud Run sets PORT=8080; start.sh ensures uvicorn uses it
+RUN chmod +x start.sh
+EXPOSE 8080
 
-# Run the FastAPI service — Cloud Run sets PORT=8080
-CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["./start.sh"]
