@@ -300,36 +300,173 @@ def _compute_index_stats(
     bbox: list[float],
 ) -> IndexResult:
     """
-    Compute index statistics for a scene.
+    Compute index statistics for a scene using REAL raster reads.
 
-    In production, this would do windowed raster reads from COGs.
-    For the demo, we use the scene metadata + realistic simulation
-    based on phenomenon-specific value ranges.
+    Opens the actual COG band assets via rasterio, reads the AOI window,
+    and computes the spectral index pixel-by-pixel using the spectral_indices engine.
+
+    Falls back to metadata-based estimation only if raster reads fail entirely.
     """
-    props = {}
-    for key, asset in scene.assets.items():
-        if isinstance(asset, dict):
-            props[key] = asset
-
     # Determine resolution
-    resolution = 10.0  # default
-    if "sentinel-2" in sensor:
-        resolution = 10.0
-    elif "landsat" in sensor:
+    resolution = 10.0
+    if "landsat" in sensor:
         resolution = 30.0
     elif "sentinel-1" in sensor:
         resolution = 10.0
 
-    # Compute approximate area in km²
+    # Get band mapping for this sensor + index
+    band_key = (sensor, index_name)
+    band_map = INDEX_BAND_MAP.get(band_key)
+    if not band_map:
+        logger.warning("No band mapping for %s on %s, falling back to estimation", index_name, sensor)
+        return _compute_index_stats_fallback(index_name, sensor, scene, bbox)
+
+    # Resolve physical band names from the index's required logical bands
+    index_def = INDEX_DEFINITIONS.get(index_name)
+    if not index_def:
+        return _compute_index_stats_fallback(index_name, sensor, scene, bbox)
+
+    required_bands = index_def.bands_required  # e.g. ["NIR", "RED"] for NDVI
+    physical_bands = {}
+    for logical in required_bands:
+        physical = band_map.get(logical)
+        if physical:
+            physical_bands[logical] = physical
+
+    if len(physical_bands) < 2:
+        logger.warning("Insufficient band mappings for %s: %s", index_name, physical_bands)
+        return _compute_index_stats_fallback(index_name, sensor, scene, bbox)
+
+    # Extract signed asset hrefs from scene
+    band_hrefs = {}
+    for logical_name, physical_name in physical_bands.items():
+        asset = scene.assets.get(physical_name)
+        if isinstance(asset, dict):
+            href = asset.get("href", "")
+        elif isinstance(asset, str):
+            href = asset
+        else:
+            href = ""
+        if href:
+            band_hrefs[logical_name] = href
+
+    if len(band_hrefs) < 2:
+        logger.warning(
+            "Missing band assets for %s. Have: %s, Need: %s",
+            index_name, list(band_hrefs.keys()), list(physical_bands.keys()),
+        )
+        return _compute_index_stats_fallback(index_name, sensor, scene, bbox)
+
+    # Attempt real raster read and index computation
+    try:
+        from app.services.raster_service import read_raster_window
+        from app.services.spectral_indices import compute_index_from_bands
+
+        # Read each band over the AOI bbox
+        band_arrays = {}
+        nodata_masks = {}
+        crs = "EPSG:4326"
+        transform = None
+        shape = None
+
+        for logical_name, href in band_hrefs.items():
+            logger.info("Reading band %s from %s", logical_name, href[:100])
+            raster_data = read_raster_window(href, bbox)
+            data = raster_data["data"]
+
+            # Take first band if multi-band (some assets are multi-band)
+            if data.ndim == 3 and data.shape[0] > 1:
+                # For visual/RGB assets, select the appropriate channel
+                band_arrays[logical_name] = data[0].astype(np.float32)
+            elif data.ndim == 3:
+                band_arrays[logical_name] = data[0].astype(np.float32)
+            else:
+                band_arrays[logical_name] = data.astype(np.float32)
+
+            # Build nodata mask
+            nodata_val = raster_data["profile"].get("nodata")
+            if nodata_val is not None:
+                nodata_masks[logical_name] = (band_arrays[logical_name] == nodata_val)
+            else:
+                # Common Sentinel-2 nodata: 0 or negative reflectance
+                nodata_masks[logical_name] = (band_arrays[logical_name] <= 0)
+
+            crs = raster_data.get("crs", "EPSG:4326")
+            if raster_data.get("transform") is not None:
+                transform = raster_data["transform"]
+            shape = list(band_arrays[logical_name].shape)
+
+            logger.info(
+                "Band %s: shape=%s, min=%.4f, max=%.4f, nodata_count=%d",
+                logical_name, band_arrays[logical_name].shape,
+                float(np.nanmin(band_arrays[logical_name])),
+                float(np.nanmax(band_arrays[logical_name])),
+                int(np.sum(nodata_masks[logical_name])),
+            )
+
+        # Compute the spectral index
+        index_array, index_result = compute_index_from_bands(
+            bands=band_arrays,
+            index_name=index_name,
+            sensor=sensor,
+            nodata_masks=nodata_masks,
+            date=scene.datetime,
+            crs=crs,
+            resolution_meters=resolution,
+        )
+
+        logger.info(
+            "[%s] Computed %s for %s: mean=%.4f, std=%.4f, valid=%d/%d",
+            index_name, index_name, scene.item_id[:30],
+            index_result.stats["mean"], index_result.stats["std"],
+            index_result.valid_pixels, index_result.total_pixels,
+        )
+
+        # Convert IndexResult (spectral_indices) to our IndexResult (temporal_compare)
+        return IndexResult(
+            index_name=index_name,
+            value=index_array,
+            stats=index_result.stats,
+            scene_id=scene.item_id,
+            date=scene.datetime,
+            resolution_m=resolution,
+            shape=index_result.shape,
+            valid_pixels=index_result.valid_pixels,
+            total_pixels=index_result.total_pixels,
+        )
+
+    except Exception as e:
+        logger.error(
+            "Raster-based %s computation failed for %s: %s. Falling back to estimation.",
+            index_name, scene.item_id, e,
+            exc_info=True,
+        )
+        return _compute_index_stats_fallback(index_name, sensor, scene, bbox)
+
+
+def _compute_index_stats_fallback(
+    index_name: str,
+    sensor: str,
+    scene: SceneSelection,
+    bbox: list[float],
+) -> IndexResult:
+    """
+    Fallback: estimate index stats from scene metadata.
+
+    Used only when raster reads fail (network error, missing assets, etc.).
+    Clearly marked as estimated in the response.
+    """
+    resolution = 10.0
+    if "landsat" in sensor:
+        resolution = 30.0
+
     if bbox and len(bbox) == 4:
         width_deg = bbox[2] - bbox[0]
         height_deg = bbox[3] - bbox[1]
-        # Rough conversion at mid-latitude
         mid_lat = (bbox[1] + bbox[3]) / 2
-        km_per_deg_lat = 111.0
         km_per_deg_lon = 111.0 * math.cos(math.radians(mid_lat))
         width_km = width_deg * km_per_deg_lon
-        height_km = height_deg * km_per_deg_lat
+        height_km = height_deg * 111.0
         area_km2 = width_km * height_km
     else:
         area_km2 = 100.0
@@ -337,47 +474,24 @@ def _compute_index_stats(
     pixel_size_km = resolution / 1000.0
     total_pixels = int(area_km2 / (pixel_size_km ** 2))
 
-    # Index value ranges vary by phenomenon
-    index_ranges = {
-        "NDVI": {"mean": 0.35, "std": 0.15, "min": -0.2, "max": 0.85},
-        "NDWI": {"mean": -0.1, "std": 0.25, "min": -0.8, "max": 0.7},
-        "NDBI": {"mean": 0.05, "std": 0.12, "min": -0.5, "max": 0.6},
-        "NBR": {"mean": 0.4, "std": 0.2, "min": -0.3, "max": 0.8},
-        "NDSI": {"mean": 0.1, "std": 0.3, "min": -0.5, "max": 0.8},
-    }
-
-    base = index_ranges.get(index_name, {"mean": 0.0, "std": 0.2, "min": -1.0, "max": 1.0})
-
-    # Add some realistic variation based on scene date (seasonal)
-    try:
-        scene_date = datetime.fromisoformat(scene.datetime.replace("Z", "+00:00"))
-        day_of_year = scene_date.timetuple().tm_yday
-        seasonal_offset = 0.1 * math.sin(2 * math.pi * day_of_year / 365)
-    except (ValueError, AttributeError):
-        seasonal_offset = 0.0
-
-    # Deterministic offset derived from scene ID (same scene → same stats)
-    scene_hash = hash(scene.item_id) % 10000 / 10000.0  # 0.0 to 0.9999
-    deterministic_offset = (scene_hash - 0.5) * 0.06  # ±0.03 range
-
     stats = {
-        "min": round(max(-1.0, base["min"] + deterministic_offset * 0.5), 4),
-        "max": round(min(1.0, base["max"] + deterministic_offset * 0.5), 4),
-        "mean": round(max(-1.0, min(1.0, base["mean"] + seasonal_offset + deterministic_offset)), 4),
-        "std": round(max(0.01, base["std"] + deterministic_offset * 0.3), 4),
-        "median": round(max(-1.0, min(1.0, base["mean"] + seasonal_offset + deterministic_offset * 0.8)), 4),
+        "min": -0.5, "max": 0.5, "mean": 0.0, "std": 0.2,
+        "median": 0.0, "p5": -0.33, "p95": 0.33,
     }
-    stats["p5"] = round(max(-1.0, stats["mean"] - 1.645 * stats["std"]), 4)
-    stats["p95"] = round(min(1.0, stats["mean"] + 1.645 * stats["std"]), 4)
+
+    logger.warning(
+        "[%s] Using fallback estimation for %s — not derived from raster data",
+        index_name, scene.item_id,
+    )
 
     return IndexResult(
         index_name=index_name,
-        value=None,  # Not computed in demo mode
+        value=None,
         stats=stats,
         scene_id=scene.item_id,
         date=scene.datetime,
         resolution_m=resolution,
-        shape=[total_pixels // 100, 100],  # Approximate
+        shape=[total_pixels // 100, 100],
         valid_pixels=int(total_pixels * 0.85),
         total_pixels=total_pixels,
     )
@@ -422,7 +536,7 @@ def _compute_comparison_metrics(
         "resolution_m": index_t1.resolution_m,
     }
 
-    # Direction indicator (derived from simulated delta — see limitations)
+    # Direction indicator
     if delta > 0.05:
         direction = "increase"
     elif delta < -0.05:
@@ -430,8 +544,17 @@ def _compute_comparison_metrics(
     else:
         direction = "stable"
     metrics["direction"] = direction
-    metrics["estimated"] = True
-    metrics["estimation_method"] = "scene_metadata_hash_based"
+
+    # Determine if values are raster-derived or estimated
+    raster_derived = (index_t1.value is not None and index_t2.value is not None)
+    metrics["raster_derived"] = raster_derived
+    if raster_derived:
+        metrics["data_quality"] = "raster_computed"
+        metrics["estimation_method"] = "pixel_level_raster_analysis"
+    else:
+        metrics["data_quality"] = "estimated_from_metadata"
+        metrics["estimation_method"] = "scene_metadata_fallback"
+    metrics["estimated"] = not raster_derived
 
     return metrics
 
@@ -523,6 +646,24 @@ def _generate_explanation(
 
     info = phenomenon_descriptions.get(phenomenon, phenomenon_descriptions["land_cover_change"])
 
+    raster_derived = metrics.get("raster_derived", False)
+
+    if raster_derived:
+        confidence = "Computed from pixel-level raster analysis of Sentinel-2 multispectral imagery."
+        limitations = [
+            "Single pair comparison (not time series) — seasonal effects possible",
+            "Cloud cover may affect optical imagery quality",
+            "Resolution limits detection of small-scale changes",
+        ]
+    else:
+        confidence = "Estimated from scene metadata. Quantitative metrics are not derived from pixel-level raster analysis."
+        limitations = [
+            "Index statistics are estimated from scene metadata, not computed from actual raster pixel analysis",
+            "Cloud cover may affect optical imagery quality",
+            "Single pair comparison (not time series) — seasonal effects possible",
+            "Resolution limits detection of small-scale changes",
+        ]
+
     return {
         "title": info["title"],
         "summary": info["summary"],
@@ -530,13 +671,9 @@ def _generate_explanation(
         "key_findings": _generate_findings(phenomenon, metrics),
         "key_indices": info.get("key_indices", [index_name]),
         "sensors_used": info.get("sensors_used", ["Sentinel-2"]),
-        "confidence": "Preliminary — based on scene metadata analysis. Quantitative metrics are estimated from scene-level statistics, not computed from pixel-level raster analysis.",
-        "limitations": [
-            "Index statistics are estimated from scene metadata, not computed from actual raster pixel analysis",
-            "Cloud cover may affect optical imagery quality",
-            "Single pair comparison (not time series) — seasonal effects possible",
-            "Resolution limits detection of small-scale changes",
-        ],
+        "confidence": confidence,
+        "raster_derived": raster_derived,
+        "limitations": limitations,
     }
 
 
@@ -697,26 +834,123 @@ def run_temporal_comparison(
     # ── Step 5: Change detection ──────────────────────────────────
     change_result = None
     if index_t1 and index_t2:
-        # Simulate change detection using stats
-        delta = index_t2.stats["mean"] - index_t1.stats["mean"]
+        # Use real raster arrays for pixel-level change detection when available
+        if index_t1.value is not None and index_t2.value is not None:
+            try:
+                import rasterio
+                from rasterio.transform import array_bounds
 
-        change_result = {
-            "status": "ok",
-            "algorithm": "difference_threshold",
-            "index_name": index_name,
-            "baseline_date": index_t1.date,
-            "comparison_date": index_t2.date,
-            "changed_pct": round(abs(delta) * 100, 4),
-            "changed_pixels": int(abs(delta) * index_t1.total_pixels),
-            "total_pixels": index_t1.total_pixels,
-            "num_regions": max(1, int(abs(delta) * 50)),
-            "changed_area_sq_meters": abs(delta) * index_t1.total_pixels * (index_t1.resolution_m ** 2),
-            "baseline_stats": index_t1.stats,
-            "comparison_stats": index_t2.stats,
-        }
+                # Ensure same shape — reproject if needed
+                t1_arr = index_t1.value
+                t2_arr = index_t2.value
+
+                # Resize to common shape if different
+                min_h = min(t1_arr.shape[0], t2_arr.shape[0])
+                min_w = min(t1_arr.shape[1], t2_arr.shape[1])
+                t1_cropped = t1_arr[:min_h, :min_w]
+                t2_cropped = t2_arr[:min_h, :min_w]
+
+                # Pixel-level difference
+                diff = t2_cropped - t1_cropped
+
+                # Mask valid pixels (both must be valid)
+                valid_mask = ~np.isnan(t1_cropped) & ~np.isnan(t2_cropped) & ~np.isinf(t1_cropped) & ~np.isinf(t2_cropped)
+                total_valid = int(np.sum(valid_mask))
+
+                # Threshold for significant change
+                threshold = 0.1  # index units
+                changed_mask = valid_mask & (np.abs(diff) >= threshold)
+                changed_pixels = int(np.sum(changed_mask))
+
+                changed_pct = (changed_pixels / total_valid * 100) if total_valid > 0 else 0.0
+                pixel_area_sq_m = index_t1.resolution_m ** 2
+                changed_area_sq_m = changed_pixels * pixel_area_sq_m
+
+                # Statistics of the change
+                if changed_pixels > 0:
+                    changed_values = diff[changed_mask]
+                    change_stats = {
+                        "mean_change": round(float(np.mean(changed_values)), 4),
+                        "max_increase": round(float(np.max(changed_values)), 4),
+                        "max_decrease": round(float(np.min(changed_values)), 4),
+                        "std_change": round(float(np.std(changed_values)), 4),
+                    }
+                else:
+                    change_stats = {}
+
+                # Simple region counting via connected components
+                num_regions = 0
+                try:
+                    from scipy import ndimage
+                    labeled, num_regions = ndimage.label(changed_mask)
+                except ImportError:
+                    # Estimate from pixel count if scipy unavailable
+                    num_regions = max(1, changed_pixels // 1000)
+
+                change_result = {
+                    "status": "ok",
+                    "algorithm": "raster_difference",
+                    "index_name": index_name,
+                    "baseline_date": index_t1.date,
+                    "comparison_date": index_t2.date,
+                    "changed_pct": round(changed_pct, 4),
+                    "changed_pixels": changed_pixels,
+                    "total_pixels": total_valid,
+                    "num_regions": num_regions,
+                    "changed_area_sq_meters": round(changed_area_sq_m, 2),
+                    "threshold": threshold,
+                    "change_stats": change_stats,
+                    "baseline_stats": index_t1.stats,
+                    "comparison_stats": index_t2.stats,
+                    "raster_derived": True,
+                }
+
+                logger.info(
+                    "[%s] Change detection: %d/%d pixels changed (%.2f%%), %d regions",
+                    index_name, changed_pixels, total_valid, changed_pct, num_regions,
+                )
+
+            except Exception as e:
+                logger.error("Raster change detection failed: %s, falling back to stats-based", e)
+                # Fall back to stats-based
+                delta = index_t2.stats["mean"] - index_t1.stats["mean"]
+                change_result = {
+                    "status": "ok",
+                    "algorithm": "difference_threshold_fallback",
+                    "index_name": index_name,
+                    "baseline_date": index_t1.date,
+                    "comparison_date": index_t2.date,
+                    "changed_pct": round(abs(delta) * 100, 4),
+                    "changed_pixels": int(abs(delta) * index_t1.total_pixels),
+                    "total_pixels": index_t1.total_pixels,
+                    "num_regions": max(1, int(abs(delta) * 50)),
+                    "changed_area_sq_meters": abs(delta) * index_t1.total_pixels * (index_t1.resolution_m ** 2),
+                    "baseline_stats": index_t1.stats,
+                    "comparison_stats": index_t2.stats,
+                    "raster_derived": False,
+                }
+        else:
+            # No raster arrays available — use stats-based estimation
+            delta = index_t2.stats["mean"] - index_t1.stats["mean"]
+            change_result = {
+                "status": "ok",
+                "algorithm": "difference_threshold_estimated",
+                "index_name": index_name,
+                "baseline_date": index_t1.date,
+                "comparison_date": index_t2.date,
+                "changed_pct": round(abs(delta) * 100, 4),
+                "changed_pixels": int(abs(delta) * index_t1.total_pixels),
+                "total_pixels": index_t1.total_pixels,
+                "num_regions": max(1, int(abs(delta) * 50)),
+                "changed_area_sq_meters": abs(delta) * index_t1.total_pixels * (index_t1.resolution_m ** 2),
+                "baseline_stats": index_t1.stats,
+                "comparison_stats": index_t2.stats,
+                "raster_derived": False,
+            }
+
         processing_steps.append({
             "step": "change_detection",
-            "detail": f"delta={delta:.4f}, changed={change_result['changed_pct']}%",
+            "detail": f"algorithm={change_result.get('algorithm', 'unknown')}, changed={change_result.get('changed_pct', 0)}%",
         })
 
     # ── Step 6: Compute metrics ───────────────────────────────────
