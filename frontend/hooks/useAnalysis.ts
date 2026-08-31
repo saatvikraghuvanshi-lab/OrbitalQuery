@@ -124,16 +124,29 @@ const FETCH_TIMEOUT_MS = 90_000;
 
 // ── Helper: single fetch attempt ────────────────────────────────
 
-async function fetchAnalysis(query: string): Promise<any> {
+export interface AnalysisOverrides {
+  bbox?: number[];
+  start_date?: string;
+  end_date?: string;
+  phenomenon?: string;
+}
+
+async function fetchAnalysis(query: string, overrides?: AnalysisOverrides): Promise<any> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
+  const body: any = { query };
+  if (overrides?.bbox) body.bbox = overrides.bbox;
+  if (overrides?.start_date) body.start_date = overrides.start_date;
+  if (overrides?.end_date) body.end_date = overrides.end_date;
+  if (overrides?.phenomenon) body.phenomenon = overrides.phenomenon;
 
   let res: Response;
   try {
     res = await fetch('/api/analysis/temporal-compare', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query }),
+      body: JSON.stringify(body),
       signal: controller.signal,
     });
   } catch (fetchErr: any) {
@@ -206,7 +219,7 @@ export function useAnalysis() {
     });
   }, []);
 
-  const analyze = useCallback(async (query: string) => {
+  const analyze = useCallback(async (query: string, overrides?: AnalysisOverrides) => {
     setState(prev => ({
       ...prev,
       step: 'planning',
@@ -224,7 +237,7 @@ export function useAnalysis() {
       // ── Single fetch attempt ───────────────────────────────
       let data: any = null;
       try {
-        data = await fetchAnalysis(query);
+        data = await fetchAnalysis(query, overrides);
       } catch (err: any) {
         throw err instanceof AnalysisError ? err : new AnalysisError(err.message, 'UNKNOWN');
       }

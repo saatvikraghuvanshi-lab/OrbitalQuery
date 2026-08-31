@@ -16,6 +16,7 @@ import AnalysisStepper from '@/components/AnalysisStepper';
 import TerminalLog from '@/components/TerminalLog';
 import AnalysisErrorScreen from '@/components/AnalysisErrorScreen';
 import MarketingHomepage from '@/components/MarketingHomepage';
+import ChangeAnalysisForm from '@/components/ChangeAnalysisForm';
 
 const MapView = dynamic(() => import('@/components/MapView'), {
   ssr: false,
@@ -108,6 +109,7 @@ function HomePageContent() {
   const [bboxResults, setBboxResults] = useState<Dataset[]>([]);
   const [bboxLoading, setBboxLoading] = useState(false);
   const [elapsed, setElapsed] = useState(0);
+  const [askMode, setAskMode] = useState<'search' | 'change'>('search');
 
   // Elapsed timer during search
   useEffect(() => {
@@ -259,7 +261,38 @@ function HomePageContent() {
 
         {/* ── IDLE: full search experience ──────────────────── */}
         {step === 'idle' && (
-          <QueryInput onAnalyze={analysis.analyze} loading={false} />
+          <>
+            {/* Mode toggle */}
+            <div className="flex justify-center pt-4 pb-2">
+              <div className="inline-flex bg-oq-900/60 border border-oq-700/20 rounded-lg p-[2px]">
+                <button
+                  onClick={() => setAskMode('search')}
+                  className={`px-4 py-1.5 rounded-md text-[10px] font-semibold uppercase tracking-wider transition-all ${
+                    askMode === 'search' ? 'bg-oq-800 text-oq-50' : 'text-oq-400 hover:text-oq-200'
+                  }`}
+                >
+                  Search
+                </button>
+                <button
+                  onClick={() => setAskMode('change')}
+                  className={`px-4 py-1.5 rounded-md text-[10px] font-semibold uppercase tracking-wider transition-all ${
+                    askMode === 'change' ? 'bg-oq-800 text-oq-50' : 'text-oq-400 hover:text-oq-200'
+                  }`}
+                >
+                  Change Analysis
+                </button>
+              </div>
+            </div>
+
+            {askMode === 'search' ? (
+              <QueryInput onAnalyze={analysis.analyze} loading={false} />
+            ) : (
+              <ChangeAnalysisForm
+                onSubmit={(query, overrides) => analysis.analyze(query, overrides)}
+                loading={false}
+              />
+            )}
+          </>
         )}
 
         {/* ── ANALYSIS IN PROGRESS ─────────────────────────── */}
