@@ -6,8 +6,9 @@
  * Never exposes Python internals to the frontend.
  */
 
-import fetch from 'node-fetch';
 import { randomUUID } from 'crypto';
+
+// Use global fetch (Node 18+) to avoid node-fetch type conflicts with AbortSignal.timeout
 
 // ── Configuration ───────────────────────────────────────────────────
 
@@ -61,24 +62,8 @@ export async function callPythonService<T = any>(
   );
 
   try {
-    let response = await fetch(url, {
-      method,
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Request-ID': requestId,
-      },
-      body: body ? JSON.stringify(body) : undefined,
-      signal: AbortSignal.timeout(effectiveTimeout),
-    });
-
-    // Retry on 502/503 (Render cold-start / restart) with exponential backoff
-    let retries = 0;
-    while ((response.status === 502 || response.status === 503) && retries < MAX_RETRIES) {
-      const delay = RETRY_DELAY_MS * Math.pow(2, retries);
-      console.log(`[python-client] ← ${response.status}, retrying in ${delay}ms (attempt ${retries + 1}/${MAX_RETRIES}) | requestId=${requestId}`);
-      await new Promise(r => setTimeout(r, delay));
-      retries++;
-      response = await fetch(url, {
+    const doFetch = async (): Promise<Response> => {
+      return await fetch(url, {
         method,
         headers: {
           'Content-Type': 'application/json',
@@ -87,6 +72,23 @@ export async function callPythonService<T = any>(
         body: body ? JSON.stringify(body) : undefined,
         signal: AbortSignal.timeout(effectiveTimeout),
       });
+    };
+
+    let response = await doFetch();
+
+    // Retry on 502/503 (Render cold-start / restart) with exponential backoff
+    let retries = 0;
+    while ((response.status === 502 || response.status === 503) && retries < MAX_RETRIES) {
+      const delay = RETRY_DELAY_MS * Math.pow(2, retries);
+      console.log(`[python-client] ← ${response.status}, retrying in ${delay}ms (attempt ${retries + 1}/${MAX_RETRIES}) | requestId=${requestId}`);
+      await new Promise(r => setTimeout(r, delay));
+      retries++;
+      try {
+        response = await doFetch();
+      } catch (fetchErr) {
+        // Network error during retry — fall through to catch block below
+        throw fetchErr;
+      }
     }
 
     const upstreamLatencyMs = Date.now() - start;
