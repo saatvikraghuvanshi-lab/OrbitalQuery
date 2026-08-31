@@ -17,6 +17,8 @@ interface SwipeMapProps {
   thumbnailT2?: string;
   tilejsonT1?: string;
   tilejsonT2?: string;
+  signedTileUrl1?: string;
+  signedTileUrl2?: string;
   sceneBboxT1?: any;
   sceneBboxT2?: any;
   sceneT1?: SceneInfo | null;
@@ -39,6 +41,8 @@ export default function SwipeMap({
   bbox,
   thumbnailT1,
   thumbnailT2,
+  signedTileUrl1,
+  signedTileUrl2,
   tilejsonT1,
   tilejsonT2,
   sceneBboxT1,
@@ -89,6 +93,7 @@ export default function SwipeMap({
       // Period 2 (After) → Bottom map (full, no clipping)
       const bottomResult = await loadSatelliteTiles(bottomMap, {
         L,
+        signedTileUrl: signedTileUrl2,
         sceneCollection: sceneT2?.collection,
         sceneItemId: sceneT2?.item_id,
         thumbnailUrl: thumbnailT2,
@@ -100,6 +105,7 @@ export default function SwipeMap({
       // Period 1 (Before) → Top map (clipped via CSS clip-path)
       const topResult = await loadSatelliteTiles(topMap, {
         L,
+        signedTileUrl: signedTileUrl1,
         sceneCollection: sceneT1?.collection,
         sceneItemId: sceneT1?.item_id,
         thumbnailUrl: thumbnailT1,
@@ -156,7 +162,7 @@ export default function SwipeMap({
       topMapRef.current = null;
       topSatelliteRef.current = null;
     };
-  }, [bbox, thumbnailT1, thumbnailT2, tilejsonT1, tilejsonT2, sceneBboxT1, sceneBboxT2]);
+  }, [bbox, thumbnailT1, thumbnailT2, signedTileUrl1, signedTileUrl2, tilejsonT1, tilejsonT2, sceneBboxT1, sceneBboxT2]);
 
   // Apply clip-path to the satellite imagery layer
   function applyClip(layer: any, pos: number) {

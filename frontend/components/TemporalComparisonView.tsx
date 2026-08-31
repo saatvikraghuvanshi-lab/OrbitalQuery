@@ -39,13 +39,15 @@ const GOOGLE_TILE = 'https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}';
 // ── Synchronized Dual Map ───────────────────────────────────
 // ══════════════════════════════════════════════════════════════
 function SynchronizedDualMap({
-  bbox, sceneT1, sceneT2, thumbnailT1, thumbnailT2, sceneBboxT1, sceneBboxT2,
+  bbox, sceneT1, sceneT2, thumbnailT1, thumbnailT2, signedTileUrl1, signedTileUrl2, sceneBboxT1, sceneBboxT2,
 }: {
   bbox: number[];
   sceneT1: SceneInfo | null;
   sceneT2: SceneInfo | null;
   thumbnailT1?: string;
   thumbnailT2?: string;
+  signedTileUrl1?: string;
+  signedTileUrl2?: string;
   sceneBboxT1?: any;
   sceneBboxT2?: any;
 }) {
@@ -80,8 +82,8 @@ function SynchronizedDualMap({
       L.tileLayer(GOOGLE_TILE, { maxZoom: 22, subdomains: ['0', '1', '2', '3'] }).addTo(rightMap);
 
       const [leftResult, rightResult] = await Promise.all([
-        loadSatelliteTiles(leftMap, { L, sceneCollection: sceneT1?.collection, sceneItemId: sceneT1?.item_id, thumbnailUrl: thumbnailT1, sceneBbox: sceneBboxT1, aoiBbox: bbox, opacity: 0.9 }),
-        loadSatelliteTiles(rightMap, { L, sceneCollection: sceneT2?.collection, sceneItemId: sceneT2?.item_id, thumbnailUrl: thumbnailT2, sceneBbox: sceneBboxT2, aoiBbox: bbox, opacity: 0.9 }),
+        loadSatelliteTiles(leftMap, { L, signedTileUrl: signedTileUrl1, sceneCollection: sceneT1?.collection, sceneItemId: sceneT1?.item_id, thumbnailUrl: thumbnailT1, sceneBbox: sceneBboxT1, aoiBbox: bbox, opacity: 0.9 }),
+        loadSatelliteTiles(rightMap, { L, signedTileUrl: signedTileUrl2, sceneCollection: sceneT2?.collection, sceneItemId: sceneT2?.item_id, thumbnailUrl: thumbnailT2, sceneBbox: sceneBboxT2, aoiBbox: bbox, opacity: 0.9 }),
       ]);
 
       if (cancelled) return;
@@ -123,7 +125,7 @@ function SynchronizedDualMap({
       leftMapRef.current = null;
       rightMapRef.current = null;
     };
-  }, [bbox, thumbnailT1, thumbnailT2, sceneBboxT1, sceneBboxT2]);
+  }, [bbox, thumbnailT1, thumbnailT2, signedTileUrl1, signedTileUrl2, sceneBboxT1, sceneBboxT2]);
 
   return (
     <div className="w-full grid grid-cols-2 gap-[2px]" style={{ height: 'clamp(400px, 65vh, 700px)' }}>
@@ -170,7 +172,7 @@ function SynchronizedDualMap({
 // ══════════════════════════════════════════════════════════════
 function DifferenceView({
   bbox, changeDetection, config, metrics,
-  sceneT1, sceneT2, thumbnailT1, thumbnailT2, sceneBboxT1, sceneBboxT2,
+  sceneT1, sceneT2, thumbnailT1, thumbnailT2, signedTileUrl1, signedTileUrl2, sceneBboxT1, sceneBboxT2,
 }: {
   bbox: number[];
   changeDetection: Record<string, any> | null;
@@ -180,6 +182,8 @@ function DifferenceView({
   sceneT2?: SceneInfo | null;
   thumbnailT1?: string;
   thumbnailT2?: string;
+  signedTileUrl1?: string;
+  signedTileUrl2?: string;
   sceneBboxT1?: any;
   sceneBboxT2?: any;
 }) {
@@ -201,8 +205,8 @@ function DifferenceView({
       const map = L.map(mapRef.current, { center, zoom: 10, zoomControl: false, attributionControl: false });
       L.tileLayer(GOOGLE_TILE, { maxZoom: 22, subdomains: ['0', '1', '2', '3'] }).addTo(map);
 
-      const baseResult = await loadSatelliteTiles(map, { L, sceneCollection: sceneT1?.collection, sceneItemId: sceneT1?.item_id, thumbnailUrl: thumbnailT1, sceneBbox: sceneBboxT1, aoiBbox: bbox, opacity: 0.9, zIndex: 400 });
-      const overlayResult = await loadSatelliteTiles(map, { L, sceneCollection: sceneT2?.collection, sceneItemId: sceneT2?.item_id, thumbnailUrl: thumbnailT2, sceneBbox: sceneBboxT2, aoiBbox: bbox, opacity: overlayOpacity, zIndex: 500 });
+      const baseResult = await loadSatelliteTiles(map, { L, signedTileUrl: signedTileUrl1, sceneCollection: sceneT1?.collection, sceneItemId: sceneT1?.item_id, thumbnailUrl: thumbnailT1, sceneBbox: sceneBboxT1, aoiBbox: bbox, opacity: 0.9, zIndex: 400 });
+      const overlayResult = await loadSatelliteTiles(map, { L, signedTileUrl: signedTileUrl2, sceneCollection: sceneT2?.collection, sceneItemId: sceneT2?.item_id, thumbnailUrl: thumbnailT2, sceneBbox: sceneBboxT2, aoiBbox: bbox, opacity: overlayOpacity, zIndex: 500 });
 
       if (cancelled) return;
 
@@ -218,7 +222,7 @@ function DifferenceView({
     });
 
     return () => { cancelled = true; mapInstanceRef.current?.remove(); mapInstanceRef.current = null; overlayLayerRef.current = null; };
-  }, [bbox, sceneT1?.item_id, sceneT2?.item_id]);
+  }, [bbox, signedTileUrl1, signedTileUrl2, sceneT1?.item_id, sceneT2?.item_id]);
 
   useEffect(() => {
     if (overlayLayerRef.current?.setOpacity) overlayLayerRef.current.setOpacity(overlayOpacity);
@@ -617,6 +621,8 @@ export default function TemporalComparisonView({ result }: Props) {
               bbox={result.aoi_bbox}
               sceneT1={result.scene_t1} sceneT2={result.scene_t2}
               thumbnailT1={result.imagery?.period1?.thumbnail} thumbnailT2={result.imagery?.period2?.thumbnail}
+              signedTileUrl1={result.imagery?.period1?.tile_url as string}
+              signedTileUrl2={result.imagery?.period2?.tile_url as string}
               sceneBboxT1={result.imagery?.period1?.bbox || result.scene_t1?.bbox}
               sceneBboxT2={result.imagery?.period2?.bbox || result.scene_t2?.bbox}
             />
@@ -625,6 +631,8 @@ export default function TemporalComparisonView({ result }: Props) {
             <SwipeMap
               bbox={result.aoi_bbox}
               thumbnailT1={result.imagery?.period1?.thumbnail} thumbnailT2={result.imagery?.period2?.thumbnail}
+              signedTileUrl1={result.imagery?.period1?.tile_url as string}
+              signedTileUrl2={result.imagery?.period2?.tile_url as string}
               sceneT1={result.scene_t1} sceneT2={result.scene_t2}
               sceneBboxT1={result.imagery?.period1?.bbox || result.scene_t1?.bbox}
               sceneBboxT2={result.imagery?.period2?.bbox || result.scene_t2?.bbox}
@@ -636,6 +644,8 @@ export default function TemporalComparisonView({ result }: Props) {
               changeDetection={result.change_detection} config={config} metrics={metrics}
               sceneT1={result.scene_t1} sceneT2={result.scene_t2}
               thumbnailT1={result.imagery?.period1?.thumbnail} thumbnailT2={result.imagery?.period2?.thumbnail}
+              signedTileUrl1={result.imagery?.period1?.tile_url as string}
+              signedTileUrl2={result.imagery?.period2?.tile_url as string}
               sceneBboxT1={result.imagery?.period1?.bbox || result.scene_t1?.bbox}
               sceneBboxT2={result.imagery?.period2?.bbox || result.scene_t2?.bbox}
             />

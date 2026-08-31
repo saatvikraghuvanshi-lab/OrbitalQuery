@@ -111,6 +111,7 @@ export async function loadSatelliteTiles(
     L: any;
     tilejsonUrl?: string;
     thumbnailUrl?: string;
+    signedTileUrl?: string;
     sceneBbox?: any;
     aoiBbox: number[];
     sceneCollection?: string;
@@ -124,9 +125,39 @@ export async function loadSatelliteTiles(
   const collection = opts.sceneCollection || 'sentinel-2-l2a';
   const itemId = opts.sceneItemId;
 
-  console.log('[satellite-tiles] loadSatelliteTiles:', { collection, itemId, hasThumbnail: !!thumbnailUrl });
+  console.log('[satellite-tiles] loadSatelliteTiles:', { collection, itemId, hasThumbnail: !!thumbnailUrl, hasSignedUrl: !!opts.signedTileUrl });
 
-  // ── Attempt 1: Direct tile URL from scene metadata ──────────
+  // ── Attempt 1a: Pre-signed tile URL from backend ───────────
+  if (opts.signedTileUrl) {
+    try {
+      const tileUrl = opts.signedTileUrl;
+      const bounds = getBestBounds(sceneBbox, aoiBbox);
+      console.log('[satellite-tiles] Using signed tile URL:', tileUrl.slice(0, 120));
+
+      const tileLayer = L.tileLayer(tileUrl, {
+        maxZoom: 24,
+        minZoom: 0,
+        opacity,
+        zIndex,
+        errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVQI12NgAAIABQABNjN9GQAAAAlwSFlzAAAWJQAAFiUBSVIk8AAAABl0RVh0U29mdHdhcmUAcGFpbnQubmV0IDQuMC41ZYUyZQAAAA1JREFUGFdjYPj/nwEABQAB/VjLQQAAAABJRU5ErkJggg==',
+      });
+
+      let loadedCount = 0;
+      tileLayer.on('tileload', () => {
+        loadedCount++;
+        if (loadedCount === 1) console.log('[satellite-tiles] Signed tile loaded');
+      });
+      tileLayer.on('tileerror', () => {});
+
+      tileLayer.addTo(map);
+      console.log('[satellite-tiles] Signed tile layer added');
+      return { hasImagery: true, layer: tileLayer, bounds, usedTileJson: true, tileUrl };
+    } catch (err: any) {
+      console.warn('[satellite-tiles] Signed tile failed:', err?.message);
+    }
+  }
+
+  // ── Attempt 1b: Direct tile URL from scene metadata ──────────
   if (itemId && collection) {
     try {
       const tileUrl = buildTileUrl(collection, itemId);
