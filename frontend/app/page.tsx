@@ -233,92 +233,154 @@ function HomePageContent() {
 
   // ── Analysis Workflow View ──────────────────────────────────────
 
-  if (tab === 'ask') {  return (
-    <div className="h-screen flex flex-col overflow-hidden oq-bg">
+  if (tab === 'ask') {
+    // ── Query interpretation (derived from plan) ─────────
+    const plan = analysis.state.plan;
+    const interpretedLocation = plan?.aoi || '';
+    const interpretedTopic = plan?.phenomenon?.replace(/_/g, ' ') || '';
+    const interpretedTime = plan?.start_date && plan?.end_date
+      ? `${plan.start_date} — ${plan.end_date}`
+      : '';
+
+    return (
+    <div className="h-screen flex flex-col overflow-hidden" style={{ background: '#050907' }}>
       <Header activeTab={tab} onNavigate={setTab} onHome={() => setView('home')} />
 
+        {/* ── IDLE: full search experience ──────────────────── */}
         {step === 'idle' && (
           <QueryInput onAnalyze={analysis.analyze} loading={false} />
         )}
 
+        {/* ── ANALYSIS IN PROGRESS ─────────────────────────── */}
         {step !== 'idle' && step !== 'complete' && step !== 'error' && (
-          <div className="flex-1 overflow-hidden">
-            <div className="max-w-[1400px] mx-auto px-6 py-5 h-full flex flex-col">
-              {/* Header */}
-              <div className="flex items-center justify-between mb-4">
-                <button onClick={analysis.reset} className="flex items-center gap-1.5 text-[11px] text-oq-300 hover:text-lime transition-colors font-medium">
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-                  </svg>
-                  New Analysis
-                </button>
-                <span className="text-[11px] text-oq-300 font-mono truncate max-w-[60%]">{analysis.state.query}</span>
-              </div>
+          <div className="flex-1 flex flex-col overflow-hidden">
+            {/* Compact search bar */}
+            <QueryInput
+              onAnalyze={analysis.analyze}
+              loading={true}
+              compact
+            />
 
-              {/* Stepper */}
-              <AnalysisStepper current={step} />
-
-              {/* Active phase */}
-              <div className="mt-3 mb-4 text-center">
-                <div className="text-[13px] font-semibold text-oq-100">{PHASE_LABELS[step] || ''}</div>
-                {analysis.state.detail && (
-                  <div className="text-[11px] text-oq-300 mt-0.5 font-mono">{analysis.state.detail}</div>
-                )}
-              </div>
-
-              {/* Dashboard grid */}
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1 min-h-0">
-                {/* Left: terminal log */}
-                <div className="col-span-12 lg:col-span-7 flex flex-col min-h-0">
-                  <TerminalLog steps={analysis.state.processingSteps} currentDetail={analysis.state.detail} />
+            <div className="flex-1 overflow-hidden">
+              <div className="max-w-[1400px] mx-auto px-6 py-4 h-full flex flex-col">
+                {/* Back + query */}
+                <div className="flex items-center justify-between mb-3">
+                  <button onClick={analysis.reset} className="flex items-center gap-1.5 text-[11px] text-oq-300 hover:text-lime transition-colors font-medium">
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                    </svg>
+                    New Analysis
+                  </button>
+                  <span className="text-[11px] text-oq-300 font-mono truncate max-w-[60%]">{analysis.state.query}</span>
                 </div>
-                {/* Right: plan + evidence */}
-                <div className="col-span-12 lg:col-span-5 flex flex-col gap-4 overflow-y-auto min-h-0">
-                  {analysis.state.plan && <AnalysisPlanView plan={analysis.state.plan} />}
-                  {analysis.state.scenes.length > 0 && <EvidencePanel scenes={analysis.state.scenes} />}
+
+                {/* Stepper */}
+                <AnalysisStepper current={step} />
+
+                {/* Query interpretation + active phase */}
+                <div className="mt-3 mb-4">
+                  <div className="text-[13px] font-semibold text-oq-100 text-center">{PHASE_LABELS[step] || ''}</div>
+                  {analysis.state.detail && (
+                    <div className="text-[11px] text-oq-300 mt-0.5 font-mono text-center">{analysis.state.detail}</div>
+                  )}
+
+                  {/* Interpreted query */}
+                  {plan && (
+                    <div className="mt-3 flex items-center justify-center gap-4 text-[10px]">
+                      <span className="text-oq-400 uppercase tracking-wider font-medium">Understood as</span>
+                      {interpretedLocation && (
+                        <span className="text-oq-200"><span className="text-oq-400">Location:</span> {interpretedLocation}</span>
+                      )}
+                      {interpretedTime && (
+                        <span className="text-oq-200"><span className="text-oq-400">Time:</span> {interpretedTime}</span>
+                      )}
+                      {interpretedTopic && (
+                        <span className="text-oq-200"><span className="text-oq-400">Topic:</span> {interpretedTopic}</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Dashboard grid */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1 min-h-0">
+                  <div className="col-span-12 lg:col-span-7 flex flex-col min-h-0">
+                    <TerminalLog steps={analysis.state.processingSteps} currentDetail={analysis.state.detail} />
+                  </div>
+                  <div className="col-span-12 lg:col-span-5 flex flex-col gap-4 overflow-y-auto min-h-0">
+                    {analysis.state.plan && <AnalysisPlanView plan={analysis.state.plan} />}
+                    {analysis.state.scenes.length > 0 && <EvidencePanel scenes={analysis.state.scenes} />}
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         )}
 
+        {/* ── ERROR ────────────────────────────────────────── */}
         {step === 'error' && (
-          <AnalysisErrorScreen
-            error={analysis.state.error || 'Analysis failed'}
-            code={analysis.state.errorCode}
-            query={analysis.state.query}
-            onRetry={() => analysis.analyze(analysis.state.query)}
-            onModify={analysis.reset}
-          />
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <QueryInput onAnalyze={analysis.analyze} loading={false} compact />
+            <div className="flex-1 overflow-y-auto">
+              <AnalysisErrorScreen
+                error={analysis.state.error || 'Analysis failed'}
+                code={analysis.state.errorCode}
+                query={analysis.state.query}
+                onRetry={() => analysis.analyze(analysis.state.query)}
+                onModify={analysis.reset}
+              />
+            </div>
+          </div>
         )}
 
+        {/* ── COMPLETE: results ─────────────────────────────── */}
         {step === 'complete' && analysis.state.result && (
-          <div className="flex-1 overflow-y-auto">
-            <div className="w-full max-w-[1400px] mx-auto px-6 py-5">
-              {/* Back button + query */}
-              <div className="flex items-center justify-between mb-4">
-                <button onClick={analysis.reset} className="flex items-center gap-1.5 text-[11px] text-oq-300 hover:text-lime transition-colors font-medium">
-                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-                  </svg>
-                  New Analysis
-                </button>
-                <span className="text-[11px] text-oq-300 font-mono truncate max-w-[60%]">{analysis.state.query}</span>
-              </div>
-
-              {/* Fallback notice */}
-              {(analysis.state.result as any)?.metrics?.fallbackMode && (
-                <div className="mb-4 mx-auto max-w-2xl">
-                  <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg px-4 py-2.5 text-center">
-                    <p className="text-[11px] text-amber-300">
-                      Running in quick-search mode — the full analysis engine is starting up. Try again in 30-60 seconds.
-                    </p>
-                  </div>
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <QueryInput onAnalyze={analysis.analyze} loading={false} compact />
+            <div className="flex-1 overflow-y-auto">
+              <div className="w-full max-w-[1400px] mx-auto px-6 py-5">
+                {/* Back + query + interpretation */}
+                <div className="flex items-center justify-between mb-3">
+                  <button onClick={analysis.reset} className="flex items-center gap-1.5 text-[11px] text-oq-300 hover:text-lime transition-colors font-medium">
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                    </svg>
+                    New Analysis
+                  </button>
+                  <span className="text-[11px] text-oq-300 font-mono truncate max-w-[60%]">{analysis.state.query}</span>
                 </div>
-              )}
 
-              {/* Temporal comparison result */}
-              <TemporalComparisonView result={analysis.state.result} />
+                {/* Query interpretation bar */}
+                {plan && (
+                  <div className="mb-4 px-4 py-2.5 bg-oq-800/30 border border-oq-700/20 rounded-lg flex items-center gap-4">
+                    <span className="text-[9px] text-oq-400 uppercase tracking-wider font-medium flex-shrink-0">Understood as</span>
+                    <div className="flex-1 flex items-center gap-4 text-[11px] flex-wrap">
+                      {interpretedLocation && (
+                        <span className="text-oq-200"><span className="text-oq-400">Location:</span> <span className="text-oq-100 font-medium">{interpretedLocation}</span></span>
+                      )}
+                      {interpretedTime && (
+                        <span className="text-oq-200"><span className="text-oq-400">Time:</span> <span className="text-oq-100 font-medium">{interpretedTime}</span></span>
+                      )}
+                      {interpretedTopic && (
+                        <span className="text-oq-200"><span className="text-oq-400">Topic:</span> <span className="text-oq-100 font-medium">{interpretedTopic}</span></span>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Fallback notice */}
+                {(analysis.state.result as any)?.metrics?.fallbackMode && (
+                  <div className="mb-4 mx-auto max-w-2xl">
+                    <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg px-4 py-2.5 text-center">
+                      <p className="text-[11px] text-amber-300">
+                        Running in quick-search mode — the full analysis engine is starting up. Try again in 30-60 seconds.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Temporal comparison result */}
+                <TemporalComparisonView result={analysis.state.result} />
+              </div>
             </div>
           </div>
         )}
