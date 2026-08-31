@@ -71,11 +71,11 @@ export async function callPythonService<T = any>(
       signal: AbortSignal.timeout(effectiveTimeout),
     });
 
-    // Retry on 503 (Render cold-start) with exponential backoff
+    // Retry on 502/503 (Render cold-start / restart) with exponential backoff
     let retries = 0;
-    while (response.status === 503 && retries < MAX_RETRIES) {
+    while ((response.status === 502 || response.status === 503) && retries < MAX_RETRIES) {
       const delay = RETRY_DELAY_MS * Math.pow(2, retries);
-      console.log(`[python-client] ← 503, retrying in ${delay}ms (attempt ${retries + 1}/${MAX_RETRIES}) | requestId=${requestId}`);
+      console.log(`[python-client] ← ${response.status}, retrying in ${delay}ms (attempt ${retries + 1}/${MAX_RETRIES}) | requestId=${requestId}`);
       await new Promise(r => setTimeout(r, delay));
       retries++;
       response = await fetch(url, {
@@ -96,7 +96,7 @@ export async function callPythonService<T = any>(
     try {
       data = JSON.parse(text);
     } catch {
-      // Non-JSON response from Python service (e.g. 503 HTML from Render)
+      // Non-JSON response from Python service (e.g. 502/503 HTML from Render)
       console.error(
         `[python-client] ← ${response.status} (non-JSON) | requestId=${requestId} latency=${upstreamLatencyMs}ms`,
       );
@@ -104,8 +104,8 @@ export async function callPythonService<T = any>(
         ok: false,
         requestId,
         status: response.status,
-        error: response.status === 503 ? 'Analysis service is starting up (cold start). Please try again in 30 seconds.' : 'Python service returned invalid response',
-        code: 'UPSTREAM_INVALID_RESPONSE',
+        error: 'Analysis service is starting up. Please try again in 30 seconds.',
+        code: response.status === 503 ? 'HTTP_503' : 'HTTP_502',
         upstreamLatencyMs,
       };
     }
