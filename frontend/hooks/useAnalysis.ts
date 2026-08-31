@@ -119,14 +119,8 @@ export interface AnalysisState {
 
 // ── Constants ───────────────────────────────────────────────────
 
-/** 60s timeout — Python service cold starts can take 30-60s on Render free tier */
-const FETCH_TIMEOUT_MS = 60_000;
-
-/** Maximum number of retry attempts for timeout/cold-start errors */
-const MAX_RETRIES = 1;
-
-/** Delay between retries (gives Python service time to warm up) */
-const RETRY_DELAY_MS = 3_000;
+/** 90s timeout — Python service cold starts on Render free tier */
+const FETCH_TIMEOUT_MS = 90_000;
 
 // ── Helper: single fetch attempt ────────────────────────────────
 
@@ -227,36 +221,16 @@ export function useAnalysis() {
 
       setState(prev => ({ ...prev, step: 'searching', detail: 'Querying satellite archives...' }));
 
-      // ── Fetch with auto-retry for cold starts ─────────────
+      // ── Single fetch attempt ───────────────────────────────
       let data: any = null;
-      let lastError: AnalysisError | null = null;
-
-      for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-        try {
-          data = await fetchAnalysis(query);
-          break; // success
-        } catch (err: any) {
-          lastError = err instanceof AnalysisError ? err : new AnalysisError(err.message, 'UNKNOWN');
-          const isRetryable =
-            lastError.code === 'TIMEOUT' ||
-            lastError.code === 'NETWORK' ||
-            lastError.code === 'PYTHON_UNAVAILABLE' ||
-            lastError.code === 'PARSE';
-
-          if (isRetryable && attempt < MAX_RETRIES) {
-            setState(prev => ({
-              ...prev,
-              detail: 'Analysis engine is warming up. Retrying...',
-            }));
-            await new Promise(r => setTimeout(r, RETRY_DELAY_MS));
-            continue;
-          }
-          throw lastError;
-        }
+      try {
+        data = await fetchAnalysis(query);
+      } catch (err: any) {
+        throw err instanceof AnalysisError ? err : new AnalysisError(err.message, 'UNKNOWN');
       }
 
       if (!data) {
-        throw lastError || new AnalysisError('No response from analysis engine.', 'UNKNOWN');
+        throw new AnalysisError('No response from analysis engine.', 'UNKNOWN');
       }
 
       // ── Process successful response ───────────────────────
@@ -333,13 +307,13 @@ export function useAnalysis() {
 
       if (code === 'TIMEOUT') {
         errorMessage =
-          'The analysis engine is still starting up. First requests may take up to 60 seconds. Please try again.';
+          'Request timed out after 90 seconds. The analysis engine may be experiencing high load or a cold start. Please try again.';
       } else if (code === 'NETWORK') {
         errorMessage =
-          'Could not reach the analysis server. This can happen if the server is starting up or the network is blocked. Please try again in 30 seconds.';
+          'Could not reach the analysis server. The server may be starting up. Please try again in 15 seconds.';
       } else if (code === 'PYTHON_UNAVAILABLE' || code === 'HTTP_503') {
         errorMessage =
-          'The analysis engine is waking up from sleep. This takes about 30-60 seconds on first use. Please try again shortly.';
+          'The analysis engine is waking up from sleep (30-60s on first use). Please try again in 30 seconds.';
       }
 
       setState(prev => ({

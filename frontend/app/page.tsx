@@ -107,6 +107,17 @@ function HomePageContent() {
   const [selectedDiscoverCollection, setSelectedDiscoverCollection] = useState<string | null>(null);
   const [bboxResults, setBboxResults] = useState<Dataset[]>([]);
   const [bboxLoading, setBboxLoading] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
+
+  // Elapsed timer during search
+  useEffect(() => {
+    if (step === 'searching' || step === 'planning' || step === 'ranking') {
+      setElapsed(0);
+      const start = Date.now();
+      const interval = setInterval(() => setElapsed(Math.floor((Date.now() - start) / 1000)), 1000);
+      return () => clearInterval(interval);
+    }
+  }, [step]);
   const [bboxDetail, setBboxDetail] = useState<any>(null);
 
   // Search STAC when bbox is drawn
@@ -274,6 +285,11 @@ function HomePageContent() {
                   <div className="text-[13px] font-semibold text-oq-100 text-center">{PHASE_LABELS[step] || ''}</div>
                   {analysis.state.detail && (
                     <div className="text-[11px] text-oq-300 mt-0.5 font-mono text-center">{analysis.state.detail}</div>
+                  )}
+                  {(step === 'searching' || step === 'planning' || step === 'ranking') && elapsed > 5 && (
+                    <div className="text-[10px] text-oq-400 mt-1 font-mono text-center">
+                      Elapsed: {elapsed}s{elapsed > 30 && ' — analysis engine may be waking up'}{elapsed > 60 && ' — please wait, cold start in progress'}
+                    </div>
                   )}
 
                   {/* Interpreted query */}
