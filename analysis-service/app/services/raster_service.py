@@ -77,6 +77,25 @@ def read_raster_window(
                 "Window: col_off=%.1f, row_off=%.1f, width=%.1f, height=%.1f",
                 window.col_off, window.row_off, window.width, window.height,
             )
+
+            # Cap window to prevent OOM on free-tier hosts.
+            # 4096² float32 ≈ 64MB per band — safe for 512MB RAM.
+            MAX_DIM = 4096
+            if window.width > MAX_DIM or window.height > MAX_DIM:
+                scale = min(MAX_DIM / window.width, MAX_DIM / window.height)
+                new_w = max(1, int(window.width * scale))
+                new_h = max(1, int(window.height * scale))
+                logger.warning(
+                    "Window capped from %.0fx%.0f to %dx%d to prevent OOM",
+                    window.width, window.height, new_w, new_h,
+                )
+                window = window_from_bounds(
+                    bbox_native[0], bbox_native[1],
+                    bbox_native[2], bbox_native[3],
+                    transform=src.transform,
+                    width=new_w,
+                    height=new_h,
+                )
         except Exception as e:
             logger.warning(
                 "Could not create window from bbox: %s. Reading full extent.", e
@@ -98,14 +117,10 @@ def read_raster_window(
                     band_indices.append(1)
             band_names = bands
         else:
-            # Read all bands (or RGB if too many)
-            if src.count <= 10:
-                band_indices = list(range(1, src.count + 1))
-                band_names = [f"band_{i}" for i in band_indices]
-            else:
-                # Read first 3 bands (likely RGB)
-                band_indices = [1, 2, 3]
-                band_names = ["red", "green", "blue"]
+            # Read up to 4 bands max to limit memory on free-tier hosts
+            band_count = min(src.count, 4)
+            band_indices = list(range(1, band_count + 1))
+            band_names = [f"band_{i}" for i in band_indices]
 
         # Read the window
         if window is not None:

@@ -1439,7 +1439,7 @@ router.post('/temporal-compare', optionalAuth, async (req: AuthRequest, res: Res
       cloud_threshold: cloud_threshold || 30,
       comparison_strategy: 'before-after',
       min_scenes: 2,
-      max_scenes: 20,
+      max_scenes: 4,
       output_requirements: ['metrics', 'imagery', 'methodology'],
       required_indices: detectedPhenomenon === 'flood' ? ['NDWI', 'MNDWI'] : detectedPhenomenon === 'urban_expansion' ? ['NDBI'] : detectedPhenomenon === 'burn_severity' ? ['NBR'] : detectedPhenomenon === 'snow_cover' || detectedPhenomenon === 'glacier_retreat' ? ['NDSI'] : ['NDVI', 'NDWI'],
       validation: {

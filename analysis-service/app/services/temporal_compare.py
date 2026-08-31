@@ -858,12 +858,13 @@ def run_temporal_comparison(
     logger.info("Searching scenes for period 1: %s to %s", period1_start, period1_end)
     logger.info("Searching scenes for period 2: %s to %s", period2_start, period2_end)
 
+    search_limit = plan.get("max_scenes", 8)
     with ThreadPoolExecutor(max_workers=2) as executor:
         future_t1 = executor.submit(
-            _search_scenes, collection, bbox, period1_start, period1_end, cloud_threshold, 8
+            _search_scenes, collection, bbox, period1_start, period1_end, cloud_threshold, search_limit
         )
         future_t2 = executor.submit(
-            _search_scenes, collection, bbox, period2_start, period2_end, cloud_threshold, 8
+            _search_scenes, collection, bbox, period2_start, period2_end, cloud_threshold, search_limit
         )
         items_t1 = future_t1.result()
         items_t2 = future_t2.result()
