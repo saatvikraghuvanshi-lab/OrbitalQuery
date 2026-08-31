@@ -235,20 +235,20 @@ export default function QueryInput({ onAnalyze, loading, compact, showRefine }: 
           <div className="text-[9px] uppercase tracking-[0.15em] text-oq-400 font-medium mb-3 text-center">
             Example Queries
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5" key={shuffleKey}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1" key={shuffleKey}>
             {EXAMPLE_QUERIES.map((s) => (
               <button
                 key={s.text}
                 onClick={() => handleExampleClick(s.text)}
                 disabled={loading}
-                className="group text-left px-3 py-2.5 rounded-md text-[12px] text-oq-200 hover:text-oq-50 hover:bg-oq-700/30 transition-all disabled:opacity-40 border border-transparent hover:border-oq-700/30 flex items-center gap-2.5"
+                className="group text-left px-3 py-2.5 rounded-md text-[12px] text-oq-200 hover:text-oq-50 hover:bg-[#0D1712] transition-all disabled:opacity-40 border border-transparent hover:border-[#17251C] flex items-center gap-2.5 min-h-[36px]"
               >
                 <span
                   className="w-1.5 h-1.5 rounded-full flex-shrink-0 opacity-60"
                   style={{ background: CATEGORY_COLORS[s.category] || '#68756E' }}
                 />
-                <span className="flex-1">{s.text}</span>
-                <span className="text-[9px] text-oq-400 font-medium uppercase tracking-wider opacity-0 group-hover:opacity-100 transition-opacity">
+                <span className="flex-1 truncate">{s.text}</span>
+                <span className="text-[9px] font-medium uppercase tracking-wider flex-shrink-0 w-[68px] text-right invisible group-hover:!visible group-hover:!opacity-100 transition-all" style={{ color: CATEGORY_COLORS[s.category] || '#68756E' }}>
                   {s.category}
                 </span>
               </button>
