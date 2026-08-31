@@ -1,0 +1,45 @@
+name: Keep-Alive (prevent Render cold starts)
+
+on:
+  schedule:
+    # Every 10 minutes — keeps both services warm
+    - cron: '*/10 * * * *'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  ping-services:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+    - name: Ping Python analysis service
+      run: |
+        URL="https://orbitalquery.onrender.com/health"
+        echo "Pinging $URL ..."
+        for i in 1 2 3; do
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "$URL" || echo "000")
+          echo "  Attempt $i: HTTP $HTTP_CODE"
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "  Analysis service is alive."
+            exit 0
+          fi
+          sleep 5
+        done
+        echo "  Warning: analysis service may be starting up. This is expected on first wake."
+        exit 0  # Don't fail the workflow — cold start is expected
+
+    - name: Ping Node.js backend service
+      run: |
+        URL="https://orbitalquery-backend.onrender.com/health"
+        echo "Pinging $URL ..."
+        for i in 1 2 3; do
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "$URL" || echo "000")
+          echo "  Attempt $i: HTTP $HTTP_CODE"
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "  Backend service is alive."
+            exit 0
+          fi
+          sleep 5
+        done
+        echo "  Warning: backend service may be starting up."
+        exit 0
