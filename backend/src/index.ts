@@ -22,6 +22,14 @@ export const prisma = new PrismaClient({
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+// Allow multiple origins: production Vercel + local dev
+const ALLOWED_ORIGINS = [
+  process.env.CORS_ORIGIN,
+  'https://orbitalquery-frontend.vercel.app',
+  'https://orbitalquery.vercel.app',
+  'http://localhost:3000',
+  'http://localhost:3001',
+].filter(Boolean);
 const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
 
 // ─── Security ─────────────────────────────────────────────────────────
@@ -31,9 +39,16 @@ app.use(helmet({
 }));
 
 app.use(cors({
-  origin: CORS_ORIGIN,
+  origin: CORS_ORIGIN === '*' ? '*' : (origin, callback) => {
+    // Allow requests with no origin (curl, server-to-server)
+    if (!origin) return callback(null, true);
+    if (ALLOWED_ORIGINS.includes(origin) || CORS_ORIGIN === '*') {
+      return callback(null, true);
+    }
+    return callback(null, true); // Allow all for now (API is public)
+  },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 

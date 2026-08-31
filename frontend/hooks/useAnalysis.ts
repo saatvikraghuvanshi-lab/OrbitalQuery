@@ -112,10 +112,74 @@ export interface AnalysisState {
   result: TemporalComparisonResult | null;
   error: string | null;
   errorCode: string | null;
-  /** Real detail string shown below the step label */
   detail: string | null;
-  /** Real processing steps from the backend */
   processingSteps: Array<{ step: string; detail: string }>;
+}
+
+// ── Constants ───────────────────────────────────────────────────
+
+/** 60s timeout — Python service cold starts can take 30-60s on Render free tier */
+const FETCH_TIMEOUT_MS = 60_000;
+
+/** Maximum number of retry attempts for timeout/cold-start errors */
+const MAX_RETRIES = 1;
+
+/** Delay between retries (gives Python service time to warm up) */
+const RETRY_DELAY_MS = 5_000;
+
+// ── Helper: single fetch attempt ────────────────────────────────
+
+async function fetchAnalysis(query: string): Promise<any> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
+  let res: Response;
+  try {
+    res = await fetch('/api/analysis/temporal-compare', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query }),
+      signal: controller.signal,
+    });
+  } catch (fetchErr: any) {
+    clearTimeout(timeout);
+    if (fetchErr.name === 'AbortError') {
+      throw new AnalysisError(
+        'TIMEOUT',
+        'TIMEOUT',
+      );
+    }
+    // "Failed to fetch" can mean CORS, network, or the backend is unreachable
+    throw new AnalysisError('NETWORK', 'NETWORK');
+  }
+  clearTimeout(timeout);
+
+  let data: any;
+  try {
+    data = await res.json();
+  } catch {
+    throw new AnalysisError('Invalid server response.', 'PARSE');
+  }
+
+  if (!res.ok) {
+    const errMsg = data?.detail || data?.message || data?.error || `Server error (${res.status})`;
+    if (
+      errMsg.includes('starting up') ||
+      errMsg.includes('unavailable') ||
+      errMsg.includes('PYTHON_UNAVAILABLE') ||
+      res.status === 502 ||
+      res.status === 503
+    ) {
+      throw new AnalysisError('PYTHON_UNAVAILABLE', 'HTTP_503');
+    }
+    throw new AnalysisError(errMsg, `HTTP_${res.status}`);
+  }
+
+  if (data.status === 'error' && !data.plan) {
+    throw new AnalysisError(data.message || 'Query could not be processed.', 'ANALYSIS');
+  }
+
+  return data;
 }
 
 // ── Hook ────────────────────────────────────────────────────────
@@ -158,54 +222,46 @@ export function useAnalysis() {
     }));
 
     try {
-      // Brief pause so user sees the planning step
       await new Promise(r => setTimeout(r, 200));
 
       setState(prev => ({ ...prev, step: 'searching', detail: 'Querying satellite archives...' }));
 
-      // ── Backend call with 35s timeout ─────────────────────
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 35000);
+      // ── Fetch with auto-retry for cold starts ─────────────
+      let data: any = null;
+      let lastError: AnalysisError | null = null;
 
-      let res: Response;
-      try {
-        res = await fetch('/api/analysis/temporal-compare', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query }),
-          signal: controller.signal,
-        });
-      } catch (fetchErr: any) {
-        clearTimeout(timeout);
-        if (fetchErr.name === 'AbortError') {
-          throw new AnalysisError('Request timed out. The analysis engine may be starting up — try again in 30 seconds.', 'TIMEOUT');
+      for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        try {
+          data = await fetchAnalysis(query);
+          break; // success
+        } catch (err: any) {
+          lastError = err instanceof AnalysisError ? err : new AnalysisError(err.message, 'UNKNOWN');
+          const isRetryable =
+            lastError.code === 'TIMEOUT' ||
+            lastError.code === 'NETWORK' ||
+            lastError.code === 'PYTHON_UNAVAILABLE' ||
+            lastError.code === 'PARSE';
+
+          if (isRetryable && attempt < MAX_RETRIES) {
+            setState(prev => ({
+              ...prev,
+              detail: 'Analysis engine is warming up. Retrying...',
+            }));
+            await new Promise(r => setTimeout(r, RETRY_DELAY_MS));
+            continue;
+          }
+          throw lastError;
         }
-        throw new AnalysisError('Cannot reach the server. Check your connection and try again.', 'NETWORK');
-      }
-      clearTimeout(timeout);
-
-      let data: any;
-      try {
-        data = await res.json();
-      } catch {
-        throw new AnalysisError('Invalid server response. The analysis engine may be starting up.', 'HTTP 000');
       }
 
-      if (!res.ok) {
-        const errMsg = data?.detail || data?.message || data?.error || `Analysis failed (${res.status})`;
-        if (errMsg.includes('starting up') || errMsg.includes('unavailable') || errMsg.includes('PYTHON_UNAVAILABLE') || res.status === 502 || res.status === 503) {
-          throw new AnalysisError('The analysis engine is waking up from sleep. Please try again in 30-60 seconds.', 'HTTP 503');
-        }
-        throw new AnalysisError(errMsg, `HTTP ${res.status}`);
+      if (!data) {
+        throw lastError || new AnalysisError('No response from analysis engine.', 'UNKNOWN');
       }
 
-      if (data.status === 'error' && !data.plan) {
-        throw new AnalysisError(data.message || 'Query could not be processed. Describe what you want to analyze.', 'ANALYSIS');
-      }
-
+      // ── Process successful response ───────────────────────
       const plan = data.plan;
       if (!plan) {
-        throw new AnalysisError('No analysis plan generated. Provide a location and phenomenon.', 'ANALYSIS');
+        throw new AnalysisError('No analysis plan generated. Please provide a location and phenomenon.', 'ANALYSIS');
       }
 
       const planDetail = [
@@ -229,8 +285,7 @@ export function useAnalysis() {
         processingSteps: backendSteps,
       }));
 
-      // Brief pause to show processing
-      await new Promise(r => setTimeout(r, 600));
+      await new Promise(r => setTimeout(r, 400));
 
       const changedPct = result?.metrics?.changed_pct;
       setState(prev => ({
@@ -241,7 +296,7 @@ export function useAnalysis() {
           : 'Running change detection...',
       }));
 
-      await new Promise(r => setTimeout(r, 400));
+      await new Promise(r => setTimeout(r, 300));
 
       const findingCount = result?.explanation?.key_findings?.length || 0;
       setState(prev => ({
@@ -252,9 +307,8 @@ export function useAnalysis() {
           : 'Generating analysis summary...',
       }));
 
-      await new Promise(r => setTimeout(r, 400));
+      await new Promise(r => setTimeout(r, 300));
 
-      // ── Phase 7: Complete ────────────────────────────────
       const scenes: SceneInfo[] = [];
       if (result.scene_t1) scenes.push(result.scene_t1);
       if (result.scene_t2) scenes.push(result.scene_t2);
@@ -268,15 +322,30 @@ export function useAnalysis() {
       }));
 
       if (data.fallback) {
-        console.warn('[OrbitalQuery] Running in degraded mode — Python analysis engine unavailable. Showing local database matches.');
+        console.warn('[OrbitalQuery] Running in degraded mode — Python analysis engine unavailable.');
       }
 
     } catch (err: any) {
+      // Map error codes to user-friendly messages
+      let errorMessage = err.message || 'Analysis failed';
+      const code = err.code ?? null;
+
+      if (code === 'TIMEOUT') {
+        errorMessage =
+          'The analysis engine is still starting up. First requests may take up to 60 seconds. Please try again.';
+      } else if (code === 'NETWORK') {
+        errorMessage =
+          'Could not reach the analysis server. This can happen if the server is starting up or the network is blocked. Please try again in 30 seconds.';
+      } else if (code === 'PYTHON_UNAVAILABLE' || code === 'HTTP_503') {
+        errorMessage =
+          'The analysis engine is waking up from sleep. This takes about 30-60 seconds on first use. Please try again shortly.';
+      }
+
       setState(prev => ({
         ...prev,
         step: 'error',
-        error: err.message || 'Analysis failed',
-        errorCode: (err as any)?.code ?? null,
+        error: errorMessage,
+        errorCode: code,
         detail: null,
       }));
     }
