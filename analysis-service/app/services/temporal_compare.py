@@ -979,7 +979,13 @@ def run_temporal_comparison(
     if index_t1 and index_t2 and index_t1.value is not None and index_t2.value is not None:
         try:
             import io
-            from PIL import Image
+            try:
+                from PIL import Image
+            except ImportError:
+                logger.warning("[visualization] Pillow not installed — cannot generate change mask PNG")
+                Image = None
+            if Image is None:
+                raise ImportError("Pillow not available")
 
             t1_arr = index_t1.value
             t2_arr = index_t2.value
