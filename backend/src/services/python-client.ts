@@ -218,11 +218,11 @@ export async function checkPythonServiceHealth(): Promise<boolean> {
  */
 let _pythonStatusCache: { ok: boolean; at: number } = { ok: false, at: 0 };
 export async function isPythonServiceUp(): Promise<boolean> {
-  // Cache result for 30 seconds to avoid hammering
-  if (Date.now() - _pythonStatusCache.at < 30_000) return _pythonStatusCache.ok;
+  // Cache result for 60 seconds to avoid hammering during cold starts
+  if (Date.now() - _pythonStatusCache.at < 60_000) return _pythonStatusCache.ok;
   try {
     const res = await fetch(`${PYTHON_SERVICE_URL}/health`, {
-      signal: AbortSignal.timeout(3000),
+      signal: AbortSignal.timeout(15000),
     });
     _pythonStatusCache = { ok: res.ok, at: Date.now() };
     return res.ok;

@@ -1298,47 +1298,42 @@ router.post('/temporal-compare', optionalAuth, async (req: AuthRequest, res: Res
   if (cloud_threshold !== undefined) pythonBody.cloud_threshold = cloud_threshold;
 
   // Quick check: is Python service alive?
-  const { isPythonServiceUp, callPythonService } = await import('../services/python-client');
-  const pythonUp = await isPythonServiceUp();
+  const { callPythonService } = await import('../services/python-client');
+  const PYTHON_TIMEOUT = 180000; // 3 minutes — allows full cold-start + processing
+  const result = await callPythonService('POST', '/analysis/temporal-compare', pythonBody, 'temporal-compare', PYTHON_TIMEOUT);
 
-  if (pythonUp) {
-    const PYTHON_TIMEOUT = 45000; // 45s max — faster fail for cold starts
-    const result = await callPythonService('POST', '/analysis/temporal-compare', pythonBody, 'temporal-compare', PYTHON_TIMEOUT);
-
-    if (result.ok) {
-      // ── Enrich imagery with tilejson URLs and bbox ─────────
-      // Python returns imagery without tilejson/bbox. We inject them here
-      // so the frontend can render zoomable Planetary Computer tiles.
-      const rd = result.data?.result || result.data;
-      if (rd?.imagery) {
-        for (const period of ['period1', 'period2'] as const) {
-          const img = rd.imagery[period];
-          if (!img) continue;
-          const scene = period === 'period1' ? rd.scene_t1 : rd.scene_t2;
-          // Inject bbox from scene data if missing
-          if (scene?.bbox && Array.isArray(scene.bbox) && scene.bbox.length === 4) {
-            if (!img.bbox || !Array.isArray(img.bbox) || img.bbox.length === 0) {
-              img.bbox = scene.bbox;
-            }
-          }
-          // Inject tilejson URL from scene metadata if missing
-          if (!img.tilejson && scene?.item_id && scene?.collection) {
-            img.tilejson = `https://planetarycomputer.microsoft.com/api/data/v1/item/tilejson.json?collection=${encodeURIComponent(scene.collection)}&item=${encodeURIComponent(scene.item_id)}&assets=visual&asset_bidx=visual%7C1%2C2%2C3`;
+  if (result.ok) {
+    // ── Enrich imagery with tilejson URLs and bbox ─────────
+    // Python returns imagery without tilejson/bbox. We inject them here
+    // so the frontend can render zoomable Planetary Computer tiles.
+    const rd = result.data?.result || result.data;
+    if (rd?.imagery) {
+      for (const period of ['period1', 'period2'] as const) {
+        const img = rd.imagery[period];
+        if (!img) continue;
+        const scene = period === 'period1' ? rd.scene_t1 : rd.scene_t2;
+        // Inject bbox from scene data if missing
+        if (scene?.bbox && Array.isArray(scene.bbox) && scene.bbox.length === 4) {
+          if (!img.bbox || !Array.isArray(img.bbox) || img.bbox.length === 0) {
+            img.bbox = scene.bbox;
           }
         }
+        // Inject tilejson URL from scene metadata if missing
+        if (!img.tilejson && scene?.item_id && scene?.collection) {
+          img.tilejson = `https://planetarycomputer.microsoft.com/api/data/v1/item/tilejson.json?collection=${encodeURIComponent(scene.collection)}&item=${encodeURIComponent(scene.item_id)}&assets=visual&asset_bidx=visual%7C1%2C2%2C3`;
+        }
       }
-      // Build response — preserve all original fields plus enriched imagery
-      const resp: any = { ...result.data };
-      if (rd) resp.result = { ...rd };
-      resp.requestId = result.requestId;
-      resp.latencyMs = result.upstreamLatencyMs;
-      res.json(resp);
-      return;
     }
-    console.log(`[temporal-compare] Python returned error (${result.code}), using local fallback`);
-  } else {
-    console.log('[temporal-compare] Python service is down, using local fallback');
+    // Build response — preserve all original fields plus enriched imagery
+    const resp: any = { ...result.data };
+    if (rd) resp.result = { ...rd };
+    resp.requestId = result.requestId;
+    resp.latencyMs = result.upstreamLatencyMs;
+    res.json(resp);
+    return;
   }
+
+  console.log(`[temporal-compare] Python returned error (${result.code}), using local fallback`);
 
   // ── LOCAL FALLBACK when Python is down ─────────────────────
   // Generate a plan from the query text + search SQLite for matching datasets
