@@ -4,17 +4,17 @@
 
 See the original Railway deployment below. Note: Railway free tier has 512MB RAM and sleeps after 15 minutes of inactivity.
 
-## Option B: Vercel + Render + HuggingFace Spaces (Recommended for Free Tier)
+## Option B: Vercel + Render + Google Cloud Run (Recommended for Free Tier)
 
-**This is the recommended deployment for free hosting.** HuggingFace Spaces provides 2vCPU + 16GB RAM and never sleeps.
+**This is the recommended deployment for free hosting.** Google Cloud Run provides 1 vCPU, 512MB RAM, 2M requests/month, and never sleeps.
 
-See **[DEPLOY_HF.md](./DEPLOY_HF.md)** for the full step-by-step guide.
+See **[DEPLOY_GCR.md](./DEPLOY_GCR.md)** for the full step-by-step guide.
 
 Quick overview:
-1. Deploy Python analysis service to **HuggingFace Spaces** (Docker space, 16GB RAM, no sleep)
+1. Deploy Python analysis service to **Google Cloud Run** (Docker, 512MB RAM, no sleep, free tier)
 2. Deploy Node.js backend to **Render** (free tier)
 3. Deploy frontend to **Vercel** (free tier)
-4. Update backend `PYTHON_SERVICE_URL` to point to HuggingFace Space
+4. Update backend `PYTHON_SERVICE_URL` to point to Cloud Run
 
 ---
 
