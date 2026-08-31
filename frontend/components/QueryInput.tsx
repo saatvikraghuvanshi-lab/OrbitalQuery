@@ -114,7 +114,7 @@ export default function QueryInput({ onAnalyze, loading, compact, showRefine }: 
           <h2 className="text-[36px] md:text-[42px] font-bold text-oq-50 tracking-tight leading-tight mb-2.5">
             Ask a question about Earth
           </h2>
-          <p className="text-[15px] text-oq-300 max-w-lg mx-auto leading-relaxed">
+          <p className="text-[15px] text-oq-300 max-w-lg mx-auto leading-relaxed mb-1">
             Search Earth observation data using natural language, location and time.
           </p>
         </div>
@@ -123,7 +123,7 @@ export default function QueryInput({ onAnalyze, loading, compact, showRefine }: 
         <div className="w-full max-w-[820px] mx-auto mb-5">
           <div className="relative flex items-center bg-oq-800/60 border border-oq-700/40 rounded-lg transition-all focus-within:border-oq-500/60 focus-within:bg-oq-800/80"
             style={{ height: 56 }}>
-            <div className="pl-4 text-oq-300">
+            <div className="pl-4 text-oq-300 flex items-center justify-center" style={{ height: 56 }}>
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
@@ -141,7 +141,7 @@ export default function QueryInput({ onAnalyze, loading, compact, showRefine }: 
             <button
               onClick={handleSubmit}
               disabled={!query.trim() || loading}
-              className="mr-2 p-2 rounded-md transition-all disabled:opacity-20 disabled:cursor-not-allowed"
+              className="mr-2 p-2 rounded-md transition-all disabled:opacity-35 disabled:cursor-not-allowed"
               style={{
                 background: query.trim() && !loading ? '#A3E635' : 'transparent',
                 color: query.trim() && !loading ? '#050907' : '#68756E',
