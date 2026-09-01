@@ -1414,9 +1414,24 @@ router.post('/temporal-compare', optionalAuth, async (req: AuthRequest, res: Res
       if (keywords.some(k => q.includes(k))) { detectedPhenomenon = phenomenon; break; }
     }
 
-    // Determine dates
-    const defaultStart = start_date || '2023-01-01';
-    const defaultEnd = end_date || new Date().toISOString().split('T')[0];
+    // Determine dates — try overrides first, then parse from query text
+    let fallbackStart = start_date;
+    let fallbackEnd = end_date;
+    if (!fallbackStart || !fallbackEnd) {
+      // Extract years from query: "Sundarbans deforestation 2019 vs 2024" → [2019, 2024]
+      const yearMatches = q.match(/\b(19|20)\d{2}\b/g);
+      if (yearMatches && yearMatches.length >= 2) {
+        const years = yearMatches.map(Number).sort((a, b) => a - b);
+        fallbackStart = fallbackStart || `${years[0]}-01-01`;
+        fallbackEnd = fallbackEnd || `${years[years.length - 1]}-12-31`;
+      } else if (yearMatches && yearMatches.length === 1) {
+        const y = yearMatches[0];
+        fallbackStart = fallbackStart || `${y}-01-01`;
+        fallbackEnd = fallbackEnd || `${y}-12-31`;
+      }
+    }
+    const defaultStart = fallbackStart || '2023-01-01';
+    const defaultEnd = fallbackEnd || new Date().toISOString().split('T')[0];
 
     // Search SQLite for matching datasets
     const allDatasets = await prisma.eODataset.findMany({ take: 500 });
