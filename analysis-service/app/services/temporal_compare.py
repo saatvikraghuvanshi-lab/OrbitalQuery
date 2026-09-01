@@ -379,15 +379,20 @@ def _compute_index_stats(
         return _compute_index_stats_fallback(index_name, sensor, scene, bbox)
 
     # Extract signed asset hrefs from scene
+    # Assets can be: pystac.Asset objects, dicts with 'href' key, or plain strings
     band_hrefs = {}
     for logical_name, physical_name in physical_bands.items():
         asset = scene.assets.get(physical_name)
-        if isinstance(asset, dict):
-            href = asset.get("href", "")
+        href = ""
+        if asset is None:
+            href = ""
+        elif hasattr(asset, 'href'):
+            # pystac.Asset object — use .href attribute
+            href = getattr(asset, 'href', '') or ''
+        elif isinstance(asset, dict):
+            href = asset.get('href', '') or ''
         elif isinstance(asset, str):
             href = asset
-        else:
-            href = ""
         if href:
             band_hrefs[logical_name] = href
 
