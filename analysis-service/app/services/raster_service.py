@@ -6,7 +6,6 @@ Uses aggressive GDAL settings and small windows to stay within memory limits.
 from __future__ import annotations
 
 import logging
-import os
 from typing import Any, Optional
 
 # NOTE: GDAL env vars are set INSIDE rasterio.Env() blocks, not at module level.

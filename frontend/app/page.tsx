@@ -365,7 +365,6 @@ function HomePageContent() {
         {/* ── ERROR ────────────────────────────────────────── */}
         {step === 'error' && (
           <div className="flex-1 flex flex-col overflow-hidden">
-            <QueryInput onAnalyze={analysis.analyze} loading={false} compact />
             <div className="flex-1 overflow-y-auto">
               <AnalysisErrorScreen
                 error={analysis.state.error || 'Analysis failed'}
@@ -381,7 +380,6 @@ function HomePageContent() {
         {/* ── COMPLETE: results ─────────────────────────────── */}
         {step === 'complete' && analysis.state.result && (
           <div className="flex-1 flex flex-col overflow-hidden">
-            <QueryInput onAnalyze={analysis.analyze} loading={false} compact />
             <div className="flex-1 overflow-y-auto">
               <div className="w-full max-w-[1400px] mx-auto px-6 py-5">
                 {/* Back + query + interpretation */}

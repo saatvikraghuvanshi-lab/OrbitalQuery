@@ -327,7 +327,6 @@ const PIPELINE_STAGES = [
   { num: '06', label: 'Spectral index computation' },
   { num: '07', label: 'Temporal comparison' },
   { num: '08', label: 'Change detection' },
-  { num: '09', label: 'Result generation' },
 ];
 
 function ProcessingPipeline({ steps }: { steps: Array<{ step: string; detail: string }> }) {
@@ -462,21 +461,6 @@ function ThreePanelView({
 
   return (
     <div className="relative">
-      {/* Visualization mode selector */}
-      <div className="absolute top-3 right-3 z-[1010]">
-        <div className="inline-flex bg-oq-950/85 backdrop-blur-sm rounded border border-oq-700/30 p-[2px]">
-          {(['change-mask', 'difference'] as const).map((mode) => (
-            <button key={mode} onClick={() => setVizMode(mode)}
-              className={`px-2.5 py-1 rounded text-[8px] font-semibold uppercase tracking-wider transition-all ${
-                vizMode === mode ? 'bg-lime text-oq-950' : 'text-oq-300 hover:text-oq-100'
-              }`}
-            >
-              {mode === 'change-mask' ? 'Change Mask' : 'Difference'}
-            </button>
-          ))}
-        </div>
-      </div>
-
       {/* Three panels */}
       <div className="grid grid-cols-3 gap-[2px]" style={{ height: 'clamp(400px, 65vh, 700px)' }}>
         {/* Before */}
