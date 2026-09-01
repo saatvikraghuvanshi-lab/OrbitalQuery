@@ -477,12 +477,16 @@ def _compute_index_stats(
         )
 
     except Exception as e:
+        error_msg = f"{type(e).__name__}: {str(e)[:200]}"
         logger.error(
             "Raster-based %s computation failed for %s: %s. Falling back to estimation.",
-            index_name, scene.item_id, e,
+            index_name, scene.item_id, error_msg,
             exc_info=True,
         )
-        return _compute_index_stats_fallback(index_name, sensor, scene, bbox)
+        result = _compute_index_stats_fallback(index_name, sensor, scene, bbox)
+        # Attach error info so API response shows why raster failed
+        result.stats["_raster_error"] = error_msg
+        return result
 
 
 def _compute_index_stats_fallback(

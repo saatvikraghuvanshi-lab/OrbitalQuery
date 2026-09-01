@@ -1,16 +1,22 @@
-"""Raster analysis service using rasterio for windowed reads."""
+"""Raster analysis service — memory-optimized for Render free tier (512MB).
+
+Uses aggressive GDAL settings and small windows to stay within memory limits.
+"""
 
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any, Optional
 
-import numpy as np
-import rasterio
-from rasterio.transform import from_bounds
-from rasterio.windows import from_bounds as window_from_bounds
-
-from app.models.requests import BandStats
+# Aggressive GDAL memory limits for Render free tier (512MB)
+os.environ.setdefault("GDAL_CACHEMAX", "32")
+os.environ.setdefault("GDAL_DISABLE_READDIR_ON_OPEN", "EMPTY_DIR")
+os.environ.setdefault("CPL_VSIL_CURL_ALLOWED_EXTENSIONS", "tif")
+os.environ.setdefault("GDAL_HTTP_MAX_RETRY", "2")
+os.environ.setdefault("GDAL_HTTP_TIMEOUT", "30")
+os.environ.setdefault("GDAL_HTTP_MULTIPLEX", "YES")
+os.environ.setdefault("GDAL_HTTPMerge_CONSECUTIVE_RANGES", "YES")
 
 logger = logging.getLogger(__name__)
 
@@ -19,12 +25,13 @@ def read_raster_window(
     href: str,
     bbox: list[float],
     bands: Optional[list[str]] = None,
+    max_dim: int = 1024,
 ) -> dict[str, Any]:
     """
-    Read a raster window for a given bounding box.
+    Read a small raster window for a given bounding box.
 
-    Uses windowed reading to avoid loading entire scenes.
-    Only reads from assets that are rasterio-compatible.
+    Uses aggressive memory limits to stay under 512MB on Render free tier.
+    max_dim=1024 → 1024² float32 = 4MB per band (safe).
 
     Returns dict with:
         - data: numpy array (bands, height, width)
@@ -34,127 +41,125 @@ def read_raster_window(
         - transform: affine transform
         - crs: coordinate reference system
     """
-    logger.info("Opening raster: %s with bbox %s", href, bbox)
+    import numpy as np
+    import rasterio
+    from rasterio.windows import from_bounds as window_from_bounds
 
-    with rasterio.open(href) as src:
-        logger.info(
-            "Raster info: %d bands, size=%dx%d, crs=%s, dtype=%s",
-            src.count,
-            src.width,
-            src.height,
-            src.crs,
-            src.dtypes,
-        )
+    logger.info("Opening raster: %s (max_dim=%d)", href[:120], max_dim)
 
-        # Transform bbox from WGS-84 to raster CRS if needed
-        bbox_native = bbox
-        src_crs_str = str(src.crs)
-        if "EPSG:4326" not in src_crs_str and src.crs is not None:
-            try:
-                from pyproj import Transformer
-                transformer = Transformer.from_crs(
-                    "EPSG:4326", src.crs, always_xy=True
-                )
-                west, south = transformer.transform(bbox[0], bbox[1])
-                east, north = transformer.transform(bbox[2], bbox[3])
-                bbox_native = [west, south, east, north]
-                logger.info(
-                    "Transformed bbox from WGS-84 to %s: %s",
-                    src.crs,
-                    bbox_native,
-                )
-            except Exception as e:
-                logger.warning("CRS transform failed, using raw bbox: %s", e)
-
-        # Create window from bbox in the raster's native CRS
-        try:
-            window = window_from_bounds(
-                bbox_native[0], bbox_native[1],
-                bbox_native[2], bbox_native[3],
-                transform=src.transform,
-            )
+    with rasterio.Env(
+        GDAL_CACHEMAX="32",
+        GDAL_DISABLE_READDIR_ON_OPEN="EMPTY_DIR",
+        GDAL_HTTP_TIMEOUT="30",
+        GDAL_HTTP_MAX_RETRY="2",
+    ):
+        with rasterio.open(href) as src:
             logger.info(
-                "Window: col_off=%.1f, row_off=%.1f, width=%.1f, height=%.1f",
-                window.col_off, window.row_off, window.width, window.height,
+                "Raster info: %d bands, size=%dx%d, crs=%s",
+                src.count, src.width, src.height, src.crs,
             )
 
-            # Cap window to prevent OOM on free-tier hosts.
-            # 4096² float32 ≈ 64MB per band — safe for 512MB RAM.
-            MAX_DIM = 4096
-            if window.width > MAX_DIM or window.height > MAX_DIM:
-                scale = min(MAX_DIM / window.width, MAX_DIM / window.height)
-                new_w = max(1, int(window.width * scale))
-                new_h = max(1, int(window.height * scale))
-                logger.warning(
-                    "Window capped from %.0fx%.0f to %dx%d to prevent OOM",
-                    window.width, window.height, new_w, new_h,
-                )
+            # Transform bbox from WGS-84 to raster CRS if needed
+            bbox_native = bbox
+            src_crs_str = str(src.crs)
+            if "EPSG:4326" not in src_crs_str and src.crs is not None:
+                try:
+                    from pyproj import Transformer
+                    transformer = Transformer.from_crs(
+                        "EPSG:4326", src.crs, always_xy=True
+                    )
+                    west, south = transformer.transform(bbox[0], bbox[1])
+                    east, north = transformer.transform(bbox[2], bbox[3])
+                    bbox_native = [west, south, east, north]
+                except Exception as e:
+                    logger.warning("CRS transform failed, using raw bbox: %s", e)
+
+            # Create window — aggressive cap for 512MB RAM
+            window = None
+            try:
                 window = window_from_bounds(
                     bbox_native[0], bbox_native[1],
                     bbox_native[2], bbox_native[3],
                     transform=src.transform,
-                    width=new_w,
-                    height=new_h,
                 )
-        except Exception as e:
-            logger.warning(
-                "Could not create window from bbox: %s. Reading full extent.", e
-            )
-            window = None
+                logger.info(
+                    "Window: col_off=%.1f, row_off=%.1f, width=%.1f, height=%.1f",
+                    window.col_off, window.row_off, window.width, window.height,
+                )
 
-        # Determine which bands to read
-        band_indices = None
-        band_names = []
+                # Cap to max_dim to prevent OOM
+                if window.width > max_dim or window.height > max_dim:
+                    scale = min(max_dim / window.width, max_dim / window.height)
+                    new_w = max(1, int(window.width * scale))
+                    new_h = max(1, int(window.height * scale))
+                    logger.warning(
+                        "Window capped from %.0fx%.0f to %dx%d",
+                        window.width, window.height, new_w, new_h,
+                    )
+                    window = window_from_bounds(
+                        bbox_native[0], bbox_native[1],
+                        bbox_native[2], bbox_native[3],
+                        transform=src.transform,
+                        width=new_w,
+                        height=new_h,
+                    )
+            except Exception as e:
+                logger.warning("Could not create window: %s", e)
+                window = None
 
-        if bands and src.count >= 1:
-            # Map band names to indices if possible
-            band_indices = []
-            for b in bands:
-                try:
-                    idx = int(b) if b.isdigit() else src.statistics(1) and 1  # fallback
-                    band_indices.append(idx)
-                except (ValueError, rasterio.errors.BandNotFoundError):
-                    band_indices.append(1)
-            band_names = bands
-        else:
-            # Read up to 4 bands max to limit memory on free-tier hosts
-            band_count = min(src.count, 4)
-            band_indices = list(range(1, band_count + 1))
-            band_names = [f"band_{i}" for i in band_indices]
+            # Determine which bands to read (single band at a time to save memory)
+            if bands and src.count >= 1:
+                band_names = bands
+                band_indices = []
+                for b in bands:
+                    try:
+                        band_indices.append(int(b) if b.isdigit() else 1)
+                    except (ValueError, rasterio.errors.BandNotFoundError):
+                        band_indices.append(1)
+            else:
+                band_count = min(src.count, 2)  # Read max 2 bands
+                band_indices = list(range(1, band_count + 1))
+                band_names = [f"band_{i}" for i in band_indices]
 
-        # Read the window
-        if window is not None:
-            data = src.read(indexes=band_indices, window=window)
-        else:
-            data = src.read(indexes=band_indices)
+            # Read bands one at a time to minimize memory
+            band_arrays = []
+            for idx in band_indices:
+                if window is not None:
+                    data = src.read(indexes=[idx], window=window)
+                else:
+                    data = src.read(indexes=[idx])
+                band_arrays.append(data[0])  # shape: (height, width)
 
-        profile = src.profile.copy()
-        transform = src.transform if window is None else src.window_transform(window)
+            # Stack into (bands, height, width)
+            import numpy as np
+            data = np.stack(band_arrays, axis=0) if len(band_arrays) > 1 else band_arrays[0][np.newaxis, ...]
 
-        logger.info("Read data shape: %s, dtype: %s", data.shape, data.dtype)
+            profile = src.profile.copy()
+            transform = src.transform if window is None else src.window_transform(window)
 
-        return {
-            "data": data,
-            "band_names": band_names,
-            "profile": profile,
-            "window_shape": list(data.shape),
-            "transform": transform,
-            "crs": str(src.crs),
-            "dtype": str(data.dtype),
-        }
+            logger.info("Read data shape: %s, dtype: %s", data.shape, data.dtype)
+
+            return {
+                "data": data,
+                "band_names": band_names,
+                "profile": profile,
+                "window_shape": list(data.shape),
+                "transform": transform,
+                "crs": str(src.crs),
+                "dtype": str(data.dtype),
+            }
 
 
 def compute_band_stats(
-    data: np.ndarray,
+    data: Any,
     band_names: list[str],
-) -> list[BandStats]:
-    """
-    Compute statistics for each band.
+) -> list:
+    """Compute statistics for each band."""
+    import numpy as np
+    from app.models.requests import BandStats
 
-    Returns list of BandStats with min, max, mean, std, nodata count.
-    """
     stats_list = []
-    nodata_value = -9999  # default nodata sentinel
+    nodata_value = -9999
 
     for i, name in enumerate(band_names):
         if data.ndim == 3:
@@ -162,70 +167,46 @@ def compute_band_stats(
         else:
             band_data = data.astype(np.float64)
 
-        # Mask nodata and zero values
         valid = band_data[(band_data != 0) & (band_data > nodata_value)]
-
         nodata_count = int(np.sum((band_data == 0) | (band_data <= nodata_value)))
 
         if len(valid) == 0:
-            stats_list.append(
-                BandStats(
-                    band=name,
-                    dtype=str(data.dtype),
-                    shape=list(band_data.shape),
-                    min=0.0,
-                    max=0.0,
-                    mean=0.0,
-                    std=0.0,
-                    nodata_count=nodata_count,
-                )
-            )
+            stats_list.append(BandStats(
+                band=name, dtype=str(data.dtype),
+                shape=list(band_data.shape),
+                min=0.0, max=0.0, mean=0.0, std=0.0,
+                nodata_count=nodata_count,
+            ))
         else:
-            stats_list.append(
-                BandStats(
-                    band=name,
-                    dtype=str(data.dtype),
-                    shape=list(band_data.shape),
-                    min=float(np.min(valid)),
-                    max=float(np.max(valid)),
-                    mean=float(np.mean(valid)),
-                    std=float(np.std(valid)),
-                    nodata_count=nodata_count,
-                )
-            )
+            stats_list.append(BandStats(
+                band=name, dtype=str(data.dtype),
+                shape=list(band_data.shape),
+                min=float(np.min(valid)), max=float(np.max(valid)),
+                mean=float(np.mean(valid)), std=float(np.std(valid)),
+                nodata_count=nodata_count,
+            ))
 
     return stats_list
 
 
 def estimate_resolution_meters(profile: dict, crs: str) -> Optional[float]:
-    """
-    Estimate spatial resolution in meters from the raster profile.
-
-    Uses the affine transform pixel size.
-    """
+    """Estimate spatial resolution in meters from the raster profile."""
     try:
         transform = profile.get("transform")
         if transform is None:
             return None
-
-        # Pixel size in CRS units
         pixel_size_x = abs(transform.a)
         pixel_size_y = abs(transform.e)
-
-        # For geographic CRS (degrees), approximate meters
-        if "EPSG:4326" in str(crs) or crs == "CRS.from_epsg(4326)":
-            # 1 degree ≈ 111 km at equator
+        if "EPSG:4326" in str(crs):
             return pixel_size_x * 111_000
-
-        # For projected CRS (meters), return directly
         return (pixel_size_x + pixel_size_y) / 2
-
     except Exception:
         return None
 
 
 def is_rasterio_compatible(href: str) -> bool:
-    """Check if a URL can be opened by rasterio (vs being a JPEG/PNG thumbnail)."""
+    """Check if a URL can be opened by rasterio."""
+    import rasterio
     try:
         with rasterio.open(href) as src:
             return src.count > 0
