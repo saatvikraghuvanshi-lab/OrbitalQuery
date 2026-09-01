@@ -403,38 +403,43 @@ def _compute_index_stats(
         from app.services.raster_service import read_raster_window
 
         # Read each band over the AOI bbox
+        # band_arrays must be keyed by PHYSICAL band name (B08, B04, B11)
+        # because compute_index_from_bands looks them up by physical name.
         band_arrays = {}
         nodata_masks = {}
+        logical_to_physical = {}  # logical_name → physical_name
         crs = "EPSG:4326"
         transform = None
         shape = None
 
         for logical_name, href in band_hrefs.items():
-            logger.info("Reading band %s from %s", logical_name, href[:100])
+            # Find the physical name for this logical name
+            physical_name = physical_bands.get(logical_name, logical_name)
+            logical_to_physical[logical_name] = physical_name
+
+            logger.info("Reading band %s (%s) from %s", logical_name, physical_name, href[:100])
             raster_data = read_raster_window(href, bbox)
             data = raster_data["data"]
 
             # Take first band if multi-band (some assets are multi-band)
             if data.ndim == 3 and data.shape[0] > 1:
-                # For visual/RGB assets, select the appropriate channel
-                band_arrays[logical_name] = data[0].astype(np.float32)
+                band_arrays[physical_name] = data[0].astype(np.float32)
             elif data.ndim == 3:
-                band_arrays[logical_name] = data[0].astype(np.float32)
+                band_arrays[physical_name] = data[0].astype(np.float32)
             else:
-                band_arrays[logical_name] = data.astype(np.float32)
+                band_arrays[physical_name] = data.astype(np.float32)
 
             # Build nodata mask
             nodata_val = raster_data["profile"].get("nodata")
             if nodata_val is not None:
-                nodata_masks[logical_name] = (band_arrays[logical_name] == nodata_val)
+                nodata_masks[physical_name] = (band_arrays[physical_name] == nodata_val)
             else:
-                # Common Sentinel-2 nodata: 0 or negative reflectance
-                nodata_masks[logical_name] = (band_arrays[logical_name] <= 0)
+                nodata_masks[physical_name] = (band_arrays[physical_name] <= 0)
 
             crs = raster_data.get("crs", "EPSG:4326")
             if raster_data.get("transform") is not None:
                 transform = raster_data["transform"]
-            shape = list(band_arrays[logical_name].shape)
+            shape = list(band_arrays[physical_name].shape)
 
             logger.info(
                 "Band %s: shape=%s, min=%.4f, max=%.4f, nodata_count=%d",
