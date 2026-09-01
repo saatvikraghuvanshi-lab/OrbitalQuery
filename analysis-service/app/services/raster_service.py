@@ -19,7 +19,7 @@ def read_raster_window(
     href: str,
     bbox: list[float],
     bands: Optional[list[str]] = None,
-    max_dim: int = 1024,
+    max_dim: int = 512,
 ) -> dict[str, Any]:
     """
     Read a small raster window for a given bounding box.
@@ -40,6 +40,17 @@ def read_raster_window(
     from rasterio.windows import from_bounds as window_from_bounds
 
     logger.info("Opening raster: %s (max_dim=%d)", href[:120], max_dim)
+
+    # NUCLEAR FIX: Clear ALL GDAL env vars that may have been set as strings
+    # at module level by old code. The module-level os.environ.setdefault(
+    # "GDAL_CACHEMAX", "64") sets a string, which GDAL reads before
+    # rasterio.Env() can override it, causing TypeError.
+    import os
+    for _gdal_key in ['GDAL_CACHEMAX', 'GDAL_DISABLE_READDIR_ON_OPEN',
+                       'CPL_VSIL_CURL_ALLOWED_EXTENSIONS', 'GDAL_HTTP_TIMEOUT',
+                       'GDAL_HTTP_MAX_RETRY']:
+        if _gdal_key in os.environ:
+            del os.environ[_gdal_key]
 
     with rasterio.Env(
         GDAL_CACHEMAX=64,
