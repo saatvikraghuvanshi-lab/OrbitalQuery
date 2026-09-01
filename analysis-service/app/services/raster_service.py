@@ -9,14 +9,11 @@ import logging
 import os
 from typing import Any, Optional
 
-# Aggressive GDAL memory limits for Render free tier (512MB)
-os.environ.setdefault("GDAL_CACHEMAX", "32")
+# GDAL memory limits for Render free tier (512MB)
+os.environ.setdefault("GDAL_CACHEMAX", "64")
 os.environ.setdefault("GDAL_DISABLE_READDIR_ON_OPEN", "EMPTY_DIR")
 os.environ.setdefault("CPL_VSIL_CURL_ALLOWED_EXTENSIONS", "tif")
-os.environ.setdefault("GDAL_HTTP_MAX_RETRY", "2")
 os.environ.setdefault("GDAL_HTTP_TIMEOUT", "30")
-os.environ.setdefault("GDAL_HTTP_MULTIPLEX", "YES")
-os.environ.setdefault("GDAL_HTTPMerge_CONSECUTIVE_RANGES", "YES")
 
 logger = logging.getLogger(__name__)
 
@@ -48,10 +45,9 @@ def read_raster_window(
     logger.info("Opening raster: %s (max_dim=%d)", href[:120], max_dim)
 
     with rasterio.Env(
-        GDAL_CACHEMAX="32",
+        GDAL_CACHEMAX=64,
         GDAL_DISABLE_READDIR_ON_OPEN="EMPTY_DIR",
         GDAL_HTTP_TIMEOUT="30",
-        GDAL_HTTP_MAX_RETRY="2",
     ):
         with rasterio.open(href) as src:
             logger.info(
@@ -74,35 +70,31 @@ def read_raster_window(
                 except Exception as e:
                     logger.warning("CRS transform failed, using raw bbox: %s", e)
 
-            # Create window — aggressive cap for 512MB RAM
+            # Create window — cap for 512MB RAM
             window = None
             try:
-                window = window_from_bounds(
-                    bbox_native[0], bbox_native[1],
-                    bbox_native[2], bbox_native[3],
-                    transform=src.transform,
-                )
-                logger.info(
-                    "Window: col_off=%.1f, row_off=%.1f, width=%.1f, height=%.1f",
-                    window.col_off, window.row_off, window.width, window.height,
-                )
-
-                # Cap to max_dim to prevent OOM
-                if window.width > max_dim or window.height > max_dim:
-                    scale = min(max_dim / window.width, max_dim / window.height)
-                    new_w = max(1, int(window.width * scale))
-                    new_h = max(1, int(window.height * scale))
-                    logger.warning(
-                        "Window capped from %.0fx%.0f to %dx%d",
-                        window.width, window.height, new_w, new_h,
-                    )
-                    window = window_from_bounds(
-                        bbox_native[0], bbox_native[1],
-                        bbox_native[2], bbox_native[3],
-                        transform=src.transform,
-                        width=new_w,
-                        height=new_h,
-                    )
+                # Compute pixel coordinates from bbox + transform
+                inv_transform = ~src.transform
+                col_off, row_off = inv_transform * (bbox_native[0], bbox_native[3])
+                col_off2, row_off2 = inv_transform * (bbox_native[2], bbox_native[1])
+                
+                # Ensure integer pixel coords
+                col_off = int(max(0, col_off))
+                row_off = int(max(0, row_off))
+                win_width = int(min(col_off2 - col_off, src.width - col_off))
+                win_height = int(min(row_off2 - row_off, src.height - row_off))
+                
+                if win_width <= 0 or win_height <= 0:
+                    logger.warning("Window too small or outside raster, reading full extent")
+                else:
+                    # Cap to max_dim
+                    if win_width > max_dim or win_height > max_dim:
+                        scale = min(max_dim / win_width, max_dim / win_height)
+                        win_width = int(win_width * scale)
+                        win_height = int(win_height * scale)
+                    
+                    window = rasterio.windows.Window(col_off, row_off, win_width, win_height)
+                    logger.info("Window: col=%d, row=%d, w=%d, h=%d", col_off, row_off, win_width, win_height)
             except Exception as e:
                 logger.warning("Could not create window: %s", e)
                 window = None
@@ -135,7 +127,10 @@ def read_raster_window(
             data = np.stack(band_arrays, axis=0) if len(band_arrays) > 1 else band_arrays[0][np.newaxis, ...]
 
             profile = src.profile.copy()
-            transform = src.transform if window is None else src.window_transform(window)
+            if window is not None:
+                transform = src.window_transform(window)
+            else:
+                transform = src.transform
 
             logger.info("Read data shape: %s, dtype: %s", data.shape, data.dtype)
 
