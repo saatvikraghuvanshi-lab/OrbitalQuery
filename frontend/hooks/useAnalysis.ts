@@ -119,8 +119,8 @@ export interface AnalysisState {
 
 // ── Constants ───────────────────────────────────────────────────
 
-/** 120s timeout — Python service cold starts on Render free tier */
-const FETCH_TIMEOUT_MS = 120_000;
+/** 60s timeout — Python cold starts handled by retry + local fallback */
+const FETCH_TIMEOUT_MS = 60_000;
 
 // ── Helper: single fetch attempt ────────────────────────────────
 
@@ -236,9 +236,9 @@ export function useAnalysis() {
 
       // ── Fetch with automatic retry for cold-start errors ──
       let data: any = null;
-      const MAX_RETRIES = 2;
+      const MAX_RETRIES = 1;
       const isColdStartError = (err: any) =>
-        err?.code === 'PYTHON_UNAVAILABLE' || err?.code === 'HTTP_503' || err?.code === 'NETWORK';
+        err?.code === 'PYTHON_UNAVAILABLE' || err?.code === 'HTTP_503' || err?.code === 'NETWORK' || err?.code === 'UPSTREAM_UNAVAILABLE';
 
       for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
         try {
@@ -248,11 +248,11 @@ export function useAnalysis() {
           const wrapped = err instanceof AnalysisError ? err : new AnalysisError(err.message, 'UNKNOWN');
           if (attempt < MAX_RETRIES && isColdStartError(wrapped)) {
             // Show retry status to user
-            const waitSec = attempt === 0 ? 8 : 15;
+            const waitSec = 10;
             setState(prev => ({
               ...prev,
               step: 'searching',
-              detail: `Engine waking up — retrying in ${waitSec}s (attempt ${attempt + 2}/${MAX_RETRIES + 1})...`,
+              detail: `Engine waking up — retrying in ${waitSec}s...`,
             }));
             await new Promise(r => setTimeout(r, waitSec * 1000));
             continue;

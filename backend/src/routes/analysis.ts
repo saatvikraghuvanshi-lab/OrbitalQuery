@@ -1297,10 +1297,19 @@ router.post('/temporal-compare', optionalAuth, async (req: AuthRequest, res: Res
   if (analysis_type) pythonBody.analysis_type = analysis_type;
   if (cloud_threshold !== undefined) pythonBody.cloud_threshold = cloud_threshold;
 
-  // Quick check: is Python service alive?
-  const { callPythonService } = await import('../services/python-client');
-  const PYTHON_TIMEOUT = 300000; // 5 minutes — matches HF Spaces timeout
-  const result = await callPythonService('POST', '/analysis/temporal-compare', pythonBody, 'temporal-compare', PYTHON_TIMEOUT);
+  // Quick check: is Python service alive? (3s timeout — skip if sleeping)
+  const { callPythonService, isPythonServiceUp } = await import('../services/python-client');
+  const pythonAlive = await isPythonServiceUp();
+  const PYTHON_TIMEOUT = 120000; // 2 minutes — reduced from 5 min to fail fast
+  
+  let result;
+  if (pythonAlive) {
+    result = await callPythonService('POST', '/analysis/temporal-compare', pythonBody, 'temporal-compare', PYTHON_TIMEOUT);
+  } else {
+    // Python service is sleeping — skip to local fallback immediately
+    console.log('[temporal-compare] Python service is sleeping, using local fallback');
+    result = { ok: false, requestId: 'skip', error: 'Python service sleeping', code: 'UPSTREAM_UNAVAILABLE', upstreamLatencyMs: 0 };
+  }
 
   if (result.ok) {
     // ── Enrich imagery with tilejson URLs and bbox ─────────
