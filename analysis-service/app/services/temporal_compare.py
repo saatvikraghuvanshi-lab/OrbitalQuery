@@ -447,11 +447,11 @@ def _compute_index_stats(
             shape = list(band_arrays[physical_name].shape)
 
             logger.info(
-                "Band %s: shape=%s, min=%.4f, max=%.4f, nodata_count=%d",
-                logical_name, band_arrays[logical_name].shape,
-                float(np.nanmin(band_arrays[logical_name])),
-                float(np.nanmax(band_arrays[logical_name])),
-                int(np.sum(nodata_masks[logical_name])),
+                "Band %s (%s): shape=%s, min=%.4f, max=%.4f, nodata_count=%d",
+                logical_name, physical_name, band_arrays[physical_name].shape,
+                float(np.nanmin(band_arrays[physical_name])),
+                float(np.nanmax(band_arrays[physical_name])),
+                int(np.sum(nodata_masks[physical_name])),
             )
 
         # Compute the spectral index
