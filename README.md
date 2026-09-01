@@ -209,6 +209,33 @@ Rate limiting, input sanitization, Helmet headers, CORS hardening, and productio
 
 ---
 
+## Retrieval Validation
+
+Benchmark queries run against the live analysis pipeline (Planetary Computer STAC + rasterio raster reads + change detection):
+
+| Metric | Value |
+|--------|-------|
+| **Benchmark queries** | 5 |
+| **Pipeline completion** | 5/5 (100%) |
+| **Both scenes found** | 4/5 (80%) |
+| **Raster-derived metrics** | 3/5 (60%) |
+| **Median response time** | 6.3s |
+| **Average response time** | 5.8s |
+
+```
+Query                                          Raster  Delta    Time
+─────────────────────────────────────────────────────────────────
+vegetation change Jaipur 2020 vs 2025          yes    -0.0568  6.4s
+Sundarbans deforestation 2019 vs 2024          yes    -0.0325  7.7s
+Hyderabad urban expansion 2021 vs 2025          no      0.0000  5.8s
+Kerala flood impact August 2024                no      0.0000  3.0s
+Delhi urban sprawl 2019 vs 2025                yes    +0.0639  6.3s
+```
+
+Raster-derived means the system read actual Sentinel-2 pixel data via rasterio, computed spectral indices (NDVI/NDBI), and ran pixel-level change detection. Non-raster results fall back to scene metadata estimation.
+
+---
+
 ## Quick Start
 
 No API keys, no external database, no complex setup. Just Node.js and Python.
