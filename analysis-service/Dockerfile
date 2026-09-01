@@ -14,8 +14,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application
 COPY . .
 
-# Cloud Run sets PORT=8080; start.sh ensures uvicorn uses it
-RUN chmod +x start.sh
+# HF Spaces and Cloud Run both use PORT env var
+# Default to 8080, start.sh reads PORT env
+RUN chmod +x start.sh 2>/dev/null || true
 EXPOSE 8080
 
-CMD ["./start.sh"]
+# Use start.sh if it exists, otherwise direct uvicorn
+CMD if [ -f start.sh ]; then ./start.sh; else python -m uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080}; fi
