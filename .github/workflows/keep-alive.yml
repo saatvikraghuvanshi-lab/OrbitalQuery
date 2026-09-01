@@ -1,3 +1,6 @@
+# NOTE: This is only needed if using Render free tier.
+# If migrated to Oracle Cloud Always Free, this workflow can be disabled.
+# Oracle Cloud VMs run 24/7 with no cold starts.
 name: Keep-Alive (prevent Render cold starts)
 
 on:

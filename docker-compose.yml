@@ -1,0 +1,82 @@
+# OrbitalQuery — Oracle Cloud Always Free deployment
+# Runs Node.js backend + Python analysis service on a single VM
+# No cold starts, always on, 24GB RAM available
+
+services:
+  # ── Node.js API Gateway ──────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: oq-backend
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - DATABASE_URL=file:/data/prod.db
+      - CORS_ORIGIN=*
+      - JWT_SECRET=${JWT_SECRET:-orbital-query-prod-secret-change-me}
+      - PYTHON_SERVICE_URL=http://python:8000
+      - PYTHON_SERVICE_TIMEOUT_MS=30000
+    volumes:
+      - backend-data:/data
+    depends_on:
+      python:
+        condition: service_healthy
+    networks:
+      - oq-network
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3001/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # ── Python Analysis Service ──────────────────────────────────
+  python:
+    build:
+      context: ./analysis-service
+      dockerfile: Dockerfile
+    container_name: oq-python
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - python-cache:/app/.cache
+    networks:
+      - oq-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ── Nginx Reverse Proxy (optional, for SSL/HTTPS) ────────────
+  # Uncomment if you want SSL termination
+  # nginx:
+  #   image: nginx:alpine
+  #   container_name: oq-nginx
+  #   restart: unless-stopped
+  #   ports:
+  #     - "80:80"
+  #     - "443:443"
+  #   volumes:
+  #     - ./nginx.conf:/etc/nginx/nginx.conf:ro
+  #     - ./certs:/etc/nginx/certs:ro
+  #   depends_on:
+  #     - backend
+  #   networks:
+  #     - oq-network
+
+volumes:
+  backend-data:
+  python-cache:
+
+networks:
+  oq-network:
+    driver: bridge
