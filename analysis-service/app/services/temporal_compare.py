@@ -34,21 +34,40 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from typing import Any, Optional
 
-import numpy as np
+# Heavy imports are deferred to function bodies to keep startup memory under 500MB
+# on Render free tier. numpy, rasterio, scipy etc. are only loaded when an analysis runs.
+import numpy as np  # numpy is needed for type hints in dataclasses — keep this one
 
-from app.services.capability_registry import (
-    PHENOMENON_REGISTRY,
-    ANALYSIS_TYPES,
-    get_analysis_config,
-)
-from app.services.change_detection import run_change_detection
-from app.services.eo_provider import get_default_provider, get_provider
-from app.services.spectral_indices import (
-    INDEX_DEFINITIONS,
-    INDEX_BAND_MAP,
-    SENSOR_BANDS,
-    compute_index_from_bands,
-)
+# These are loaded lazily inside run_temporal_comparison()
+_PHENOMENON_REGISTRY = None
+_INDEX_DEFINITIONS = None
+_INDEX_BAND_MAP = None
+_SENSOR_BANDS = None
+_compute_index_from_bands = None
+_run_change_detection = None
+_get_default_provider = None
+_get_provider = None
+
+def _lazy_import_heavy():
+    """Load heavy modules only when analysis actually runs."""
+    global _PHENOMENON_REGISTRY, _INDEX_DEFINITIONS, _INDEX_BAND_MAP
+    global _SENSOR_BANDS, _compute_index_from_bands, _run_change_detection
+    global _get_default_provider, _get_provider
+    if _PHENOMENON_REGISTRY is not None:
+        return  # already loaded
+    from app.services.capability_registry import PHENOMENON_REGISTRY, ANALYSIS_TYPES, get_analysis_config
+    from app.services.change_detection import run_change_detection
+    from app.services.eo_provider import get_default_provider, get_provider
+    from app.services.spectral_indices import INDEX_DEFINITIONS, INDEX_BAND_MAP, SENSOR_BANDS, compute_index_from_bands
+    _PHENOMENON_REGISTRY = PHENOMENON_REGISTRY
+    _INDEX_DEFINITIONS = INDEX_DEFINITIONS
+    _INDEX_BAND_MAP = INDEX_BAND_MAP
+    _SENSOR_BANDS = SENSOR_BANDS
+    _compute_index_from_bands = compute_index_from_bands
+    _run_change_detection = run_change_detection
+    _get_default_provider = get_default_provider
+    _get_provider = get_provider
+    logger.info("Heavy modules loaded (numpy, rasterio, scipy, planetary_computer)")
 
 logger = logging.getLogger(__name__)
 
@@ -137,7 +156,8 @@ def _search_scenes(
     provider_name: Optional[str] = None,
 ) -> list[dict[str, Any]]:
     """Search STAC for scenes in a time window."""
-    provider = get_provider(provider_name) if provider_name else get_default_provider()
+    _lazy_import_heavy()
+    provider = _get_provider(provider_name) if provider_name else _get_default_provider()
 
     datetime_str = f"{start_date}/{end_date}"
 
@@ -335,15 +355,16 @@ def _compute_index_stats(
     elif "sentinel-1" in sensor:
         resolution = 10.0
 
+    _lazy_import_heavy()
     # Get band mapping for this sensor + index
     band_key = (sensor, index_name)
-    band_map = INDEX_BAND_MAP.get(band_key)
+    band_map = _INDEX_BAND_MAP.get(band_key)
     if not band_map:
         logger.warning("No band mapping for %s on %s, falling back to estimation", index_name, sensor)
         return _compute_index_stats_fallback(index_name, sensor, scene, bbox)
 
     # Resolve physical band names from the index's required logical bands
-    index_def = INDEX_DEFINITIONS.get(index_name)
+    index_def = _INDEX_DEFINITIONS.get(index_name)
     if not index_def:
         return _compute_index_stats_fallback(index_name, sensor, scene, bbox)
 
@@ -381,7 +402,6 @@ def _compute_index_stats(
     # Attempt real raster read and index computation
     try:
         from app.services.raster_service import read_raster_window
-        from app.services.spectral_indices import compute_index_from_bands
 
         # Read each band over the AOI bbox
         band_arrays = {}
@@ -426,7 +446,7 @@ def _compute_index_stats(
             )
 
         # Compute the spectral index
-        index_array, index_result = compute_index_from_bands(
+        index_array, index_result = _compute_index_from_bands(
             bands=band_arrays,
             index_name=index_name,
             sensor=sensor,
@@ -808,8 +828,9 @@ def run_temporal_comparison(
     aoi_name = plan.get("aoi", "Unknown")
     plan_id = plan.get("plan_id", "unknown")
 
+    _lazy_import_heavy()
     # Get index name from phenomenon config
-    pheno_config = PHENOMENON_REGISTRY.get(phenomenon, {})
+    pheno_config = _PHENOMENON_REGISTRY.get(phenomenon, {})
     index_name = pheno_config.get("default_index", "NDVI")
     if not index_name:
         # For SAR-based phenomena like flood
@@ -1132,9 +1153,9 @@ def run_temporal_comparison(
         "collection": collection,
         "index_used": index_name,
         "resolution_m": index_t1.resolution_m if index_t1 else 10.0,
-        "bands_used": INDEX_BAND_MAP.get((sensor, index_name), {}),
-        "index_formula": INDEX_DEFINITIONS.get(index_name, {}).formula if index_name in INDEX_DEFINITIONS else "",
-        "index_description": INDEX_DEFINITIONS.get(index_name, {}).description if index_name in INDEX_DEFINITIONS else "",
+        "bands_used": _INDEX_BAND_MAP.get((sensor, index_name), {}),
+        "index_formula": _INDEX_DEFINITIONS.get(index_name, {}).formula if index_name in _INDEX_DEFINITIONS else "",
+        "index_description": _INDEX_DEFINITIONS.get(index_name, {}).description if index_name in _INDEX_DEFINITIONS else "",
     }
 
     # ── Build final result ────────────────────────────────────────
