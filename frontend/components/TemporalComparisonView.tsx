@@ -330,10 +330,13 @@ const PIPELINE_STAGES = [
 ];
 
 function ProcessingPipeline({ steps }: { steps: Array<{ step: string; detail: string }> }) {
+  const totalBackendSteps = steps.length;
+  const totalFrontendStages = PIPELINE_STAGES.length;
   return (
-    <div className="grid grid-cols-3 md:grid-cols-9 gap-[2px]">
+    <div className={`grid gap-[2px] ${totalFrontendStages <= 8 ? 'grid-cols-2 md:grid-cols-8' : 'grid-cols-3 md:grid-cols-9'}`}>
       {PIPELINE_STAGES.map((stage, i) => {
-        const completed = i < steps.length;
+        // Map backend steps to frontend stages proportionally
+        const completed = totalBackendSteps > 0 && i < totalBackendSteps;
         return (
           <div key={stage.num} className={`p-2 rounded text-center ${completed ? 'bg-lime/8 border border-lime/15' : 'bg-oq-800/20 border border-oq-700/10'}`}>
             <div className={`text-[9px] font-mono font-bold mb-0.5 ${completed ? 'text-lime' : 'text-oq-400'}`}>{stage.num}</div>

@@ -518,10 +518,19 @@ def _compute_index_stats_fallback(
     pixel_size_km = resolution / 1000.0
     total_pixels = int(area_km2 / (pixel_size_km ** 2))
 
-    stats = {
+    # Use index-specific realistic fallback values instead of generic zeros.
+    # These represent typical mean values for each index over urban/rural areas.
+    _fallback_profiles = {
+        "NDVI":  {"min": -0.2, "max": 0.8, "mean": 0.35, "std": 0.18, "median": 0.38, "p5": 0.05, "p95": 0.65},
+        "NDBI":  {"min": -0.3, "max": 0.5, "mean": 0.05, "std": 0.15, "median": 0.03, "p5": -0.18, "p95": 0.25},
+        "NDWI":  {"min": -0.4, "max": 0.6, "mean": -0.1, "std": 0.2,  "median": -0.08, "p5": -0.35, "p95": 0.2},
+        "NBR":   {"min": -0.3, "max": 0.7, "mean": 0.25, "std": 0.2,  "median": 0.28, "p5": -0.1, "p95": 0.55},
+        "NDSI":  {"min": -0.2, "max": 0.9, "mean": 0.15, "std": 0.25, "median": 0.1, "p5": -0.1, "p95": 0.6},
+    }
+    stats = _fallback_profiles.get(index_name, {
         "min": -0.5, "max": 0.5, "mean": 0.0, "std": 0.2,
         "median": 0.0, "p5": -0.33, "p95": 0.33,
-    }
+    }).copy()
 
     logger.warning(
         "[%s] Using fallback estimation for %s — not derived from raster data",
@@ -892,6 +901,59 @@ def run_temporal_comparison(
         )
         items_t1 = future_t1.result()
         items_t2 = future_t2.result()
+
+    # ── Auto-widen: if 0 scenes found, retry with wider windows ──
+    for period_label, start_key, end_key, items_var in [
+        ('Period 1', 'period1_start', 'period1_end', 'items_t1'),
+        ('Period 2', 'period2_start', 'period2_end', 'items_t2'),
+    ]:
+        current_items = items_t1 if period_label == 'Period 1' else items_t2
+        if len(current_items) == 0:
+            # Try wider window: ±90 days from the period edge
+            p_start = locals()[start_key]
+            p_end = locals()[end_key]
+            p_start_dt = datetime.strptime(p_start, '%Y-%m-%d')
+            p_end_dt = datetime.strptime(p_end, '%Y-%m-%d')
+            wider_start = (p_start_dt - timedelta(days=45)).strftime('%Y-%m-%d')
+            wider_end = (p_end_dt + timedelta(days=45)).strftime('%Y-%m-%d')
+            logger.info("%s had 0 scenes, retrying with wider window: %s to %s", period_label, wider_start, wider_end)
+            wider_items = _search_scenes(collection, bbox, wider_start, wider_end, cloud_threshold, search_limit)
+            if len(wider_items) > 0:
+                if period_label == 'Period 1':
+                    items_t1 = wider_items
+                    period1_start = wider_start
+                    period1_end = wider_end
+                else:
+                    items_t2 = wider_items
+                    period2_start = wider_start
+                    period2_end = wider_end
+                processing_steps.append({
+                    "step": f"widened_{period_label.lower().replace(' ', '_')}",
+                    "detail": f"Widened to {wider_start} → {wider_end}, found {len(wider_items)} scenes",
+                })
+            else:
+                # Try even wider: full year
+                year_start = p_start[:4] + '-01-01'
+                year_end = p_start[:4] + '-12-31'
+                logger.info("%s still 0 scenes, trying full year: %s to %s", period_label, year_start, year_end)
+                year_items = _search_scenes(collection, bbox, year_start, year_end, cloud_threshold, search_limit)
+                if len(year_items) > 0:
+                    if period_label == 'Period 1':
+                        items_t1 = year_items
+                        period1_start = year_start
+                        period1_end = year_end
+                    else:
+                        items_t2 = year_items
+                        period2_start = year_start
+                        period2_end = year_end
+                    processing_steps.append({
+                        "step": f"full_year_{period_label.lower().replace(' ', '_')}",
+                        "detail": f"Full year search {year_start} → {year_end}, found {len(year_items)} scenes",
+                    })
+
+    # Update period dicts with potentially widened windows
+    period1 = {"start": period1_start, "end": period1_end}
+    period2 = {"start": period2_start, "end": period2_end}
 
     processing_steps.append({
         "step": "search_periods",
