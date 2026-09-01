@@ -1297,19 +1297,18 @@ router.post('/temporal-compare', optionalAuth, async (req: AuthRequest, res: Res
   if (analysis_type) pythonBody.analysis_type = analysis_type;
   if (cloud_threshold !== undefined) pythonBody.cloud_threshold = cloud_threshold;
 
-  // Quick check: is Python service alive? (3s timeout — skip if sleeping)
   const { callPythonService, isPythonServiceUp } = await import('../services/python-client');
-  const pythonAlive = await isPythonServiceUp();
-  const PYTHON_TIMEOUT = 120000; // 2 minutes — reduced from 5 min to fail fast
+  const PYTHON_TIMEOUT = 30000; // 30s — if Python doesn't respond, fall back to local
   
-  let result;
-  if (pythonAlive) {
-    result = await callPythonService('POST', '/analysis/temporal-compare', pythonBody, 'temporal-compare', PYTHON_TIMEOUT);
-  } else {
-    // Python service is sleeping — skip to local fallback immediately
-    console.log('[temporal-compare] Python service is sleeping, using local fallback');
-    result = { ok: false, requestId: 'skip', error: 'Python service sleeping', code: 'UPSTREAM_UNAVAILABLE', upstreamLatencyMs: 0 };
+  // Quick health pre-check (3s timeout)
+  const pythonAlive = await isPythonServiceUp();
+  if (!pythonAlive) {
+    console.log('[temporal-compare] Python service is sleeping, using local fallback immediately');
   }
+  
+  const result = pythonAlive
+    ? await callPythonService('POST', '/analysis/temporal-compare', pythonBody, 'temporal-compare', PYTHON_TIMEOUT)
+    : { ok: false, requestId: 'skip', error: 'Python service sleeping', code: 'UPSTREAM_UNAVAILABLE', upstreamLatencyMs: 0 };
 
   if (result.ok) {
     // ── Enrich imagery with tilejson URLs and bbox ─────────

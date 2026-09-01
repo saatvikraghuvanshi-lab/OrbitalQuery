@@ -119,8 +119,8 @@ export interface AnalysisState {
 
 // ── Constants ───────────────────────────────────────────────────
 
-/** 60s timeout — Python cold starts handled by retry + local fallback */
-const FETCH_TIMEOUT_MS = 60_000;
+/** 45s timeout — backend handles cold-start fallback within 30s */
+const FETCH_TIMEOUT_MS = 45_000;
 
 // ── Helper: single fetch attempt ────────────────────────────────
 
@@ -235,35 +235,8 @@ export function useAnalysis() {
       setState(prev => ({ ...prev, step: 'searching', detail: 'Querying satellite archives...' }));
 
       // ── Fetch with automatic retry for cold-start errors ──
-      let data: any = null;
-      const MAX_RETRIES = 1;
-      const isColdStartError = (err: any) =>
-        err?.code === 'PYTHON_UNAVAILABLE' || err?.code === 'HTTP_503' || err?.code === 'NETWORK' || err?.code === 'UPSTREAM_UNAVAILABLE';
-
-      for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-        try {
-          data = await fetchAnalysis(query, overrides);
-          break; // success — exit retry loop
-        } catch (err: any) {
-          const wrapped = err instanceof AnalysisError ? err : new AnalysisError(err.message, 'UNKNOWN');
-          if (attempt < MAX_RETRIES && isColdStartError(wrapped)) {
-            // Show retry status to user
-            const waitSec = 10;
-            setState(prev => ({
-              ...prev,
-              step: 'searching',
-              detail: `Engine waking up — retrying in ${waitSec}s...`,
-            }));
-            await new Promise(r => setTimeout(r, waitSec * 1000));
-            continue;
-          }
-          throw wrapped;
-        }
-      }
-
-      if (!data) {
-        throw new AnalysisError('No response from analysis engine.', 'UNKNOWN');
-      }
+      // Single fetch — backend handles cold-start fallback internally
+      const data = await fetchAnalysis(query, overrides);
 
       // ── Process successful response ───────────────────────
       const plan = data.plan;
@@ -339,13 +312,13 @@ export function useAnalysis() {
 
       if (code === 'TIMEOUT') {
         errorMessage =
-          'Request timed out after 90 seconds. The analysis engine may be experiencing high load or a cold start. Please try again.';
+          'Request timed out. The analysis engine may be experiencing high load. Please try again.';
       } else if (code === 'NETWORK') {
         errorMessage =
-          'Could not reach the analysis server. The server may be starting up. Please try again in 15 seconds.';
+          'Could not reach the analysis server. Please try again.';
       } else if (code === 'PYTHON_UNAVAILABLE' || code === 'HTTP_503') {
         errorMessage =
-          'The analysis engine is waking up from sleep (30-60s on first use). Please try again in 30 seconds.';
+          'The analysis engine is currently unavailable. Showing results from local dataset catalog.';
       }
 
       setState(prev => ({

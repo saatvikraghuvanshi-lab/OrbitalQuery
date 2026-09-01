@@ -16,7 +16,7 @@ const PYTHON_SERVICE_URL =
   process.env.PYTHON_SERVICE_URL || 'http://localhost:8000';
 
 const PYTHON_SERVICE_TIMEOUT_MS = parseInt(
-  process.env.PYTHON_SERVICE_TIMEOUT_MS || '300000', // 5 minutes — matches HF Spaces timeout
+  process.env.PYTHON_SERVICE_TIMEOUT_MS || '30000', // 30s — fall back to local if Python is slow
   10,
 );
 
