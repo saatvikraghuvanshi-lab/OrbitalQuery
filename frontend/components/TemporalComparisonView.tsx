@@ -39,7 +39,7 @@ const GOOGLE_TILE = 'https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}';
 // ── Synchronized Dual Map ───────────────────────────────────
 // ══════════════════════════════════════════════════════════════
 function SynchronizedDualMap({
-  bbox, sceneT1, sceneT2, thumbnailT1, thumbnailT2, signedTileUrl1, signedTileUrl2, sceneBboxT1, sceneBboxT2,
+  bbox, sceneT1, sceneT2, thumbnailT1, thumbnailT2, signedTileUrl1, signedTileUrl2, tilejsonUrl1, tilejsonUrl2, sceneBboxT1, sceneBboxT2,
 }: {
   bbox: number[];
   sceneT1: SceneInfo | null;
@@ -48,6 +48,8 @@ function SynchronizedDualMap({
   thumbnailT2?: string;
   signedTileUrl1?: string;
   signedTileUrl2?: string;
+  tilejsonUrl1?: string;
+  tilejsonUrl2?: string;
   sceneBboxT1?: any;
   sceneBboxT2?: any;
 }) {
@@ -68,7 +70,24 @@ function SynchronizedDualMap({
     import('leaflet').then(async (L) => {
       if (cancelled || !leftRef.current || !rightRef.current) return;
 
-      const initBounds = parseBbox(sceneBboxT1) || parseBbox(sceneBboxT2) || bbox;
+      // Fetch TileJSON to get correct tile template + bounds for each scene
+      async function fetchTilejson(url: string): Promise<{ tileTemplate: string; bounds: number[] } | null> {
+        try {
+          const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
+          if (!r.ok) return null;
+          const tj = await r.json();
+          return { tileTemplate: tj.tiles?.[0] || '', bounds: tj.bounds || [] };
+        } catch { return null; }
+      }
+
+      const [tj1, tj2] = await Promise.all([
+        tilejsonUrl1 ? fetchTilejson(tilejsonUrl1) : Promise.resolve(null),
+        tilejsonUrl2 ? fetchTilejson(tilejsonUrl2) : Promise.resolve(null),
+      ]);
+
+      // Use TileJSON bounds for init, fallback to scene bbox, then AOI
+      const initBounds = (tj1?.bounds && tj1.bounds.length === 4 ? tj1.bounds : null)
+        || parseBbox(sceneBboxT1) || parseBbox(sceneBboxT2) || bbox;
       const [west, south, east, north] = initBounds;
       const center: [number, number] = [(south + north) / 2, (west + east) / 2];
       const latDiff = north - south;
@@ -81,9 +100,13 @@ function SynchronizedDualMap({
       const rightMap = L.map(rightRef.current, { center, zoom: initZoom, zoomControl: false, attributionControl: false });
       L.tileLayer(GOOGLE_TILE, { maxZoom: 22, subdomains: ['0', '1', '2', '3'] }).addTo(rightMap);
 
+      // Use TileJSON tile templates if available (they work without signing)
+      const tileUrl1 = tj1?.tileTemplate || signedTileUrl1;
+      const tileUrl2 = tj2?.tileTemplate || signedTileUrl2;
+
       const [leftResult, rightResult] = await Promise.all([
-        loadSatelliteTiles(leftMap, { L, signedTileUrl: signedTileUrl1, sceneCollection: sceneT1?.collection, sceneItemId: sceneT1?.item_id, thumbnailUrl: thumbnailT1, sceneBbox: sceneBboxT1, aoiBbox: bbox, opacity: 0.9 }),
-        loadSatelliteTiles(rightMap, { L, signedTileUrl: signedTileUrl2, sceneCollection: sceneT2?.collection, sceneItemId: sceneT2?.item_id, thumbnailUrl: thumbnailT2, sceneBbox: sceneBboxT2, aoiBbox: bbox, opacity: 0.9 }),
+        loadSatelliteTiles(leftMap, { L, signedTileUrl: tileUrl1, tilejsonUrl: tilejsonUrl1, sceneCollection: sceneT1?.collection, sceneItemId: sceneT1?.item_id, thumbnailUrl: thumbnailT1, sceneBbox: tj1?.bounds?.length === 4 ? tj1.bounds : sceneBboxT1, aoiBbox: bbox, opacity: 0.9 }),
+        loadSatelliteTiles(rightMap, { L, signedTileUrl: tileUrl2, tilejsonUrl: tilejsonUrl2, sceneCollection: sceneT2?.collection, sceneItemId: sceneT2?.item_id, thumbnailUrl: thumbnailT2, sceneBbox: tj2?.bounds?.length === 4 ? tj2.bounds : sceneBboxT2, aoiBbox: bbox, opacity: 0.9 }),
       ]);
 
       if (cancelled) return;
@@ -95,8 +118,9 @@ function SynchronizedDualMap({
       L.rectangle(aoiBounds, { color: '#22d3ee', weight: 1, fillColor: '#22d3ee', fillOpacity: 0.03, dashArray: '6 3' }).addTo(leftMap);
       L.rectangle(aoiBounds, { color: '#22d3ee', weight: 1, fillColor: '#22d3ee', fillOpacity: 0.03, dashArray: '6 3' }).addTo(rightMap);
 
-      leftMap.fitBounds(leftResult.bounds, { padding: [20, 20] });
-      rightMap.fitBounds(rightResult.bounds, { padding: [20, 20] });
+      const fitBounds = leftResult.hasImagery ? leftResult.bounds : rightResult.bounds;
+      leftMap.fitBounds(fitBounds, { padding: [20, 20] });
+      rightMap.fitBounds(fitBounds, { padding: [20, 20] });
 
       setTimeout(() => { leftMap.invalidateSize(); rightMap.invalidateSize(); }, 100);
 
@@ -125,7 +149,7 @@ function SynchronizedDualMap({
       leftMapRef.current = null;
       rightMapRef.current = null;
     };
-  }, [bbox, thumbnailT1, thumbnailT2, signedTileUrl1, signedTileUrl2, sceneBboxT1, sceneBboxT2]);
+  }, [bbox, thumbnailT1, thumbnailT2, tilejsonUrl1, tilejsonUrl2, signedTileUrl1, signedTileUrl2, sceneBboxT1, sceneBboxT2]);
 
   return (
     <div className="w-full grid grid-cols-2 gap-[2px]" style={{ height: 'clamp(400px, 65vh, 700px)' }}>
@@ -600,7 +624,7 @@ export default function TemporalComparisonView({ result }: Props) {
             {/* Mode switcher — centered at top of map */}
             <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[1010]">
               <div className="inline-flex bg-oq-950/85 backdrop-blur-sm rounded border border-oq-700/30 p-[2px]">
-                {(['side-by-side', 'swipe', 'difference'] as ViewMode[]).map((mode) => (
+                {(['side-by-side', 'swipe', 'difference', 'change-mask'] as ViewMode[]).map((mode) => (
                   <button
                     key={mode}
                     onClick={() => setViewMode(mode)}
@@ -625,6 +649,8 @@ export default function TemporalComparisonView({ result }: Props) {
               thumbnailT1={result.imagery?.period1?.thumbnail} thumbnailT2={result.imagery?.period2?.thumbnail}
               signedTileUrl1={result.imagery?.period1?.tile_url as string}
               signedTileUrl2={result.imagery?.period2?.tile_url as string}
+              tilejsonUrl1={result.imagery?.period1?.tilejson as string}
+              tilejsonUrl2={result.imagery?.period2?.tilejson as string}
               sceneBboxT1={result.imagery?.period1?.bbox || result.scene_t1?.bbox}
               sceneBboxT2={result.imagery?.period2?.bbox || result.scene_t2?.bbox}
             />
@@ -635,6 +661,8 @@ export default function TemporalComparisonView({ result }: Props) {
               thumbnailT1={result.imagery?.period1?.thumbnail} thumbnailT2={result.imagery?.period2?.thumbnail}
               signedTileUrl1={result.imagery?.period1?.tile_url as string}
               signedTileUrl2={result.imagery?.period2?.tile_url as string}
+              tilejsonUrl1={result.imagery?.period1?.tilejson as string}
+              tilejsonUrl2={result.imagery?.period2?.tilejson as string}
               sceneT1={result.scene_t1} sceneT2={result.scene_t2}
               sceneBboxT1={result.imagery?.period1?.bbox || result.scene_t1?.bbox}
               sceneBboxT2={result.imagery?.period2?.bbox || result.scene_t2?.bbox}

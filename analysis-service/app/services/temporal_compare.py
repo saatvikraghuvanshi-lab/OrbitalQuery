@@ -266,7 +266,13 @@ def _scene_to_selection(item: dict[str, Any], provider_name: str) -> SceneSelect
 
 
 def _get_imagery_urls(scene: SceneSelection) -> dict[str, str]:
-    """Extract imagery URLs from a scene's assets + construct TileJSON URL."""
+    """Extract imagery URLs from a scene's assets + construct TileJSON URL.
+
+    Returns tilejson URL and bounds so the frontend can fetch the signed
+    tile template from Planetary Computer directly. The tilejson endpoint
+    returns tiles that work WITHOUT signing — we just need to fetch it
+    to get the correct tile template and spatial bounds.
+    """
     urls = {}
     assets = scene.assets
 
@@ -286,22 +292,10 @@ def _get_imagery_urls(scene: SceneSelection) -> dict[str, str]:
                 urls["rendered"] = href
                 break
 
-    # TileURL: Construct and sign for Planetary Computer
+    # TileJSON URL — the frontend fetches this to get the signed tile template + bounds.
+    # pc.sign() fails silently on Render free tier, so we return the unsigned tilejson
+    # URL. The PC tilejson endpoint returns tile URLs that work WITHOUT authentication.
     if scene.collection and scene.item_id:
-        tile_url = (
-            f"https://planetarycomputer.microsoft.com/api/data/v1/item/tiles/WebMercatorQuad/{{z}}/{{x}}/{{y}}@1x"
-            f"?collection={scene.collection}"
-            f"&item={scene.item_id}"
-            f"&assets=visual"
-        )
-        # Sign the tile URL for Planetary Computer access
-        try:
-            import planetary_computer as pc
-            signed = pc.sign(tile_url)
-            urls["tile_url"] = signed
-        except Exception:
-            urls["tile_url"] = tile_url
-
         tilejson_url = (
             f"https://planetarycomputer.microsoft.com/api/data/v1/item/tilejson.json"
             f"?collection={scene.collection}"
@@ -309,11 +303,16 @@ def _get_imagery_urls(scene: SceneSelection) -> dict[str, str]:
             f"&assets=visual"
             f"&asset_bidx=visual%7C1%2C2%2C3"
         )
-        try:
-            import planetary_computer as pc
-            urls["tilejson"] = pc.sign(tilejson_url)
-        except Exception:
-            urls["tilejson"] = tilejson_url
+        urls["tilejson"] = tilejson_url
+
+        # Also provide the direct tile URL as fallback (may not work without signing)
+        tile_url = (
+            f"https://planetarycomputer.microsoft.com/api/data/v1/item/tiles/WebMercatorQuad/{{z}}/{{x}}/{{y}}@1x"
+            f"?collection={scene.collection}"
+            f"&item={scene.item_id}"
+            f"&assets=visual"
+        )
+        urls["tile_url"] = tile_url
 
     # Also check assets for tilejson (backup)
     if "tilejson" not in urls and "tilejson" in assets:

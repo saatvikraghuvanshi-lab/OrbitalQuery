@@ -119,8 +119,8 @@ export interface AnalysisState {
 
 // ── Constants ───────────────────────────────────────────────────
 
-/** 60s timeout — Python cold start + analysis can take 45-50s */
-const FETCH_TIMEOUT_MS = 60_000;
+/** 90s timeout — Vercel rewrite + Render cold start + analysis processing */
+const FETCH_TIMEOUT_MS = 90_000;
 
 // ── Helper: single fetch attempt ────────────────────────────────
 

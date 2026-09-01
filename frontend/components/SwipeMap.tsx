@@ -15,8 +15,8 @@ interface SwipeMapProps {
   bbox: number[];
   thumbnailT1?: string;
   thumbnailT2?: string;
-  tilejsonT1?: string;
-  tilejsonT2?: string;
+  tilejsonUrl1?: string;
+  tilejsonUrl2?: string;
   signedTileUrl1?: string;
   signedTileUrl2?: string;
   sceneBboxT1?: any;
@@ -43,8 +43,8 @@ export default function SwipeMap({
   thumbnailT2,
   signedTileUrl1,
   signedTileUrl2,
-  tilejsonT1,
-  tilejsonT2,
+  tilejsonUrl1,
+  tilejsonUrl2,
   sceneBboxT1,
   sceneBboxT2,
   sceneT1,
@@ -68,13 +68,34 @@ export default function SwipeMap({
     import('leaflet').then(async (L) => {
       if (cancelled || !bottomRef.current || !topRef.current) return;
 
-      // Use scene bbox for initial zoom
-      const initBounds = parseBbox(sceneBboxT1) || parseBbox(sceneBboxT2) || bbox;
+      // Fetch TileJSON to get correct tile templates + bounds for each scene
+      async function fetchTilejson(url: string): Promise<{ tileTemplate: string; bounds: number[] } | null> {
+        try {
+          const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
+          if (!r.ok) return null;
+          const tj = await r.json();
+          return { tileTemplate: tj.tiles?.[0] || '', bounds: tj.bounds || [] };
+        } catch { return null; }
+      }
+
+      const [tj1, tj2] = await Promise.all([
+        tilejsonUrl1 ? fetchTilejson(tilejsonUrl1) : Promise.resolve(null),
+        tilejsonUrl2 ? fetchTilejson(tilejsonUrl2) : Promise.resolve(null),
+      ]);
+
+      // Use TileJSON bounds for init zoom if available
+      const initBounds = (tj2?.bounds && tj2.bounds.length === 4 ? tj2.bounds : null)
+        || (tj1?.bounds && tj1.bounds.length === 4 ? tj1.bounds : null)
+        || parseBbox(sceneBboxT1) || parseBbox(sceneBboxT2) || bbox;
       const [west, south, east, north] = initBounds;
       const center: [number, number] = [(south + north) / 2, (west + east) / 2];
       const latDiff = north - south;
       const lngDiff = east - west;
       const initZoom = Math.min(12, Math.max(6, Math.floor(Math.log2(360 / Math.max(latDiff, lngDiff)))));
+
+      // Use TileJSON tile templates if available (they work without signing)
+      const tileUrl1 = tj1?.tileTemplate || signedTileUrl1;
+      const tileUrl2 = tj2?.tileTemplate || signedTileUrl2;
 
       // ── Create both maps with Google Satellite basemap ──────
       const bottomMap = L.map(bottomRef.current, {
@@ -93,11 +114,12 @@ export default function SwipeMap({
       // Period 2 (After) → Bottom map (full, no clipping)
       const bottomResult = await loadSatelliteTiles(bottomMap, {
         L,
-        signedTileUrl: signedTileUrl2,
+        signedTileUrl: tileUrl2,
+        tilejsonUrl: tilejsonUrl2,
         sceneCollection: sceneT2?.collection,
         sceneItemId: sceneT2?.item_id,
         thumbnailUrl: thumbnailT2,
-        sceneBbox: sceneBboxT2,
+        sceneBbox: tj2?.bounds?.length === 4 ? tj2.bounds : sceneBboxT2,
         aoiBbox: bbox,
         opacity: 0.9,
       });
@@ -105,11 +127,12 @@ export default function SwipeMap({
       // Period 1 (Before) → Top map (clipped via CSS clip-path)
       const topResult = await loadSatelliteTiles(topMap, {
         L,
-        signedTileUrl: signedTileUrl1,
+        signedTileUrl: tileUrl1,
+        tilejsonUrl: tilejsonUrl1,
         sceneCollection: sceneT1?.collection,
         sceneItemId: sceneT1?.item_id,
         thumbnailUrl: thumbnailT1,
-        sceneBbox: sceneBboxT1,
+        sceneBbox: tj1?.bounds?.length === 4 ? tj1.bounds : sceneBboxT1,
         aoiBbox: bbox,
         opacity: 0.9,
       });
@@ -162,7 +185,7 @@ export default function SwipeMap({
       topMapRef.current = null;
       topSatelliteRef.current = null;
     };
-  }, [bbox, thumbnailT1, thumbnailT2, signedTileUrl1, signedTileUrl2, tilejsonT1, tilejsonT2, sceneBboxT1, sceneBboxT2]);
+  }, [bbox, thumbnailT1, thumbnailT2, signedTileUrl1, signedTileUrl2, tilejsonUrl1, tilejsonUrl2, sceneBboxT1, sceneBboxT2]);
 
   // Apply clip-path to the satellite imagery layer
   function applyClip(layer: any, pos: number) {

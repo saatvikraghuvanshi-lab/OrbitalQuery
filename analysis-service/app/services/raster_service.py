@@ -9,11 +9,9 @@ import logging
 import os
 from typing import Any, Optional
 
-# GDAL memory limits for Render free tier (512MB)
-os.environ.setdefault("GDAL_CACHEMAX", "64")
-os.environ.setdefault("GDAL_DISABLE_READDIR_ON_OPEN", "EMPTY_DIR")
-os.environ.setdefault("CPL_VSIL_CURL_ALLOWED_EXTENSIONS", "tif")
-os.environ.setdefault("GDAL_HTTP_TIMEOUT", "30")
+# NOTE: GDAL env vars are set INSIDE rasterio.Env() blocks, not at module level.
+# Setting GDAL_CACHEMAX="64" (string) at module level causes
+# TypeError: an integer is required when GDAL reads the env var before rasterio.Env().
 
 logger = logging.getLogger(__name__)
 

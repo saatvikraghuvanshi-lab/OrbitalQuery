@@ -345,18 +345,14 @@ function HomePageContent() {
                 {/* Dashboard grid */}
                 <div className={`grid gap-4 flex-1 min-h-0 ${
                   (analysis.state.plan || analysis.state.scenes.length > 0)
-                    ? 'grid-cols-1 lg:grid-cols-12'
+                    ? 'grid-cols-1 lg:grid-cols-[1fr_320px]'
                     : 'grid-cols-1'
                 }`}>
-                  <div className={`flex flex-col min-h-0 ${
-                    (analysis.state.plan || analysis.state.scenes.length > 0)
-                      ? 'col-span-12 lg:col-span-7'
-                      : ''
-                  }`}>
+                  <div className="flex flex-col min-h-0">
                     <TerminalLog steps={analysis.state.processingSteps} currentDetail={analysis.state.detail} />
                   </div>
                   {(analysis.state.plan || analysis.state.scenes.length > 0) && (
-                    <div className="col-span-12 lg:col-span-5 flex flex-col gap-4 overflow-y-auto min-h-0">
+                    <div className="flex flex-col gap-4 overflow-y-auto min-h-0">
                       {analysis.state.plan && <AnalysisPlanView plan={analysis.state.plan} />}
                       {analysis.state.scenes.length > 0 && <EvidencePanel scenes={analysis.state.scenes} />}
                     </div>
