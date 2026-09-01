@@ -1297,18 +1297,12 @@ router.post('/temporal-compare', optionalAuth, async (req: AuthRequest, res: Res
   if (analysis_type) pythonBody.analysis_type = analysis_type;
   if (cloud_threshold !== undefined) pythonBody.cloud_threshold = cloud_threshold;
 
-  const { callPythonService, isPythonServiceUp } = await import('../services/python-client');
-  const PYTHON_TIMEOUT = 30000; // 30s — if Python doesn't respond, fall back to local
+  const { callPythonService } = await import('../services/python-client');
+  const PYTHON_TIMEOUT = 45000; // 45s — enough for Python cold start + analysis
   
-  // Quick health pre-check (3s timeout)
-  const pythonAlive = await isPythonServiceUp();
-  if (!pythonAlive) {
-    console.log('[temporal-compare] Python service is sleeping, using local fallback immediately');
-  }
-  
-  const result = pythonAlive
-    ? await callPythonService('POST', '/analysis/temporal-compare', pythonBody, 'temporal-compare', PYTHON_TIMEOUT)
-    : { ok: false, requestId: 'skip', error: 'Python service sleeping', code: 'UPSTREAM_UNAVAILABLE', upstreamLatencyMs: 0 };
+  // Call Python directly (no health pre-check — it adds latency and
+  // incorrectly skips Python during cold starts)
+  const result = await callPythonService('POST', '/analysis/temporal-compare', pythonBody, 'temporal-compare', PYTHON_TIMEOUT);
 
   if (result.ok) {
     // ── Enrich imagery with tilejson URLs and bbox ─────────

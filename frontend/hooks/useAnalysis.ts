@@ -119,8 +119,8 @@ export interface AnalysisState {
 
 // ── Constants ───────────────────────────────────────────────────
 
-/** 45s timeout — backend handles cold-start fallback within 30s */
-const FETCH_TIMEOUT_MS = 45_000;
+/** 60s timeout — Python cold start + analysis can take 45-50s */
+const FETCH_TIMEOUT_MS = 60_000;
 
 // ── Helper: single fetch attempt ────────────────────────────────
 
@@ -235,8 +235,30 @@ export function useAnalysis() {
       setState(prev => ({ ...prev, step: 'searching', detail: 'Querying satellite archives...' }));
 
       // ── Fetch with automatic retry for cold-start errors ──
-      // Single fetch — backend handles cold-start fallback internally
-      const data = await fetchAnalysis(query, overrides);
+      // Fetch with single retry for cold-start recovery
+      let data: any = null;
+      for (let attempt = 0; attempt <= 1; attempt++) {
+        try {
+          data = await fetchAnalysis(query, overrides);
+          break;
+        } catch (err: any) {
+          const wrapped = err instanceof AnalysisError ? err : new AnalysisError(err.message, 'UNKNOWN');
+          const isColdStart = wrapped.code === 'PYTHON_UNAVAILABLE' || wrapped.code === 'HTTP_503' || wrapped.code === 'TIMEOUT';
+          if (attempt === 0 && isColdStart) {
+            setState(prev => ({
+              ...prev,
+              step: 'searching',
+              detail: 'Engine waking up — retrying in 10s...',
+            }));
+            await new Promise(r => setTimeout(r, 10_000));
+            continue;
+          }
+          throw wrapped;
+        }
+      }
+      if (!data) {
+        throw new AnalysisError('No response from analysis engine.', 'UNKNOWN');
+      }
 
       // ── Process successful response ───────────────────────
       const plan = data.plan;
