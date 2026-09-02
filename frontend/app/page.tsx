@@ -298,7 +298,7 @@ function HomePageContent() {
         {/* ── ANALYSIS IN PROGRESS ─────────────────────────── */}
         {step !== 'idle' && step !== 'complete' && step !== 'error' && (
           <div className="flex-1 flex flex-col overflow-hidden">
-              <div className="max-w-[1400px] mx-auto px-6 py-4 h-full flex flex-col">
+              <div className="w-full px-6 py-4 h-full flex flex-col">
                 {/* Back + query */}
                 <div className="flex items-center justify-between mb-3">
                   <button onClick={analysis.reset} className="flex items-center gap-1.5 text-[11px] text-oq-300 hover:text-lime transition-colors font-medium">
@@ -343,20 +343,14 @@ function HomePageContent() {
                 </div>
 
                 {/* Dashboard grid */}
-                <div className={`grid gap-4 flex-1 min-h-0 ${
-                  (analysis.state.plan || analysis.state.scenes.length > 0)
-                    ? 'grid-cols-1 lg:grid-cols-[1fr_320px]'
-                    : 'grid-cols-1'
-                }`}>
+                <div className="flex-1 grid grid-cols-[1fr_360px] gap-4 min-h-0">
                   <div className="flex flex-col min-h-0">
                     <TerminalLog steps={analysis.state.processingSteps} currentDetail={analysis.state.detail} />
                   </div>
-                  {(analysis.state.plan || analysis.state.scenes.length > 0) && (
-                    <div className="flex flex-col gap-4 overflow-y-auto min-h-0">
-                      {analysis.state.plan && <AnalysisPlanView plan={analysis.state.plan} />}
-                      {analysis.state.scenes.length > 0 && <EvidencePanel scenes={analysis.state.scenes} />}
-                    </div>
-                  )}
+                  <div className="flex flex-col gap-4 overflow-y-auto min-h-0">
+                    {analysis.state.plan && <AnalysisPlanView plan={analysis.state.plan} />}
+                    {analysis.state.scenes.length > 0 && <EvidencePanel scenes={analysis.state.scenes} />}
+                  </div>
                 </div>
               </div>
             </div>
