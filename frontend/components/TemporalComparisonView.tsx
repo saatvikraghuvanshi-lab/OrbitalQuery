@@ -349,35 +349,31 @@ function ProcessingPipeline({ steps }: { steps: Array<{ step: string; detail: st
 }
 
 // ══════════════════════════════════════════════════════════════
-// ── Three-Panel View (Before → After → Change) ──────────────
+// ── Change Mask View (single full-width map) ────────────────
 // ══════════════════════════════════════════════════════════════
-function ThreePanelView({
+function ChangeMaskView({
   bbox, sceneT1, sceneT2, thumbnailT1, thumbnailT2, sceneBboxT1, sceneBboxT2,
-  changeMaskB64, diffVisB64, changeVisBbox, config,
+  changeMaskB64, changeVisBbox, changeVisStats, config,
 }: {
   bbox: number[];
   sceneT1: SceneInfo | null; sceneT2: SceneInfo | null;
   thumbnailT1?: string; thumbnailT2?: string;
   sceneBboxT1?: any; sceneBboxT2?: any;
   changeMaskB64: string | null;
-  diffVisB64: string | null;
   changeVisBbox: number[] | null;
+  changeVisStats: Record<string, any>;
   config: { color: string; label: string; indexLabel: string };
 }) {
-  const leftRef = useRef<HTMLDivElement>(null);
-  const centerRef = useRef<HTMLDivElement>(null);
-  const rightRef = useRef<HTMLDivElement>(null);
-  const leftMapRef = useRef<any>(null);
-  const centerMapRef = useRef<any>(null);
-  const [vizMode, setVizMode] = useState<'change-mask' | 'difference'>('change-mask');
-  const [loading, setLoading] = useState({ left: true, center: true });
+  const mapRef = useRef<HTMLDivElement>(null);
+  const mapRefInst = useRef<any>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!leftRef.current || !centerRef.current || leftMapRef.current) return;
+    if (!mapRef.current || mapRefInst.current) return;
     let cancelled = false;
 
     import('leaflet').then(async (L) => {
-      if (cancelled || !leftRef.current || !centerRef.current) return;
+      if (cancelled || !mapRef.current) return;
 
       const initBounds = parseBbox(sceneBboxT1) || parseBbox(sceneBboxT2) || bbox;
       const [west, south, east, north] = initBounds;
@@ -386,168 +382,171 @@ function ThreePanelView({
       const lngDiff = east - west;
       const initZoom = Math.min(12, Math.max(6, Math.floor(Math.log2(360 / Math.max(latDiff, lngDiff)))));
 
-      const leftMap = L.map(leftRef.current, { center, zoom: initZoom, zoomControl: false, attributionControl: false });
-      L.tileLayer(GOOGLE_TILE, { maxZoom: 22, subdomains: ['0', '1', '2', '3'] }).addTo(leftMap);
+      const map = L.map(mapRef.current, { center, zoom: initZoom, zoomControl: false, attributionControl: false });
+      L.tileLayer(GOOGLE_TILE, { maxZoom: 22, subdomains: ['0', '1', '2', '3'] }).addTo(map);
 
-      const centerMap = L.map(centerRef.current, { center, zoom: initZoom, zoomControl: false, attributionControl: false });
-      L.tileLayer(GOOGLE_TILE, { maxZoom: 22, subdomains: ['0', '1', '2', '3'] }).addTo(centerMap);
-
-      const [leftResult, centerResult] = await Promise.all([
-        loadSatelliteTiles(leftMap, { L, sceneCollection: sceneT1?.collection, sceneItemId: sceneT1?.item_id, thumbnailUrl: thumbnailT1, sceneBbox: sceneBboxT1, aoiBbox: bbox, opacity: 0.9 }),
-        loadSatelliteTiles(centerMap, { L, sceneCollection: sceneT2?.collection, sceneItemId: sceneT2?.item_id, thumbnailUrl: thumbnailT2, sceneBbox: sceneBboxT2, aoiBbox: bbox, opacity: 0.9 }),
-      ]);
+      // Load satellite tiles for context
+      const result = await loadSatelliteTiles(map, {
+        L,
+        sceneCollection: sceneT1?.collection,
+        sceneItemId: sceneT1?.item_id,
+        thumbnailUrl: thumbnailT1,
+        sceneBbox: sceneBboxT1,
+        aoiBbox: bbox,
+        opacity: 0.4,  // dimmed — the change mask is the focus
+        zIndex: 300,
+      });
 
       if (cancelled) return;
-      setLoading({ left: false, center: false });
+      setLoading(false);
 
+      // AOI boundary
       const aoiBounds = boundsToLatLng(bbox);
-      L.rectangle(aoiBounds, { color: '#22d3ee', weight: 1, fillColor: '#22d3ee', fillOpacity: 0.03, dashArray: '6 3' }).addTo(leftMap);
-      L.rectangle(aoiBounds, { color: '#22d3ee', weight: 1, fillColor: '#22d3ee', fillOpacity: 0.03, dashArray: '6 3' }).addTo(centerMap);
+      L.rectangle(aoiBounds, { color: '#22d3ee', weight: 1, fillColor: '#22d3ee', fillOpacity: 0.02, dashArray: '6 3' }).addTo(map);
 
-      leftMap.fitBounds(leftResult.bounds, { padding: [15, 15] });
-      centerMap.fitBounds(centerResult.bounds, { padding: [15, 15] });
+      map.fitBounds(result.bounds, { padding: [20, 20] });
+      setTimeout(() => map.invalidateSize(), 100);
 
-      setTimeout(() => { leftMap.invalidateSize(); centerMap.invalidateSize(); }, 100);
-
-      leftMap.on('move', () => {
-        centerMap.setView(leftMap.getCenter(), leftMap.getZoom(), { animate: false });
-      });
-      centerMap.on('move', () => {
-        leftMap.setView(centerMap.getCenter(), centerMap.getZoom(), { animate: false });
-      });
-
-      leftMapRef.current = leftMap;
-      centerMapRef.current = centerMap;
+      mapRefInst.current = map;
     });
 
-    return () => {
-      cancelled = true;
-      leftMapRef.current?.remove();
-      centerMapRef.current?.remove();
-      leftMapRef.current = null;
-      centerMapRef.current = null;
-    };
-  }, [bbox, thumbnailT1, thumbnailT2, sceneBboxT1, sceneBboxT2]);
+    return () => { cancelled = true; mapRefInst.current?.remove(); mapRefInst.current = null; };
+  }, [bbox, thumbnailT1, sceneBboxT1]);
 
-  // Decode the visualization hex string to a data URL
+  // Decode and overlay the change mask
   const decodeVis = (hex: string | null): string | null => {
     if (!hex) return null;
     try {
       const bytes = new Uint8Array(hex.match(/.{1,2}/g)!.map(b => parseInt(b, 16)));
-      const blob = new Blob([bytes], { type: 'image/png' });
-      return URL.createObjectURL(blob);
+      return URL.createObjectURL(new Blob([bytes], { type: 'image/png' }));
     } catch { return null; }
   };
 
   const changeMaskUrl = decodeVis(changeMaskB64);
-  const diffVisUrl = decodeVis(diffVisB64);
-  const activeVisUrl = vizMode === 'change-mask' ? changeMaskUrl : diffVisUrl;
   const visBbox = changeVisBbox || bbox;
   const visBoundsStr = `${visBbox[1]},${visBbox[0]},${visBbox[3]},${visBbox[2]}`;
 
-  // Add/remove image overlay when viz changes
   const overlayRef = useRef<any>(null);
   useEffect(() => {
-    if (!centerMapRef.current || !activeVisUrl) return;
-    const map = centerMapRef.current;
+    if (!mapRefInst.current || !changeMaskUrl) return;
+    const map = mapRefInst.current;
     if (overlayRef.current) {
       map.removeLayer(overlayRef.current);
       overlayRef.current = null;
     }
     const bounds: [[number, number], [number, number]] = [[visBbox[1], visBbox[0]], [visBbox[3], visBbox[2]]];
     import('leaflet').then(({ default: L }) => {
-      const img = L.imageOverlay(activeVisUrl, bounds as any, { opacity: 0.75, zIndex: 450 }).addTo(map);
+      const img = L.imageOverlay(changeMaskUrl, bounds as any, { opacity: 0.85, zIndex: 500 }).addTo(map);
       overlayRef.current = img;
     });
     return () => { if (overlayRef.current) { map.removeLayer(overlayRef.current); overlayRef.current = null; } };
-  }, [activeVisUrl, visBoundsStr]);
+  }, [changeMaskUrl, visBoundsStr]);
+
+  // Stats from backend
+  const lossKm2 = changeVisStats.loss_area_km2 ?? 0;
+  const gainKm2 = changeVisStats.gain_area_km2 ?? 0;
+  const lossPixels = changeVisStats.loss_pixels ?? 0;
+  const gainPixels = changeVisStats.gain_pixels ?? 0;
+  const dominantTrend = changeVisStats.dominant_trend ?? 'stable_mixed';
+  const threshold = changeVisStats.threshold ?? 0.15;
+  const numLossRegions = changeVisStats.num_loss_regions ?? 0;
+  const numGainRegions = changeVisStats.num_gain_regions ?? 0;
+  const totalAnalyzed = changeVisStats.total_analyzed_km2 ?? 0;
+
+  const trendLabel = dominantTrend === 'vegetation_loss' ? 'VEGETATION LOSS'
+    : dominantTrend === 'vegetation_gain' ? 'VEGETATION GAIN'
+    : 'STABLE / MIXED';
+  const trendColor = dominantTrend === 'vegetation_loss' ? '#DC3C3C'
+    : dominantTrend === 'vegetation_gain' ? '#22B45A'
+    : '#9CA3AF';
 
   return (
     <div className="relative">
-      {/* Three panels */}
-      <div className="grid grid-cols-3 gap-[2px]" style={{ height: 'clamp(400px, 65vh, 700px)' }}>
-        {/* Before */}
-        <div className="relative rounded-l-lg overflow-hidden bg-oq-950">
-          <div ref={leftRef} className="absolute inset-0" />
-          <div className="absolute top-2 left-2 z-[1000] px-2 py-0.5 rounded text-[8px] font-bold uppercase tracking-widest bg-oq-950/80" style={{ color: '#60A5FA', border: '1px solid rgba(96,165,250,0.2)' }}>Before</div>
-          {loading.left && (
-            <div className="absolute inset-0 z-[1000] flex items-center justify-center bg-oq-950/60">
-              <div className="flex items-center gap-2 px-3 py-1.5 rounded bg-oq-900/90 border border-oq-700/30">
-                <svg className="animate-spin h-3 w-3 text-lime" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
-                <span className="text-[9px] text-oq-200">Loading...</span>
-              </div>
-            </div>
-          )}
+      {/* Full-width change mask map */}
+      <div className="relative rounded-lg overflow-hidden bg-oq-950" style={{ height: 'clamp(400px, 65vh, 700px)' }}>
+        <div ref={mapRef} className="absolute inset-0" />
+
+        {/* Title badge */}
+        <div className="absolute top-3 left-3 z-[1000] px-3 py-1 rounded bg-oq-950/85 backdrop-blur-sm border border-oq-700/30">
+          <span className="text-[9px] font-bold uppercase tracking-widest" style={{ color: '#10B981' }}>Change Detection</span>
+          <span className="text-[8px] text-oq-300 ml-2">{config.indexLabel}-based categorical mask</span>
         </div>
 
-        {/* After */}
-        <div className="relative overflow-hidden bg-oq-950">
-          <div ref={centerRef} className="absolute inset-0" />
-          <div className="absolute top-2 left-2 z-[1000] px-2 py-0.5 rounded text-[8px] font-bold uppercase tracking-widest bg-oq-950/80" style={{ color: '#FB923C', border: '1px solid rgba(251,146,60,0.2)' }}>After</div>
-          {loading.center && (
-            <div className="absolute inset-0 z-[1000] flex items-center justify-center bg-oq-950/60">
-              <div className="flex items-center gap-2 px-3 py-1.5 rounded bg-oq-900/90 border border-oq-700/30">
-                <svg className="animate-spin h-3 w-3 text-lime" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
-                <span className="text-[9px] text-oq-200">Loading...</span>
-              </div>
+        {/* Legend */}
+        <div className="absolute top-3 right-12 z-[1000] bg-oq-950/85 backdrop-blur-sm rounded border border-oq-700/30 px-3 py-2">
+          <div className="text-[7px] uppercase tracking-wider mb-1.5 font-medium" style={{ color: '#9CA3AF' }}>Legend</div>
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded-sm" style={{ background: 'rgba(220,60,60,0.85)' }} />
+              <span className="text-[9px] font-medium" style={{ color: '#E5E7EB' }}>Loss ({lossPixels.toLocaleString()} px / {lossKm2} km²)</span>
             </div>
-          )}
-        </div>
-
-        {/* Change Detected */}
-        <div className="relative rounded-r-lg overflow-hidden bg-oq-950">
-          <div ref={rightRef} className="absolute inset-0 bg-oq-950" />
-          <div className="absolute top-2 left-2 z-[1000] px-2 py-0.5 rounded text-[8px] font-bold uppercase tracking-widest bg-oq-950/80" style={{ color: '#10B981', border: '1px solid rgba(16,185,129,0.2)' }}>Change Detected</div>
-          {activeVisUrl ? (
-            <img src={activeVisUrl} className="absolute inset-0 w-full h-full object-cover z-[500]" style={{ mixBlendMode: 'normal' }} alt="Change detection visualization" />
-          ) : (
-            <div className="absolute inset-0 flex flex-col items-center justify-center z-[500]">
-              <svg className="w-6 h-6 mb-1" style={{ color: '#68756E' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" /></svg>
-              <span className="text-[9px]" style={{ color: '#9CA3AF' }}>No visualization available</span>
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded-sm" style={{ background: 'rgba(34,180,90,0.85)' }} />
+              <span className="text-[9px] font-medium" style={{ color: '#E5E7EB' }}>Gain ({gainPixels.toLocaleString()} px / {gainKm2} km²)</span>
             </div>
-          )}
-          {/* Legend */}
-          {activeVisUrl && vizMode === 'change-mask' && (
-            <div className="absolute bottom-10 left-2 z-[1000] bg-oq-950/90 backdrop-blur-sm rounded border border-oq-700/30 px-2.5 py-1.5">
-              <div className="text-[7px] uppercase tracking-wider mb-1" style={{ color: '#9CA3AF' }}>Legend</div>
-              <div className="flex flex-col gap-1">
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-sm" style={{ background: 'rgba(34,197,94,0.8)' }} />
-                  <span className="text-[8px]" style={{ color: '#E5E7EB' }}>Increase (vegetation gain, water expansion)</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-sm" style={{ background: 'rgba(239,68,68,0.8)' }} />
-                  <span className="text-[8px]" style={{ color: '#E5E7EB' }}>Decrease (vegetation loss, urban expansion)</span>
-                </div>
-              </div>
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded-sm" style={{ background: 'rgba(15,22,18,0.6)', border: '1px solid rgba(42,58,47,0.5)' }} />
+              <span className="text-[9px] font-medium" style={{ color: '#9CA3AF' }}>Stable</span>
             </div>
-          )}
-          {/* Zoom controls */}
-          <div className="absolute bottom-2 right-2 z-[1000] flex flex-col rounded overflow-hidden border border-oq-700/30" style={{ padding: 10 }}>
-            <button onClick={() => { leftMapRef.current?.zoomIn(); centerMapRef.current?.zoomIn(); }} className="w-6 h-6 flex items-center justify-center text-oq-200 hover:text-lime bg-oq-950/70 backdrop-blur-sm rounded text-xs font-bold">+</button>
-            <div className="h-px bg-oq-700/30 my-0.5" />
-            <button onClick={() => { leftMapRef.current?.zoomOut(); centerMapRef.current?.zoomOut(); }} className="w-6 h-6 flex items-center justify-center text-oq-200 hover:text-lime bg-oq-950/70 backdrop-blur-sm rounded text-xs font-bold">−</button>
+            <div className="flex items-center gap-2">
+              <span className="w-3 h-3 rounded-sm" style={{ background: 'rgba(20,28,24,1)' }} />
+              <span className="text-[9px] font-medium" style={{ color: '#68756E' }}>No Data</span>
+            </div>
           </div>
+        </div>
+
+        {/* Loading */}
+        {loading && (
+          <div className="absolute inset-0 z-[1000] flex items-center justify-center bg-oq-950/60">
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded bg-oq-900/90 border border-oq-700/30">
+              <svg className="animate-spin h-3 w-3 text-lime" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+              <span className="text-[9px] text-oq-200">Loading change mask...</span>
+            </div>
+          </div>
+        )}
+
+        {/* Zoom controls */}
+        <div className="absolute bottom-3 right-3 z-[1000] flex flex-col rounded overflow-hidden border border-oq-700/30" style={{ padding: 10 }}>
+          <button onClick={() => mapRefInst.current?.zoomIn()} className="w-7 h-7 flex items-center justify-center text-oq-200 hover:text-lime bg-oq-950/70 backdrop-blur-sm rounded text-xs font-bold">+</button>
+          <div className="h-px bg-oq-700/30 my-0.5" />
+          <button onClick={() => mapRefInst.current?.zoomOut()} className="w-7 h-7 flex items-center justify-center text-oq-200 hover:text-lime bg-oq-950/70 backdrop-blur-sm rounded text-xs font-bold">−</button>
         </div>
       </div>
 
-      {/* Interpretation bar below the three panels */}
-      {vizMode === 'change-mask' && (
-        <div className="mt-2 flex items-center justify-between px-1">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#22C55E]" />
-              <span className="text-[9px]" style={{ color: '#E5E7EB' }}>Green = index increase</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#EF4444]" />
-              <span className="text-[9px]" style={{ color: '#E5E7EB' }}>Red = index decrease</span>
-            </div>
-            <span className="text-[8px]" style={{ color: '#68756E' }}>|</span>
-            <span className="text-[8px] font-mono" style={{ color: '#9CA3AF' }}>Threshold: adaptive ({'>1.5'} std dev)</span>
-          </div>
+      {/* Change statistics bar below map */}
+      <div className="mt-3 flex items-stretch gap-3">
+        {/* Dominant trend */}
+        <div className="flex-shrink-0 px-4 py-3 rounded-lg border border-oq-700/20 bg-oq-800/20">
+          <div className="text-[8px] uppercase tracking-wider mb-1" style={{ color: '#9CA3AF' }}>Dominant Trend</div>
+          <div className="text-[15px] font-bold tracking-tight" style={{ color: trendColor }}>{trendLabel}</div>
         </div>
-      )}
+        {/* Loss */}
+        <div className="flex-1 px-4 py-3 rounded-lg border border-oq-700/20 bg-oq-800/20">
+          <div className="flex items-center gap-1.5 mb-1">
+            <span className="w-1.5 h-1.5 rounded-full" style={{ background: '#DC3C3C' }} />
+            <span className="text-[8px] uppercase tracking-wider" style={{ color: '#9CA3AF' }}>Vegetation Loss</span>
+          </div>
+          <div className="text-[18px] font-bold leading-none" style={{ color: '#DC3C3C' }}>{lossKm2} km²</div>
+          <div className="text-[9px] mt-0.5 font-mono" style={{ color: '#68756E' }}>{lossPixels.toLocaleString()} pixels / {numLossRegions} regions</div>
+        </div>
+        {/* Gain */}
+        <div className="flex-1 px-4 py-3 rounded-lg border border-oq-700/20 bg-oq-800/20">
+          <div className="flex items-center gap-1.5 mb-1">
+            <span className="w-1.5 h-1.5 rounded-full" style={{ background: '#22B45A' }} />
+            <span className="text-[8px] uppercase tracking-wider" style={{ color: '#9CA3AF' }}>Vegetation Gain</span>
+          </div>
+          <div className="text-[18px] font-bold leading-none" style={{ color: '#22B45A' }}>{gainKm2} km²</div>
+          <div className="text-[9px] mt-0.5 font-mono" style={{ color: '#68756E' }}>{gainPixels.toLocaleString()} pixels / {numGainRegions} regions</div>
+        </div>
+        {/* Net */}
+        <div className="flex-1 px-4 py-3 rounded-lg border border-oq-700/20 bg-oq-800/20">
+          <div className="text-[8px] uppercase tracking-wider mb-1" style={{ color: '#9CA3AF' }}>Net Change</div>
+          <div className="text-[18px] font-bold leading-none" style={{ color: '#FFFFFF' }}>
+            {lossKm2 > gainKm2 ? '-' : '+'}{Math.abs(lossKm2 - gainKm2).toFixed(2)} km²
+          </div>
+          <div className="text-[9px] mt-0.5 font-mono" style={{ color: '#68756E' }}>analyzed: {totalAnalyzed.toFixed(1)} km² / threshold: {threshold.toFixed(3)}</div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -702,15 +701,15 @@ export default function TemporalComparisonView({ result }: Props) {
             />
           )}
           {viewMode === 'change-mask' && (
-            <ThreePanelView
+            <ChangeMaskView
               bbox={result.aoi_bbox}
               sceneT1={result.scene_t1} sceneT2={result.scene_t2}
               thumbnailT1={result.imagery?.period1?.thumbnail} thumbnailT2={result.imagery?.period2?.thumbnail}
               sceneBboxT1={result.imagery?.period1?.bbox || result.scene_t1?.bbox}
               sceneBboxT2={result.imagery?.period2?.bbox || result.scene_t2?.bbox}
               changeMaskB64={result.change_visualizations?.change_mask_png || null}
-              diffVisB64={result.change_visualizations?.difference_png || null}
               changeVisBbox={result.change_visualizations?.bbox || null}
+              changeVisStats={result.change_visualizations || {}}
               config={config}
             />
           )}

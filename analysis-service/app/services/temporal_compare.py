@@ -1148,84 +1148,169 @@ def run_temporal_comparison(
             "detail": f"algorithm={change_result.get('algorithm', 'unknown')}, changed={change_result.get('changed_pct', 0)}%",
         })
 
-    # ── Step 5b: Generate change mask visualization ──────────────
+    # ── Step 5b: Generate NDVI-based categorical change mask ────
+    # Uses the actual spectral index arrays (NDVI/NDBI/etc.), NOT raw RGB pixels.
+    # Classifies into: Vegetation Loss / Stable / Vegetation Gain / No Data
     change_mask_b64 = None
     diff_vis_b64 = None
+    change_vis_stats = {}
     if index_t1 and index_t2 and index_t1.value is not None and index_t2.value is not None:
         try:
-            t1_arr = index_t1.value
-            t2_arr = index_t2.value
+            from scipy import ndimage as _ndimage_vis
+
+            t1_arr = index_t1.value.astype(np.float32)
+            t2_arr = index_t2.value.astype(np.float32)
             min_h = min(t1_arr.shape[0], t2_arr.shape[0])
             min_w = min(t1_arr.shape[1], t2_arr.shape[1])
             t1_c = t1_arr[:min_h, :min_w]
             t2_c = t2_arr[:min_h, :min_w]
 
-            valid = ~np.isnan(t1_c) & ~np.isnan(t2_c) & ~np.isinf(t1_c) & ~np.isinf(t2_c)
-            diff = np.where(valid, t2_c - t1_c, 0.0)
+            # Valid pixel mask: both scenes must have valid (non-NaN, non-zero) data
+            valid = (~np.isnan(t1_c)) & (~np.isnan(t2_c)) & (~np.isinf(t1_c)) & (~np.isinf(t2_c))
+            # Also treat very low values as nodata (sensor artifacts)
+            valid = valid & (np.abs(t1_c) > 0.001) & (np.abs(t2_c) > 0.001)
+            total_valid_pixels = int(np.sum(valid))
 
-            # -- Adaptive threshold (same as change detection) --
-            from scipy import ndimage as _ndimage_vis
-            valid_diff_vals = diff[valid]
-            if len(valid_diff_vals) > 100:
-                vis_threshold = max(0.15, 1.5 * float(np.std(valid_diff_vals)))
+            # Compute delta: index_after - index_before
+            # For NDVI: positive = vegetation gain, negative = vegetation loss
+            # For NDBI: positive = urban expansion, negative = urban shrinkage
+            delta = np.where(valid, t2_c - t1_c, np.nan)
+
+            # --- Adaptive threshold based on data distribution ---
+            valid_delta = delta[valid]
+            if len(valid_delta) > 100:
+                delta_std = float(np.std(valid_delta))
+                # Use 1.5 * std but floor at 0.12 and ceiling at 0.25
+                threshold = max(0.12, min(0.25, 1.5 * delta_std))
             else:
-                vis_threshold = 0.15
-            change_mask = valid & (np.abs(diff) >= vis_threshold)
-            
-            # Morphological cleaning for visualization too
-            struct = _ndimage_vis.generate_binary_structure(2, 1)
-            change_mask = _ndimage_vis.binary_opening(change_mask, structure=struct, iterations=1)
-            labeled_vis, num_vis = _ndimage_vis.label(change_mask)
-            region_sizes_vis = _ndimage_vis.sum(change_mask, labeled_vis, range(1, num_vis + 1))
-            cleaned_vis = np.zeros_like(change_mask)
-            for i, size in enumerate(region_sizes_vis):
-                if size >= 25:
-                    cleaned_vis[labeled_vis == (i + 1)] = True
-            change_mask = cleaned_vis
+                threshold = 0.15
 
-            # -- Change mask: green = increase, red = decrease, semi-transparent --
-            # Color intensity scales with magnitude of change
-            abs_diff = np.abs(diff)
-            max_abs = float(np.nanmax(abs_diff[change_mask])) if np.any(change_mask) else 1.0
-            if max_abs < 0.01:
-                max_abs = 1.0
-            intensity = np.clip(abs_diff / max_abs, 0.3, 1.0)  # minimum 30% opacity
-            
+            # --- Classify into categorical mask ---
+            # 0 = No Data, 1 = Vegetation Loss (decrease), 2 = Stable, 3 = Vegetation Gain (increase)
+            classification = np.zeros((min_h, min_w), dtype=np.uint8)  # 0 = No Data by default
+            classification[valid] = 2  # Default: Stable
+            classification[valid & (delta < -threshold)] = 1  # Loss
+            classification[valid & (delta > threshold)] = 3   # Gain
+
+            # --- Morphological filtering ---
+            # Remove isolated noise pixels using binary opening
+            struct = _ndimage_vis.generate_binary_structure(2, 1)  # 4-connectivity
+
+            # Filter loss regions
+            loss_mask = classification == 1
+            loss_cleaned = _ndimage_vis.binary_opening(loss_mask, structure=struct, iterations=1)
+            # Remove small regions (< 30 pixels = ~0.3 ha at 10m resolution)
+            min_region = 30
+            labeled_loss, n_loss = _ndimage_vis.label(loss_cleaned)
+            if n_loss > 0:
+                sizes_loss = _ndimage_vis.sum(loss_cleaned, labeled_loss, range(1, n_loss + 1))
+                for i, sz in enumerate(sizes_loss):
+                    if sz < min_region:
+                        loss_cleaned[labeled_loss == (i + 1)] = False
+
+            # Filter gain regions
+            gain_mask = classification == 3
+            gain_cleaned = _ndimage_vis.binary_opening(gain_mask, structure=struct, iterations=1)
+            labeled_gain, n_gain = _ndimage_vis.label(gain_cleaned)
+            if n_gain > 0:
+                sizes_gain = _ndimage_vis.sum(gain_cleaned, labeled_gain, range(1, n_gain + 1))
+                for i, sz in enumerate(sizes_gain):
+                    if sz < min_region:
+                        gain_cleaned[labeled_gain == (i + 1)] = False
+
+            # Rebuild classification from cleaned masks
+            final_class = np.zeros((min_h, min_w), dtype=np.uint8)  # 0 = No Data
+            final_class[valid] = 2  # Stable
+            final_class[loss_cleaned] = 1  # Loss (overwrites stable)
+            final_class[gain_cleaned] = 3  # Gain (overwrites stable)
+
+            # --- Generate categorical RGBA image ---
+            # Loss  = warm red (220, 60, 60)  — semi-transparent
+            # Stable = very dark, nearly invisible — lets the basemap show through
+            # Gain  = green (34, 180, 90) — semi-transparent
+            # No Data = dark charcoal (20, 28, 24) — opaque
             mask_img = np.zeros((min_h, min_w, 4), dtype=np.uint8)
-            # Increase (positive delta) — green
-            pos_mask = change_mask & (diff > 0)
-            mask_img[pos_mask, 0] = 34
-            mask_img[pos_mask, 1] = 197
-            mask_img[pos_mask, 2] = 94
-            mask_img[pos_mask, 3] = (intensity[pos_mask] * 210).astype(np.uint8)
-            # Decrease (negative delta) — red
-            neg_mask = change_mask & (diff < 0)
-            mask_img[neg_mask, 0] = 239
-            mask_img[neg_mask, 1] = 68
-            mask_img[neg_mask, 2] = 68
-            mask_img[neg_mask, 3] = (intensity[neg_mask] * 210).astype(np.uint8)
+
+            # No Data (opaque dark)
+            nodata = final_class == 0
+            mask_img[nodata] = [20, 28, 24, 255]
+
+            # Stable (nearly invisible — very low alpha so basemap shows through)
+            stable = final_class == 2
+            mask_img[stable] = [15, 22, 18, 30]  # barely visible tint
+
+            # Vegetation Loss (red, strong alpha)
+            loss_final = final_class == 1
+            mask_img[loss_final] = [220, 60, 60, 180]
+
+            # Vegetation Gain (green, strong alpha)
+            gain_final = final_class == 3
+            mask_img[gain_final] = [34, 180, 90, 180]
 
             change_mask_b64 = _encode_rgba_png(mask_img)
 
-            # -- Difference visualization (diverging blue-white-red) --
-            # Only color significant change, leave no-change areas transparent
-            diff_clipped = np.clip(diff, -0.5, 0.5)
+            # --- Compute statistics from the FINAL filtered mask ---
+            pixel_area_sq_m = index_t1.resolution_m ** 2
+            loss_pixels = int(np.sum(final_class == 1))
+            gain_pixels = int(np.sum(final_class == 3))
+            stable_pixels = int(np.sum(final_class == 2))
+            nodata_pixels = int(np.sum(final_class == 0))
+            changed_pixels_total = loss_pixels + gain_pixels
+
+            loss_area_km2 = loss_pixels * pixel_area_sq_m / 1e6
+            gain_area_km2 = gain_pixels * pixel_area_sq_m / 1e6
+            stable_area_km2 = stable_pixels * pixel_area_sq_m / 1e6
+            total_analyzed_km2 = (total_valid_pixels * pixel_area_sq_m) / 1e6
+
+            # Dominant trend
+            if loss_pixels > gain_pixels * 1.5:
+                dominant_trend = "vegetation_loss"
+            elif gain_pixels > loss_pixels * 1.5:
+                dominant_trend = "vegetation_gain"
+            else:
+                dominant_trend = "stable_mixed"
+
+            # Mean delta of changed pixels
+            loss_mean_delta = float(np.nanmean(delta[loss_cleaned])) if np.any(loss_cleaned) else 0.0
+            gain_mean_delta = float(np.nanmean(delta[gain_cleaned])) if np.any(gain_cleaned) else 0.0
+
+            change_vis_stats = {
+                "loss_pixels": loss_pixels,
+                "gain_pixels": gain_pixels,
+                "stable_pixels": stable_pixels,
+                "nodata_pixels": nodata_pixels,
+                "loss_area_km2": round(loss_area_km2, 2),
+                "gain_area_km2": round(gain_area_km2, 2),
+                "stable_area_km2": round(stable_area_km2, 2),
+                "total_analyzed_km2": round(total_analyzed_km2, 2),
+                "dominant_trend": dominant_trend,
+                "loss_mean_delta": round(loss_mean_delta, 4),
+                "gain_mean_delta": round(gain_mean_delta, 4),
+                "threshold": round(threshold, 4),
+                "total_valid_pixels": total_valid_pixels,
+                "num_loss_regions": n_loss,
+                "num_gain_regions": n_gain,
+            }
+
+            # --- Difference visualization (for the Difference mode, not Change Mask) ---
+            diff_clipped = np.clip(np.nan_to_num(delta, nan=0.0), -0.5, 0.5)
             diff_norm = ((diff_clipped + 0.5) / 1.0 * 255).astype(np.uint8)
             diff_img = np.zeros((min_h, min_w, 4), dtype=np.uint8)
-            # Where there IS significant change, show the diverging colormap
-            sig_mask = change_mask
-            diff_img[sig_mask, 0] = np.where(diff[sig_mask] > 0, diff_norm[sig_mask], 50)
+            sig_mask = valid & (np.abs(np.nan_to_num(delta, nan=0.0)) >= threshold)
+            diff_img[sig_mask, 0] = np.where(delta[sig_mask] > 0, diff_norm[sig_mask], 80)
             diff_img[sig_mask, 1] = 50
-            diff_img[sig_mask, 2] = np.where(diff[sig_mask] < 0, diff_norm[sig_mask], 50)
-            diff_img[sig_mask, 3] = (intensity[sig_mask] * 180).astype(np.uint8)
-            # No-change areas: transparent
+            diff_img[sig_mask, 2] = np.where(delta[sig_mask] < 0, diff_norm[sig_mask], 80)
+            diff_img[sig_mask, 3] = 160
             diff_img[~valid] = [13, 23, 17, 255]
-
             diff_vis_b64 = _encode_rgba_png(diff_img)
 
-            logger.info("[%s] Generated change mask + difference visualization: %dx%d", index_name, min_w, min_h)
+            logger.info(
+                "[%s] Change mask: loss=%d px (%.2f km2), gain=%d px (%.2f km2), trend=%s, threshold=%.3f",
+                index_name, loss_pixels, loss_area_km2, gain_pixels, gain_area_km2,
+                dominant_trend, threshold,
+            )
         except Exception as e:
-            logger.warning("[%s] Visualization generation failed: %s", index_name, e)
+            logger.warning("[%s] Change mask generation failed: %s", index_name, e, exc_info=True)
 
     # ── Step 6: Compute metrics ───────────────────────────────────
     metrics = {}
@@ -1301,6 +1386,7 @@ def run_temporal_comparison(
             "change_mask_png": change_mask_b64,
             "difference_png": diff_vis_b64,
             "bbox": bbox,
+            **change_vis_stats,
         } if change_mask_b64 else None,
         metrics=metrics,
         imagery=imagery,
