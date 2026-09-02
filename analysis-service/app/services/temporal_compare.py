@@ -1034,9 +1034,33 @@ def run_temporal_comparison(
                 valid_mask = ~np.isnan(t1_cropped) & ~np.isnan(t2_cropped) & ~np.isinf(t1_cropped) & ~np.isinf(t2_cropped)
                 total_valid = int(np.sum(valid_mask))
 
-                # Threshold for significant change
-                threshold = 0.1  # index units
+                # Adaptive threshold: use max(0.15, 1.5 * std of diff)
+                # This avoids picking up sensor noise while catching real change
+                from scipy import ndimage as _ndimage
+                valid_diff = diff[valid_mask]
+                if len(valid_diff) > 100:
+                    diff_std = float(np.std(valid_diff))
+                    threshold = max(0.15, 1.5 * diff_std)
+                else:
+                    threshold = 0.15
+                
                 changed_mask = valid_mask & (np.abs(diff) >= threshold)
+                
+                # Morphological cleaning: remove isolated noise pixels
+                # binary_opening removes single-pixel noise
+                struct = _ndimage.generate_binary_structure(2, 1)  # 4-connectivity
+                changed_mask = _ndimage.binary_opening(changed_mask, structure=struct, iterations=1)
+                
+                # Remove small connected regions (< 25 pixels = ~0.25 ha at 10m)
+                min_region_pixels = 25
+                labeled_raw, num_raw = _ndimage.label(changed_mask)
+                region_sizes = _ndimage.sum(changed_mask, labeled_raw, range(1, num_raw + 1))
+                cleaned = np.zeros_like(changed_mask)
+                for i, size in enumerate(region_sizes):
+                    if size >= min_region_pixels:
+                        cleaned[labeled_raw == (i + 1)] = True
+                changed_mask = cleaned
+                
                 changed_pixels = int(np.sum(changed_mask))
 
                 changed_pct = (changed_pixels / total_valid * 100) if total_valid > 0 else 0.0
@@ -1055,14 +1079,8 @@ def run_temporal_comparison(
                 else:
                     change_stats = {}
 
-                # Simple region counting via connected components
-                num_regions = 0
-                try:
-                    from scipy import ndimage
-                    labeled, num_regions = ndimage.label(changed_mask)
-                except ImportError:
-                    # Estimate from pixel count if scipy unavailable
-                    num_regions = max(1, changed_pixels // 1000)
+                # Connected components on cleaned mask
+                labeled, num_regions = _ndimage.label(changed_mask)
 
                 change_result = {
                     "status": "ok",
@@ -1145,34 +1163,65 @@ def run_temporal_comparison(
             valid = ~np.isnan(t1_c) & ~np.isnan(t2_c) & ~np.isinf(t1_c) & ~np.isinf(t2_c)
             diff = np.where(valid, t2_c - t1_c, 0.0)
 
-            # -- Change mask visualization (green = increase, red = decrease) --
-            threshold = 0.1
-            change_mask = valid & (np.abs(diff) >= threshold)
+            # -- Adaptive threshold (same as change detection) --
+            from scipy import ndimage as _ndimage_vis
+            valid_diff_vals = diff[valid]
+            if len(valid_diff_vals) > 100:
+                vis_threshold = max(0.15, 1.5 * float(np.std(valid_diff_vals)))
+            else:
+                vis_threshold = 0.15
+            change_mask = valid & (np.abs(diff) >= vis_threshold)
+            
+            # Morphological cleaning for visualization too
+            struct = _ndimage_vis.generate_binary_structure(2, 1)
+            change_mask = _ndimage_vis.binary_opening(change_mask, structure=struct, iterations=1)
+            labeled_vis, num_vis = _ndimage_vis.label(change_mask)
+            region_sizes_vis = _ndimage_vis.sum(change_mask, labeled_vis, range(1, num_vis + 1))
+            cleaned_vis = np.zeros_like(change_mask)
+            for i, size in enumerate(region_sizes_vis):
+                if size >= 25:
+                    cleaned_vis[labeled_vis == (i + 1)] = True
+            change_mask = cleaned_vis
 
+            # -- Change mask: green = increase, red = decrease, semi-transparent --
+            # Color intensity scales with magnitude of change
+            abs_diff = np.abs(diff)
+            max_abs = float(np.nanmax(abs_diff[change_mask])) if np.any(change_mask) else 1.0
+            if max_abs < 0.01:
+                max_abs = 1.0
+            intensity = np.clip(abs_diff / max_abs, 0.3, 1.0)  # minimum 30% opacity
+            
             mask_img = np.zeros((min_h, min_w, 4), dtype=np.uint8)
+            # Increase (positive delta) — green
             pos_mask = change_mask & (diff > 0)
-            mask_img[pos_mask, 0] = 16
-            mask_img[pos_mask, 1] = 185
-            mask_img[pos_mask, 2] = 129
-            mask_img[pos_mask, 3] = 200
+            mask_img[pos_mask, 0] = 34
+            mask_img[pos_mask, 1] = 197
+            mask_img[pos_mask, 2] = 94
+            mask_img[pos_mask, 3] = (intensity[pos_mask] * 210).astype(np.uint8)
+            # Decrease (negative delta) — red
             neg_mask = change_mask & (diff < 0)
             mask_img[neg_mask, 0] = 239
             mask_img[neg_mask, 1] = 68
             mask_img[neg_mask, 2] = 68
-            mask_img[neg_mask, 3] = 200
+            mask_img[neg_mask, 3] = (intensity[neg_mask] * 210).astype(np.uint8)
 
             change_mask_b64 = _encode_rgba_png(mask_img)
 
-            # -- Difference visualization (blue-white-red diverging) --
-            diff_clipped = np.clip(diff, -1, 1)
-            diff_norm = ((diff_clipped + 1) / 2 * 255).astype(np.uint8)
-            diff_img = np.zeros((min_h, min_w, 3), dtype=np.uint8)
-            diff_img[:, :, 0] = np.where(diff > 0, diff_norm, 0)
-            diff_img[:, :, 1] = np.where(valid, np.full_like(diff_norm, 200), 0)
-            diff_img[:, :, 2] = np.where(diff < 0, diff_norm, 0)
-            diff_img[~valid] = [13, 23, 17]
+            # -- Difference visualization (diverging blue-white-red) --
+            # Only color significant change, leave no-change areas transparent
+            diff_clipped = np.clip(diff, -0.5, 0.5)
+            diff_norm = ((diff_clipped + 0.5) / 1.0 * 255).astype(np.uint8)
+            diff_img = np.zeros((min_h, min_w, 4), dtype=np.uint8)
+            # Where there IS significant change, show the diverging colormap
+            sig_mask = change_mask
+            diff_img[sig_mask, 0] = np.where(diff[sig_mask] > 0, diff_norm[sig_mask], 50)
+            diff_img[sig_mask, 1] = 50
+            diff_img[sig_mask, 2] = np.where(diff[sig_mask] < 0, diff_norm[sig_mask], 50)
+            diff_img[sig_mask, 3] = (intensity[sig_mask] * 180).astype(np.uint8)
+            # No-change areas: transparent
+            diff_img[~valid] = [13, 23, 17, 255]
 
-            diff_vis_b64 = _encode_rgb_png(diff_img)
+            diff_vis_b64 = _encode_rgba_png(diff_img)
 
             logger.info("[%s] Generated change mask + difference visualization: %dx%d", index_name, min_w, min_h)
         except Exception as e:

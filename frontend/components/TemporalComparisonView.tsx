@@ -499,11 +499,27 @@ function ThreePanelView({
           <div ref={rightRef} className="absolute inset-0 bg-oq-950" />
           <div className="absolute top-2 left-2 z-[1000] px-2 py-0.5 rounded text-[8px] font-bold uppercase tracking-widest bg-oq-950/80" style={{ color: '#10B981', border: '1px solid rgba(16,185,129,0.2)' }}>Change Detected</div>
           {activeVisUrl ? (
-            <img src={activeVisUrl} className="absolute inset-0 w-full h-full object-cover z-[500]" style={{ mixBlendMode: 'screen' }} alt="Change detection visualization" />
+            <img src={activeVisUrl} className="absolute inset-0 w-full h-full object-cover z-[500]" style={{ mixBlendMode: 'normal' }} alt="Change detection visualization" />
           ) : (
             <div className="absolute inset-0 flex flex-col items-center justify-center z-[500]">
               <svg className="w-6 h-6 mb-1" style={{ color: '#68756E' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" /></svg>
               <span className="text-[9px]" style={{ color: '#9CA3AF' }}>No visualization available</span>
+            </div>
+          )}
+          {/* Legend */}
+          {activeVisUrl && vizMode === 'change-mask' && (
+            <div className="absolute bottom-10 left-2 z-[1000] bg-oq-950/90 backdrop-blur-sm rounded border border-oq-700/30 px-2.5 py-1.5">
+              <div className="text-[7px] uppercase tracking-wider mb-1" style={{ color: '#9CA3AF' }}>Legend</div>
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-sm" style={{ background: 'rgba(34,197,94,0.8)' }} />
+                  <span className="text-[8px]" style={{ color: '#E5E7EB' }}>Increase (vegetation gain, water expansion)</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-sm" style={{ background: 'rgba(239,68,68,0.8)' }} />
+                  <span className="text-[8px]" style={{ color: '#E5E7EB' }}>Decrease (vegetation loss, urban expansion)</span>
+                </div>
+              </div>
             </div>
           )}
           {/* Zoom controls */}
@@ -514,6 +530,24 @@ function ThreePanelView({
           </div>
         </div>
       </div>
+
+      {/* Interpretation bar below the three panels */}
+      {vizMode === 'change-mask' && (
+        <div className="mt-2 flex items-center justify-between px-1">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#22C55E]" />
+              <span className="text-[9px]" style={{ color: '#E5E7EB' }}>Green = index increase</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#EF4444]" />
+              <span className="text-[9px]" style={{ color: '#E5E7EB' }}>Red = index decrease</span>
+            </div>
+            <span className="text-[8px]" style={{ color: '#68756E' }}>|</span>
+            <span className="text-[8px] font-mono" style={{ color: '#9CA3AF' }}>Threshold: adaptive ({'>1.5'} std dev)</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
