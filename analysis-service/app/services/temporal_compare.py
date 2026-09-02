@@ -1032,27 +1032,37 @@ def run_temporal_comparison(
 
                 # Mask valid pixels (both must be valid)
                 valid_mask = ~np.isnan(t1_cropped) & ~np.isnan(t2_cropped) & ~np.isinf(t1_cropped) & ~np.isinf(t2_cropped)
+
+                # Water mask: exclude water/tidal pixels from change detection
+                water_t1 = t1_cropped < 0.0
+                water_t2 = t2_cropped < 0.0
+                water_mask = water_t1 | water_t2
+                low_both = (t1_cropped < 0.05) & (t2_cropped < 0.05)
+                water_mask = water_mask | low_both
+                valid_mask = valid_mask & (~water_mask)
                 total_valid = int(np.sum(valid_mask))
 
-                # Adaptive threshold: use max(0.15, 1.5 * std of diff)
-                # This avoids picking up sensor noise while catching real change
+                # Adaptive threshold
                 from scipy import ndimage as _ndimage
                 valid_diff = diff[valid_mask]
                 if len(valid_diff) > 100:
                     diff_std = float(np.std(valid_diff))
-                    threshold = max(0.15, 1.5 * diff_std)
+                    threshold = max(0.12, min(0.25, 1.5 * diff_std))
                 else:
                     threshold = 0.15
                 
-                changed_mask = valid_mask & (np.abs(diff) >= threshold)
+                # Vegetation preconditions: loss requires baseline NDVI >= 0.3
+                loss_cond = valid_mask & (diff < -threshold) & (t1_cropped >= 0.3)
+                gain_cond = valid_mask & (diff > threshold) & (t2_cropped >= 0.3)
+                changed_mask = loss_cond | gain_cond
                 
                 # Morphological cleaning: remove isolated noise pixels
                 # binary_opening removes single-pixel noise
                 struct = _ndimage.generate_binary_structure(2, 1)  # 4-connectivity
                 changed_mask = _ndimage.binary_opening(changed_mask, structure=struct, iterations=1)
                 
-                # Remove small connected regions (< 25 pixels = ~0.25 ha at 10m)
-                min_region_pixels = 25
+                # Remove small connected regions (< 50 pixels = ~0.5 ha at 10m)
+                min_region_pixels = 50
                 labeled_raw, num_raw = _ndimage.label(changed_mask)
                 region_sizes = _ndimage.sum(changed_mask, labeled_raw, range(1, num_raw + 1))
                 cleaned = np.zeros_like(changed_mask)
@@ -1167,40 +1177,57 @@ def run_temporal_comparison(
 
             # Valid pixel mask: both scenes must have valid (non-NaN, non-zero) data
             valid = (~np.isnan(t1_c)) & (~np.isnan(t2_c)) & (~np.isinf(t1_c)) & (~np.isinf(t2_c))
-            # Also treat very low values as nodata (sensor artifacts)
             valid = valid & (np.abs(t1_c) > 0.001) & (np.abs(t2_c) > 0.001)
+
+            # --- Water mask using NDVI proxy ---
+            # Water/tidal pixels have NDVI < 0 in both periods.
+            # Also mask pixels where NDVI crosses zero between periods
+            # (tidal flats, sediment plumes, seasonal flooding).
+            # This eliminates the Sundarbans river noise.
+            water_t1 = t1_c < 0.0  # water in period 1
+            water_t2 = t2_c < 0.0  # water in period 2
+            water_mask = water_t1 | water_t2  # exclude ANY pixel that is water in either period
+            
+            # Additional: mask very low NDVI in both periods (bare soil, mudflats)
+            # that might look like "loss" when it's just not vegetation
+            low_both = (t1_c < 0.05) & (t2_c < 0.05)
+            water_mask = water_mask | low_both
+
+            valid = valid & (~water_mask)
             total_valid_pixels = int(np.sum(valid))
 
             # Compute delta: index_after - index_before
-            # For NDVI: positive = vegetation gain, negative = vegetation loss
-            # For NDBI: positive = urban expansion, negative = urban shrinkage
             delta = np.where(valid, t2_c - t1_c, np.nan)
 
-            # --- Adaptive threshold based on data distribution ---
+            # --- Adaptive threshold ---
             valid_delta = delta[valid]
             if len(valid_delta) > 100:
                 delta_std = float(np.std(valid_delta))
-                # Use 1.5 * std but floor at 0.12 and ceiling at 0.25
                 threshold = max(0.12, min(0.25, 1.5 * delta_std))
             else:
                 threshold = 0.15
 
             # --- Classify into categorical mask ---
-            # 0 = No Data, 1 = Vegetation Loss (decrease), 2 = Stable, 3 = Vegetation Gain (increase)
-            classification = np.zeros((min_h, min_w), dtype=np.uint8)  # 0 = No Data by default
+            # Vegetation preconditions:
+            # LOSS: delta < -threshold AND baseline NDVI >= 0.3 (was vegetation)
+            # GAIN: delta > +threshold AND target NDVI >= 0.3 (became vegetation)
+            # This prevents bare soil / water from being classified as vegetation change.
+            classification = np.zeros((min_h, min_w), dtype=np.uint8)
             classification[valid] = 2  # Default: Stable
-            classification[valid & (delta < -threshold)] = 1  # Loss
-            classification[valid & (delta > threshold)] = 3   # Gain
+
+            loss_condition = valid & (delta < -threshold) & (t1_c >= 0.3)
+            gain_condition = valid & (delta > threshold) & (t2_c >= 0.3)
+            classification[loss_condition] = 1  # Loss
+            classification[gain_condition] = 3   # Gain
 
             # --- Morphological filtering ---
             # Remove isolated noise pixels using binary opening
             struct = _ndimage_vis.generate_binary_structure(2, 1)  # 4-connectivity
 
-            # Filter loss regions
+            # Filter loss regions (min 50 pixels = ~0.5 ha at 10m)
             loss_mask = classification == 1
             loss_cleaned = _ndimage_vis.binary_opening(loss_mask, structure=struct, iterations=1)
-            # Remove small regions (< 30 pixels = ~0.3 ha at 10m resolution)
-            min_region = 30
+            min_region = 50
             labeled_loss, n_loss = _ndimage_vis.label(loss_cleaned)
             if n_loss > 0:
                 sizes_loss = _ndimage_vis.sum(loss_cleaned, labeled_loss, range(1, n_loss + 1))
@@ -1208,7 +1235,7 @@ def run_temporal_comparison(
                     if sz < min_region:
                         loss_cleaned[labeled_loss == (i + 1)] = False
 
-            # Filter gain regions
+            # Filter gain regions (min 50 pixels = ~0.5 ha at 10m)
             gain_mask = classification == 3
             gain_cleaned = _ndimage_vis.binary_opening(gain_mask, structure=struct, iterations=1)
             labeled_gain, n_gain = _ndimage_vis.label(gain_cleaned)
