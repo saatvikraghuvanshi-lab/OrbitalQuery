@@ -59,6 +59,7 @@ def _lazy_import_heavy():
     from app.services.change_detection import run_change_detection
     from app.services.eo_provider import get_default_provider, get_provider
     from app.services.spectral_indices import INDEX_DEFINITIONS, INDEX_BAND_MAP, SENSOR_BANDS, compute_index_from_bands
+    from app.services.scene_selector import select_scenes_for_period, check_periods_compatible, SceneSelectionResult
     _PHENOMENON_REGISTRY = PHENOMENON_REGISTRY
     _INDEX_DEFINITIONS = INDEX_DEFINITIONS
     _INDEX_BAND_MAP = INDEX_BAND_MAP
@@ -329,6 +330,180 @@ def _get_imagery_urls(scene: SceneSelection) -> dict[str, str]:
                     urls[f"band_{key}"] = href
 
     return urls
+
+
+# ── Multi-scene index computation ─────────────────────────────────
+
+def _compute_index_from_mosaic_scenes(
+    index_name: str,
+    sensor: str,
+    scenes: list[dict[str, Any]],
+    bbox: list[float],
+    period_label: str,
+) -> IndexResult:
+    """
+    Compute a spectral index from multiple scenes using mosaicking.
+
+    For each required band:
+    1. Collect the band href from each scene's assets
+    2. Use the mosaic module to read + composite all scenes
+    3. Compute the spectral index from the composited bands
+
+    Falls back to single-scene if only one scene is provided.
+    """
+    _lazy_import_heavy()
+
+    # Get band mapping
+    band_key = (sensor, index_name)
+    band_map = _INDEX_BAND_MAP.get(band_key)
+    if not band_map:
+        raise ValueError(f"No band mapping for {index_name} on {sensor}")
+
+    index_def = _INDEX_DEFINITIONS.get(index_name)
+    if not index_def:
+        raise ValueError(f"Unknown index: {index_name}")
+
+    required_bands = index_def.bands_required
+    physical_bands = {}
+    for logical in required_bands:
+        physical = band_map.get(logical)
+        if physical:
+            physical_bands[logical] = physical
+
+    if len(physical_bands) < 2:
+        raise ValueError(f"Insufficient band mappings for {index_name}")
+
+    # Collect band hrefs from all scenes
+    # For each required band, gather hrefs from each scene
+    band_href_lists: dict[str, list[str]] = {logical: [] for logical in required_bands}
+    for scene in scenes:
+        assets = scene.get("assets", {})
+        for logical_name, physical_name in physical_bands.items():
+            asset = assets.get(physical_name)
+            href = ""
+            if asset is None:
+                pass
+            elif hasattr(asset, 'href'):
+                href = getattr(asset, 'href', '') or ''
+            elif isinstance(asset, dict):
+                href = asset.get('href', '') or ''
+            elif isinstance(asset, str):
+                href = asset
+            if href:
+                band_href_lists[logical_name].append(href)
+
+    # Check we have enough data
+    for logical in required_bands:
+        if len(band_href_lists[logical]) == 0:
+            raise ValueError(
+                f"No {logical} band hrefs found across {len(scenes)} scenes"
+            )
+
+    # Determine resolution
+    resolution = 10.0
+    if "landsat" in sensor:
+        resolution = 30.0
+
+    # Use mosaic module for multi-scene, or single read for one scene
+    from app.services.mosaic import mosaic_bands
+
+    # Mosaic the first required band across all scenes
+    first_logical = required_bands[0]
+    first_physical = physical_bands[first_logical]
+    first_hrefs = band_href_lists[first_logical]
+
+    logger.info(
+        "[%s] Mosaicking %d scenes for band %s",
+        period_label, len(first_hrefs), first_physical,
+    )
+
+    # For single scene, use the existing read_raster_window per band
+    if len(first_hrefs) == 1:
+        return _compute_index_stats(
+            index_name, sensor,
+            SceneSelection(
+                item_id=scenes[0].get("id", "unknown"),
+                collection=scenes[0].get("collection", "unknown"),
+                datetime=scenes[0].get("properties", {}).get("datetime", ""),
+                cloud_cover=scenes[0].get("properties", {}).get("eo:cloud_cover"),
+                bbox=scenes[0].get("bbox", []),
+                provider=scenes[0].get("provider", "unknown"),
+                platform=scenes[0].get("properties", {}).get("platform", "unknown"),
+                score=0.0,
+                assets=scenes[0].get("assets", {}),
+            ),
+            bbox,
+        )
+
+    # Multi-scene: mosaic each required band
+    band_arrays = {}
+    nodata_masks = {}
+
+    for logical_name in required_bands:
+        physical_name = physical_bands[logical_name]
+        scene_hrefs = band_href_lists[logical_name]
+
+        if len(scene_hrefs) == 1:
+            # Single scene for this band — just read it
+            from app.services.raster_service import read_raster_window
+            raster_data = read_raster_window(scene_hrefs[0], bbox)
+            data = raster_data["data"]
+            if data.ndim == 3:
+                band_arrays[physical_name] = data[0].astype(np.float32)
+            else:
+                band_arrays[physical_name] = data.astype(np.float32)
+            nodata_val = raster_data["profile"].get("nodata")
+            if nodata_val is not None:
+                nodata_masks[physical_name] = (band_arrays[physical_name] == nodata_val)
+            else:
+                nodata_masks[physical_name] = (band_arrays[physical_name] <= 0)
+        else:
+            # Multi-scene: mosaic
+            mosaic_result = mosaic_bands(scene_hrefs, [physical_name], bbox)
+            mosaic_data = mosaic_result["data"]
+            if mosaic_data.ndim == 3:
+                band_arrays[physical_name] = mosaic_data[0].astype(np.float32)
+            else:
+                band_arrays[physical_name] = mosaic_data.astype(np.float32)
+            nodata_masks[physical_name] = mosaic_result.get("nodata_mask", np.zeros_like(band_arrays[physical_name], dtype=bool))
+
+        logger.info(
+            "[%s] Band %s (%s): shape=%s, valid=%d",
+            period_label, logical_name, physical_name,
+            band_arrays[physical_name].shape,
+            int(np.sum(~nodata_masks[physical_name])),
+        )
+
+    # Compute the spectral index
+    index_array, index_result = _compute_index_from_bands(
+        bands=band_arrays,
+        index_name=index_name,
+        sensor=sensor,
+        nodata_masks=nodata_masks,
+        date=scenes[0].get("properties", {}).get("datetime", ""),
+        crs="EPSG:4326",
+        resolution_meters=resolution,
+    )
+
+    logger.info(
+        "[%s] Mosaic %s: mean=%.4f, valid=%d/%d, scenes=%d",
+        period_label, index_name,
+        index_result.stats["mean"],
+        index_result.valid_pixels, index_result.total_pixels,
+        len(scenes),
+    )
+
+    return IndexResult(
+        index_name=index_name,
+        value=index_array,
+        stats=index_result.stats,
+        scene_id=".".join(s.get("id", "?")[:20] for s in scenes[:3]),
+        date=scenes[0].get("properties", {}).get("datetime", ""),
+        resolution_m=resolution,
+        shape=index_result.shape,
+        valid_pixels=index_result.valid_pixels,
+        total_pixels=index_result.total_pixels,
+    )
 
 
 # ── Index computation (simulated for demo) ────────────────────────
@@ -970,43 +1145,140 @@ def run_temporal_comparison(
         "detail": f"Period 1: {len(items_t1)} scenes | Period 2: {len(items_t2)} scenes",
     })
 
-    # ── Step 3: Select best scene for each period ─────────────────
-    best_t1 = _select_best_scene(items_t1, bbox, cloud_threshold)
-    best_t2 = _select_best_scene(items_t2, bbox, cloud_threshold)
+    # ── Step 3: Multi-scene selection for each period ──────────────
+    # Use the scene selector to find enough scenes to cover the AOI.
+    # This handles large AOIs that span multiple satellite footprints.
+    from datetime import datetime as _dt
 
-    scene_sel_t1 = _scene_to_selection(best_t1, "planetary_computer") if best_t1 else None
-    scene_sel_t2 = _scene_to_selection(best_t2, "planetary_computer") if best_t2 else None
+    period1_target = datetime.strptime(period1_start, "%Y-%m-%d")
+    period2_target = datetime.strptime(period2_start, "%Y-%m-%d")
 
+    selection_t1 = select_scenes_for_period(
+        aoi_bbox=bbox,
+        scenes=items_t1,
+        period_label="period1",
+        target_date=period1_target,
+        max_cloud_cover=cloud_threshold,
+        required_sensor=collection,
+    )
+
+    selection_t2 = select_scenes_for_period(
+        aoi_bbox=bbox,
+        scenes=items_t2,
+        period_label="period2",
+        target_date=period2_target,
+        max_cloud_cover=cloud_threshold,
+        required_sensor=collection,
+    )
+
+    # Check sensor compatibility
+    periods_compatible, compat_warnings = check_periods_compatible(selection_t1, selection_t2)
     processing_steps.append({
         "step": "scene_selection",
-        "detail": f"Period 1: {scene_sel_t1.item_id if scene_sel_t1 else 'none'} | Period 2: {scene_sel_t2.item_id if scene_sel_t2 else 'none'}",
+        "detail": (
+            f"Period 1: {selection_t1.total_scenes} scenes, "
+            f"coverage={selection_t1.coverage_ratio:.0%}, sensor={selection_t1.collection} | "
+            f"Period 2: {selection_t2.total_scenes} scenes, "
+            f"coverage={selection_t2.coverage_ratio:.0%}, sensor={selection_t2.collection}"
+        ),
     })
 
-    # ── Step 4: Compute spectral indices for each period (parallel) ─
+    if compat_warnings:
+        for w in compat_warnings:
+            processing_steps.append({"step": "sensor_warning", "detail": w})
+
+    if selection_t1.errors:
+        for e in selection_t1.errors:
+            processing_steps.append({"step": "selection_error_p1", "detail": e})
+    if selection_t2.errors:
+        for e in selection_t2.errors:
+            processing_steps.append({"step": "selection_error_p2", "detail": e})
+
+    # Build SceneSelection objects for backward compatibility
+    scene_sel_t1 = _scene_to_selection(
+        selection_t1.scenes[0].to_dict(), "planetary_computer"
+    ) if selection_t1.scenes else None
+    scene_sel_t2 = _scene_to_selection(
+        selection_t2.scenes[0].to_dict(), "planetary_computer"
+    ) if selection_t2.scenes else None
+
+    # ── Step 4: Compute spectral indices (mosaic-aware) ───────────
     index_t1 = None
     index_t2 = None
 
+    def _compute_for_period(sel: SceneSelectionResult, lbl: str) -> Optional[IndexResult]:
+        """Compute index for a period, using mosaic if multiple scenes."""
+        if not sel.scenes:
+            return None
+
+        scene_dicts = [s.to_dict() for s in sel.scenes]
+
+        try:
+            if sel.is_mosaic and len(sel.scenes) > 1:
+                # Multi-scene: use mosaic pipeline
+                logger.info(
+                    "[%s] Using mosaic index computation (%d scenes)",
+                    lbl, len(sel.scenes),
+                )
+                return _compute_index_from_mosaic_scenes(
+                    index_name=index_name,
+                    sensor=sel.collection,
+                    scenes=scene_dicts,
+                    bbox=bbox,
+                    period_label=lbl,
+                )
+            else:
+                # Single scene: use existing pipeline
+                single_scene = sel.scenes[0]
+                scene_sel = _scene_to_selection(single_scene.to_dict(), "planetary_computer")
+                return _compute_index_stats(index_name, sel.collection, scene_sel, bbox)
+        except Exception as e:
+            logger.error("[%s] Index computation failed: %s", lbl, e)
+            # Fall back to single-scene if mosaic fails
+            if sel.is_mosaic and len(sel.scenes) > 1:
+                logger.info("[%s] Mosaic failed, falling back to best single scene", lbl)
+                try:
+                    scene_sel = _scene_to_selection(sel.scenes[0].to_dict(), "planetary_computer")
+                    return _compute_index_stats(index_name, sel.collection, scene_sel, bbox)
+                except Exception as e2:
+                    logger.error("[%s] Fallback also failed: %s", lbl, e2)
+            return None
+
     with ThreadPoolExecutor(max_workers=2) as executor:
         futures = {}
-        if scene_sel_t1:
-            futures["t1"] = executor.submit(_compute_index_stats, index_name, sensor, scene_sel_t1, bbox)
-        if scene_sel_t2:
-            futures["t2"] = executor.submit(_compute_index_stats, index_name, sensor, scene_sel_t2, bbox)
+        if selection_t1.scenes:
+            futures["t1"] = executor.submit(_compute_for_period, selection_t1, "period1")
+        if selection_t2.scenes:
+            futures["t2"] = executor.submit(_compute_for_period, selection_t2, "period2")
 
         for key, future in futures.items():
             result = future.result()
             if key == "t1":
                 index_t1 = result
-                processing_steps.append({
-                    "step": "compute_index_t1",
-                    "detail": f"{index_name} for {scene_sel_t1.item_id}: mean={result.stats['mean']}",
-                })
+                if result:
+                    scene_ids = ",".join(s.item_id[:20] for s in selection_t1.scenes[:3])
+                    processing_steps.append({
+                        "step": "compute_index_t1",
+                        "detail": (
+                            f"{index_name} for {scene_ids}: "
+                            f"mean={result.stats['mean']}, "
+                            f"scenes={selection_t1.total_scenes}, "
+                            f"mosaic={selection_t1.is_mosaic}"
+                        ),
+                    })
             else:
                 index_t2 = result
-                processing_steps.append({
-                    "step": "compute_index_t2",
-                    "detail": f"{index_name} for {scene_sel_t2.item_id}: mean={result.stats['mean']}",
-                })
+                if result:
+                    scene_ids = ",".join(s.item_id[:20] for s in selection_t2.scenes[:3])
+                    processing_steps.append({
+                        "step": "compute_index_t2",
+                        "detail": (
+                            f"{index_name} for {scene_ids}: "
+                            f"mean={result.stats['mean']}, "
+                            f"scenes={selection_t2.total_scenes}, "
+                            f"mosaic={selection_t2.is_mosaic}"
+                        ),
+                    })
 
     # ── Step 5: Change detection ──────────────────────────────────
     change_result = None
