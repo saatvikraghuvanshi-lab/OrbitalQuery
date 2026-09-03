@@ -65,7 +65,6 @@ MAX_DATE = "2026-12-31"
 # AOI limits (bounding box)
 MIN_BBOX = [-180.0, -90.0, 180.0, 90.0]
 MAX_AREA_DEGREES_SQ = 100.0  # max bbox area in degrees²
-t
 # Analysis pipeline configuration
 ANALYSIS_SCENE_SEARCH_LIMIT = int(os.getenv("ANALYSIS_SCENE_SEARCH_LIMIT", "8"))
 ANALYSIS_CLOUD_THRESHOLD_DEFAULT = int(os.getenv("ANALYSIS_CLOUD_THRESHOLD_DEFAULT", "20"))
