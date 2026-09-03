@@ -689,25 +689,6 @@ OrbitalQuery/
 
 ---
 
-## Screenshots
-
-<table>
-<tr>
-<td align="center"><b>Ask — Natural Language Search</b><br/><img src="docs/screenshots/OQ2.png" width="400"/></td>
-<td align="center"><b>Explore — Phenomenon Browser</b><br/><img src="docs/screenshots/OQ3.png" width="400"/></td>
-</tr>
-<tr>
-<td align="center"><b>Analysis Pipeline — Processing Steps</b><br/><img src="docs/screenshots/OQ5.png" width="400"/></td>
-<td align="center"><b>Before / After — Satellite Comparison</b><br/><img src="docs/screenshots/OQ6.png" width="400"/></td>
-</tr>
-<tr>
-<td align="center"><b>Change Detection — Results</b><br/><img src="docs/screenshots/OQ7.png" width="400"/></td>
-<td align="center"><b>Full Analysis — Complete</b><br/><img src="docs/screenshots/OQ8.png" width="400"/></td>
-</tr>
-</table>
-
----
-
 ## Deployment
 
 ### Backend (Render)
@@ -742,6 +723,7 @@ See [DEPLOY.md](DEPLOY.md) for complete deployment instructions.
 ## Research and Documentation
 
 Research Document: [ORBITALQUERY_RESEARCH_REPORT.docx](https://github.com/user-attachments/files/31349935/ORBITALQUERY_RESEARCH_REPORT.docx)
+SEMANTICQUERYING INEARTHOBSERVATIONDATACUBES:  [isprs-archives-XLVIII-4-W1-2022-503-2022.pdf](https://github.com/user-attachments/files/31767213/isprs-archives-XLVIII-4-W1-2022-503-2022.pdf)
 
 | Document | Description |
 |----------|-------------|
