@@ -204,45 +204,46 @@ export default function SwipeMap({
     }
   }, [splitPos]);
 
+  // Use window-level event listeners during drag so Leaflet doesn't consume the events
   const handleMouseDown = useCallback((e: React.MouseEvent | React.TouchEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     draggingRef.current = true;
-  }, []);
 
-  const handleMouseMove = useCallback((e: React.MouseEvent) => {
-    if (!draggingRef.current || !bottomRef.current) return;
-    const rect = bottomRef.current.getBoundingClientRect();
-    const pct = ((e.clientX - rect.left) / rect.width) * 100;
-    setSplitPos(Math.max(5, Math.min(95, pct)));
-  }, []);
+    const onMove = (clientX: number) => {
+      if (!bottomRef.current) return;
+      const rect = bottomRef.current.getBoundingClientRect();
+      const pct = ((clientX - rect.left) / rect.width) * 100;
+      setSplitPos(Math.max(5, Math.min(95, pct)));
+    };
 
-  const handlePointerUp = useCallback(() => {
-    draggingRef.current = false;
-  }, []);
+    const onMouseMove = (ev: MouseEvent) => onMove(ev.clientX);
+    const onTouchMove = (ev: TouchEvent) => { if (ev.touches[0]) onMove(ev.touches[0].clientX); };
 
-  const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    if (!bottomRef.current) return;
-    const rect = bottomRef.current.getBoundingClientRect();
-    const touch = e.touches[0];
-    const pct = ((touch.clientX - rect.left) / rect.width) * 100;
-    setSplitPos(Math.max(5, Math.min(95, pct)));
+    const onUp = () => {
+      draggingRef.current = false;
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onUp);
+      window.removeEventListener('touchmove', onTouchMove);
+      window.removeEventListener('touchend', onUp);
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onUp);
+    window.addEventListener('touchmove', onTouchMove, { passive: false });
+    window.addEventListener('touchend', onUp);
   }, []);
 
   return (
     <div
       className="relative w-full rounded-xl overflow-hidden border border-[var(--color-accent-border)] select-none"
       style={{ height: '520px' }}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handlePointerUp}
-      onMouseLeave={handlePointerUp}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handlePointerUp}
     >
       {/* Bottom map = Period 2 (After) — full satellite imagery visible */}
       <div ref={bottomRef} className="absolute inset-0" />
 
       {/* Top map = Period 1 (Before) — satellite imagery clipped, basemap visible everywhere */}
-      <div ref={topRef} className="absolute inset-0" style={{ pointerEvents: 'none' }} />
+      <div ref={topRef} className="absolute inset-0" />
 
       {/* Draggable divider */}
       <div

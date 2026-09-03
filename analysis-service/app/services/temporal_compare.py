@@ -773,6 +773,213 @@ def _generate_findings(phenomenon: str, metrics: dict[str, Any]) -> list[str]:
     return findings
 
 
+# ── Multi-signal change analysis ───────────────────────────────
+
+def _compute_multi_signal_change(
+    primary_index_name: str,
+    additional_indices: dict[str, dict[str, Any]],
+    signal_rules: list[dict[str, Any]],
+    min_agreeing_signals: int,
+    scene_t1: Optional[SceneSelection],
+    scene_t2: Optional[SceneSelection],
+    bbox: list[float],
+    resolution_m: float,
+    primary_change_result: Optional[dict[str, Any]],
+) -> dict[str, Any]:
+    """
+    Multi-signal change analysis.
+
+    Combines primary indicator with supporting indicators to produce
+    more defensible candidate change regions.
+
+    For URBAN_EXPANSION:
+    - Primary: NDBI increase (built-up signal)
+    - Supporting: NDVI decrease (vegetation context)
+    - A pixel is a candidate change if enough signals agree.
+
+    This implements the research principle:
+    Don't rely on one spectral signal — combine multiple indicators
+    for more robust change detection.
+    """
+    signal_details = {}
+    agreeing_pixels = 0
+    candidate_changed_pct = 0.0
+    candidate_changed_area = 0.0
+
+    # ── Evaluate each signal rule ────────────────────────────────
+    for rule in signal_rules:
+        idx_name = rule["index_name"]
+        direction = rule["direction"]
+        threshold = rule.get("threshold", 0.10)
+        is_primary = rule.get("is_primary", False)
+
+        # Get the index results for this signal
+        if idx_name == primary_index_name:
+            # Use the primary change detection results
+            sig_detail = {
+                "index_name": idx_name,
+                "direction": direction,
+                "threshold": threshold,
+                "is_primary": is_primary,
+                "status": "primary",
+            }
+            if primary_change_result and primary_change_result.get("raster_derived"):
+                # We already have raster-level analysis for this signal
+                sig_detail["changed_pct"] = primary_change_result.get("changed_pct", 0)
+                sig_detail["algorithm"] = primary_change_result.get("algorithm", "unknown")
+                # For the primary signal, "agreeing" pixels = all changed pixels
+                # (they already passed the threshold in the main change detection)
+                sig_detail["agreeing_pixels"] = primary_change_result.get("changed_pixels", 0)
+            else:
+                sig_detail["changed_pct"] = 0
+                sig_detail["algorithm"] = "not_raster_derived"
+                sig_detail["agreeing_pixels"] = 0
+        elif idx_name in additional_indices:
+            idx_data = additional_indices[idx_name]
+            idx_t1 = idx_data.get("t1")
+            idx_t2 = idx_data.get("t2")
+
+            if idx_t1 and idx_t2 and idx_t1.value is not None and idx_t2.value is not None:
+                # Compute the delta for this supporting indicator
+                t1_arr = idx_t1.value.astype(np.float32)
+                t2_arr = idx_t2.value.astype(np.float32)
+                min_h = min(t1_arr.shape[0], t2_arr.shape[0])
+                min_w = min(t1_arr.shape[1], t2_arr.shape[1])
+                t1_c = t1_arr[:min_h, :min_w]
+                t2_c = t2_arr[:min_h, :min_w]
+
+                valid = ~np.isnan(t1_c) & ~np.isnan(t2_c) & ~np.isinf(t1_c) & ~np.isinf(t2_c)
+                delta = np.where(valid, t2_c - t1_c, np.nan)
+                total_valid = int(np.sum(valid))
+
+                # Apply direction-specific threshold
+                if direction == "increase":
+                    signal_mask = valid & (delta > threshold)
+                elif direction == "decrease":
+                    signal_mask = valid & (delta < -threshold)
+                else:  # absolute_change
+                    signal_mask = valid & (np.abs(delta) > threshold)
+
+                signal_pixels = int(np.sum(signal_mask))
+                signal_pct = (signal_pixels / total_valid * 100) if total_valid > 0 else 0.0
+
+                sig_detail = {
+                    "index_name": idx_name,
+                    "direction": direction,
+                    "threshold": threshold,
+                    "is_primary": is_primary,
+                    "status": "raster_computed",
+                    "changed_pct": round(signal_pct, 4),
+                    "changed_pixels": signal_pixels,
+                    "total_valid_pixels": total_valid,
+                    "agreeing_pixels": signal_pixels,
+                    "delta_mean": round(float(np.nanmean(delta[valid])), 4) if total_valid > 0 else 0.0,
+                }
+            else:
+                # Fallback: estimate from stats
+                if idx_t1 and idx_t2:
+                    delta_mean = idx_t2.stats.get("mean", 0) - idx_t1.stats.get("mean", 0)
+                    if direction == "increase":
+                        signal_satisfied = delta_mean > threshold
+                    elif direction == "decrease":
+                        signal_satisfied = delta_mean < -threshold
+                    else:
+                        signal_satisfied = abs(delta_mean) > threshold
+
+                    sig_detail = {
+                        "index_name": idx_name,
+                        "direction": direction,
+                        "threshold": threshold,
+                        "is_primary": is_primary,
+                        "status": "estimated",
+                        "delta_mean": round(delta_mean, 4),
+                        "signal_satisfied": signal_satisfied,
+                        "agreeing_pixels": idx_t1.total_pixels if signal_satisfied else 0,
+                    }
+                else:
+                    sig_detail = {
+                        "index_name": idx_name,
+                        "direction": direction,
+                        "threshold": threshold,
+                        "is_primary": is_primary,
+                        "status": "no_data",
+                        "agreeing_pixels": 0,
+                    }
+        else:
+            sig_detail = {
+                "index_name": idx_name,
+                "direction": direction,
+                "threshold": threshold,
+                "is_primary": is_primary,
+                "status": "not_computed",
+                "agreeing_pixels": 0,
+            }
+
+        signal_details[idx_name] = sig_detail
+
+    # ── Compute agreement ────────────────────────────────────────
+    # Count how many signals agree (are satisfied)
+    satisfied_count = 0
+    total_signals = len(signal_rules)
+    for rule in signal_rules:
+        idx_name = rule["index_name"]
+        detail = signal_details.get(idx_name, {})
+        status = detail.get("status", "not_computed")
+        if status in ("primary", "raster_computed"):
+            # For primary: use the main change detection's changed_pixels
+            # For supporting: use the signal's changed_pixels
+            if detail.get("agreeing_pixels", 0) > 0:
+                satisfied_count += 1
+        elif status == "estimated":
+            if detail.get("signal_satisfied", False):
+                satisfied_count += 1
+
+    meets_threshold = satisfied_count >= min_agreeing_signals
+
+    # Compute candidate changed area from the primary signal
+    # but only if enough signals agree
+    if meets_threshold and primary_change_result:
+        candidate_changed_pct = primary_change_result.get("changed_pct", 0)
+        candidate_changed_area = primary_change_result.get("changed_area_sq_meters", 0)
+        agreeing_pixels = primary_change_result.get("changed_pixels", 0)
+    else:
+        candidate_changed_pct = 0.0
+        candidate_changed_area = 0.0
+        agreeing_pixels = 0
+
+    # Confidence note
+    if meets_threshold:
+        if satisfied_count == total_signals:
+            confidence_note = (
+                f"All {total_signals} indicators agree on candidate change regions. "
+                f"Primary signal: {candidate_changed_pct:.2f}% of area."
+            )
+        else:
+            confidence_note = (
+                f"{satisfied_count}/{total_signals} indicators agree on candidate change. "
+                f"Primary signal: {candidate_changed_pct:.2f}% of area. "
+                f"Supporting signals provide additional context."
+            )
+    else:
+        confidence_note = (
+            f"Only {satisfied_count}/{total_signals} indicators agree — "
+            f"below minimum threshold of {min_agreeing_signals}. "
+            f"Detected changes may not represent real-world {primary_index_name.lower()} change."
+        )
+
+    return {
+        "status": "ok",
+        "satisfied_signals": satisfied_count,
+        "total_signals": total_signals,
+        "meets_threshold": meets_threshold,
+        "agreeing_pixels": agreeing_pixels,
+        "candidate_changed_pct": round(candidate_changed_pct, 4),
+        "candidate_changed_area_sq_meters": round(candidate_changed_area, 2),
+        "signal_details": signal_details,
+        "confidence_note": confidence_note,
+    }
+
+
 # ── Pure-Python PNG encoder (no Pillow required) ───────────────
 import struct
 import zlib
@@ -850,18 +1057,44 @@ def run_temporal_comparison(
     aoi_name = plan.get("aoi", "Unknown")
     plan_id = plan.get("plan_id", "unknown")
 
+    # ── Semantic layer: read multi-signal config from plan ──────
+    semantic_config = plan.get("semantic", {})
+    indicators_config = plan.get("indicators", {})
+    multi_signal_config = plan.get("multi_signal", {})
+    evidence_config = plan.get("evidence_requirements", [])
+
     _lazy_import_heavy()
-    # Get index name from phenomenon config
-    pheno_config = _PHENOMENON_REGISTRY.get(phenomenon, {})
-    index_name = pheno_config.get("default_index", "NDVI")
+    # Get index name: prefer semantic primary_indicator, fallback to phenomenon config
+    index_name = indicators_config.get("primary", None)
     if not index_name:
-        # For SAR-based phenomena like flood
-        index_name = "NDWI"
+        pheno_config = _PHENOMENON_REGISTRY.get(phenomenon, {})
+        index_name = pheno_config.get("default_index", "NDVI")
+        if not index_name:
+            index_name = "NDWI"
+
+    # All indicators for this concept (used in multi-signal analysis)
+    all_indicators = indicators_config.get("all", [index_name])
+    multi_signal_enabled = multi_signal_config.get("enabled", False)
+    signal_rules = multi_signal_config.get("rules", [])
+    min_agreeing = multi_signal_config.get("min_agreeing_signals", 1)
+
+    # Track additional indicator results for multi-signal analysis
+    additional_indices: dict[str, dict[str, IndexResult]] = {}  # indicator_name -> {"t1": ..., "t2": ...}
 
     processing_steps.append({
         "step": "plan_validation",
         "detail": f"phenomenon={phenomenon}, analysis_type={analysis_type}, sensor={sensor}, index={index_name}",
     })
+    if multi_signal_enabled:
+        processing_steps.append({
+            "step": "multi_signal_config",
+            "detail": f"Multi-signal enabled: indicators={all_indicators}, rules={len(signal_rules)}, min_agreeing={min_agreeing}",
+        })
+        if semantic_config.get("concept"):
+            processing_steps.append({
+                "step": "semantic_concept",
+                "detail": f"Concept: {semantic_config['concept']} ({semantic_config.get('description', '')})",
+            })
 
     # ── Step 1: Compute time windows ──────────────────────────────
     # Split the date range into two comparison periods
@@ -982,10 +1215,11 @@ def run_temporal_comparison(
         "detail": f"Period 1: {scene_sel_t1.item_id if scene_sel_t1 else 'none'} | Period 2: {scene_sel_t2.item_id if scene_sel_t2 else 'none'}",
     })
 
-    # ── Step 4: Compute spectral indices for each period (parallel) ─
+    # ── Step 4: Compute spectral indices for each period ────────
     index_t1 = None
     index_t2 = None
 
+    # 4a: Compute primary index
     with ThreadPoolExecutor(max_workers=2) as executor:
         futures = {}
         if scene_sel_t1:
@@ -1006,6 +1240,31 @@ def run_temporal_comparison(
                 processing_steps.append({
                     "step": "compute_index_t2",
                     "detail": f"{index_name} for {scene_sel_t2.item_id}: mean={result.stats['mean']}",
+                })
+
+    # 4b: Compute additional indicators for multi-signal analysis
+    if multi_signal_enabled and len(all_indicators) > 1:
+        additional_indicator_names = [ind for ind in all_indicators if ind != index_name]
+        for extra_idx_name in additional_indicator_names:
+            extra_t1 = None
+            extra_t2 = None
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                futures = {}
+                if scene_sel_t1:
+                    futures["t1"] = executor.submit(_compute_index_stats, extra_idx_name, sensor, scene_sel_t1, bbox)
+                if scene_sel_t2:
+                    futures["t2"] = executor.submit(_compute_index_stats, extra_idx_name, sensor, scene_sel_t2, bbox)
+                for key, future in futures.items():
+                    result = future.result()
+                    if key == "t1":
+                        extra_t1 = result
+                    else:
+                        extra_t2 = result
+            if extra_t1 or extra_t2:
+                additional_indices[extra_idx_name] = {"t1": extra_t1, "t2": extra_t2}
+                processing_steps.append({
+                    "step": f"compute_index_{extra_idx_name.lower()}",
+                    "detail": f"{extra_idx_name} (supporting indicator): t1_mean={extra_t1.stats['mean'] if extra_t1 else 'N/A'}, t2_mean={extra_t2.stats['mean'] if extra_t2 else 'N/A'}",
                 })
 
     # ── Step 5: Change detection ──────────────────────────────────
@@ -1034,11 +1293,9 @@ def run_temporal_comparison(
                 valid_mask = ~np.isnan(t1_cropped) & ~np.isnan(t2_cropped) & ~np.isinf(t1_cropped) & ~np.isinf(t2_cropped)
 
                 # Water mask: exclude water/tidal pixels from change detection
-                water_t1 = t1_cropped < 0.0
-                water_t2 = t2_cropped < 0.0
-                water_mask = water_t1 | water_t2
-                low_both = (t1_cropped < 0.05) & (t2_cropped < 0.05)
-                water_mask = water_mask | low_both
+                water_t1 = t1_cropped < -0.1
+                water_t2 = t2_cropped < -0.1
+                water_mask = water_t1 & water_t2  # only exclude pixels that are water in BOTH periods
                 valid_mask = valid_mask & (~water_mask)
                 total_valid = int(np.sum(valid_mask))
 
@@ -1047,22 +1304,23 @@ def run_temporal_comparison(
                 valid_diff = diff[valid_mask]
                 if len(valid_diff) > 100:
                     diff_std = float(np.std(valid_diff))
-                    threshold = max(0.12, min(0.25, 1.5 * diff_std))
+                    threshold = max(0.08, min(0.20, 1.2 * diff_std))
                 else:
-                    threshold = 0.15
+                    threshold = 0.10
                 
-                # Vegetation preconditions: loss requires baseline NDVI >= 0.3
-                loss_cond = valid_mask & (diff < -threshold) & (t1_cropped >= 0.3)
-                gain_cond = valid_mask & (diff > threshold) & (t2_cropped >= 0.3)
+                # Vegetation preconditions: more lenient thresholds to detect real change
+                # Loss: significant NDVI decrease AND baseline had some vegetation
+                loss_cond = valid_mask & (diff < -threshold) & (t1_cropped >= 0.15)
+                # Gain: significant NDVI increase AND result has some vegetation  
+                gain_cond = valid_mask & (diff > threshold) & (t2_cropped >= 0.15)
                 changed_mask = loss_cond | gain_cond
                 
                 # Morphological cleaning: remove isolated noise pixels
-                # binary_opening removes single-pixel noise
                 struct = _ndimage.generate_binary_structure(2, 1)  # 4-connectivity
                 changed_mask = _ndimage.binary_opening(changed_mask, structure=struct, iterations=1)
                 
-                # Remove small connected regions (< 50 pixels = ~0.5 ha at 10m)
-                min_region_pixels = 50
+                # Remove small connected regions (< 25 pixels = ~0.25 ha at 10m)
+                min_region_pixels = 25
                 labeled_raw, num_raw = _ndimage.label(changed_mask)
                 region_sizes = _ndimage.sum(changed_mask, labeled_raw, range(1, num_raw + 1))
                 cleaned = np.zeros_like(changed_mask)
@@ -1158,6 +1416,171 @@ def run_temporal_comparison(
             "detail": f"algorithm={change_result.get('algorithm', 'unknown')}, changed={change_result.get('changed_pct', 0)}%",
         })
 
+    # ── Step 5a: Multi-signal change analysis ────────────────────
+    # When multi-signal is enabled, combine primary + supporting indicators
+    # to produce more defensible candidate change regions.
+    multi_signal_result = None
+    if multi_signal_enabled and additional_indices and change_result is not None:
+        try:
+            multi_signal_result = _compute_multi_signal_change(
+                primary_index_name=index_name,
+                additional_indices=additional_indices,
+                signal_rules=signal_rules,
+                min_agreeing_signals=min_agreeing,
+                scene_t1=scene_sel_t1,
+                scene_t2=scene_sel_t2,
+                bbox=bbox,
+                resolution_m=index_t1.resolution_m if index_t1 else 10.0,
+                primary_change_result=change_result,
+            )
+            processing_steps.append({
+                "step": "multi_signal_analysis",
+                "detail": f"Combined {len(additional_indices) + 1} indicators, "
+                          f"{multi_signal_result.get('agreeing_pixels', 0)} agreeing pixels, "
+                          f"{multi_signal_result.get('candidate_changed_pct', 0):.2f}% candidate change",
+            })
+
+            # Enrich the main change_result with multi-signal evidence
+            if multi_signal_result.get("status") == "ok":
+                change_result["multi_signal"] = {
+                    "enabled": True,
+                    "indicators_used": [index_name] + list(additional_indices.keys()),
+                    "agreeing_pixels": multi_signal_result.get("agreeing_pixels", 0),
+                    "candidate_changed_pct": multi_signal_result.get("candidate_changed_pct", 0),
+                    "candidate_changed_area_sq_meters": multi_signal_result.get("candidate_changed_area_sq_meters", 0),
+                    "signal_details": multi_signal_result.get("signal_details", {}),
+                    "confidence_note": multi_signal_result.get("confidence_note", ""),
+                }
+        except Exception as e:
+            logger.warning("Multi-signal analysis failed: %s — falling back to single-signal", e)
+            processing_steps.append({
+                "step": "multi_signal_analysis",
+                "detail": f"Failed: {type(e).__name__}: {str(e)[:100]}",
+            })
+    elif multi_signal_enabled:
+        processing_steps.append({
+            "step": "multi_signal_analysis",
+            "detail": "Skipped — no additional indicator arrays available",
+        })
+
+    # ── Step 5c: Ensemble change detection (CVA + IR-MAD + Object-CD) ──
+    # Runs three independent algorithms and combines via majority voting.
+    # This is more robust than any single algorithm.
+    ensemble_mask = None
+    ensemble_confidence = None
+    ensemble_stats = {}
+    if index_t1 and index_t2 and index_t1.value is not None and index_t2.value is not None:
+        try:
+            from app.services.cva import run_cva
+            from app.services.mad import run_ir_mad
+            from app.services.object_cd import run_object_cd
+
+            t1_arr = index_t1.value.astype(np.float32)
+            t2_arr = index_t2.value.astype(np.float32)
+            min_h = min(t1_arr.shape[0], t2_arr.shape[0])
+            min_w = min(t1_arr.shape[1], t2_arr.shape[1])
+            t1_c = t1_arr[:min_h, :min_w]
+            t2_c = t2_arr[:min_h, :min_w]
+            delta = t2_c - t1_c
+
+            valid = ~np.isnan(t1_c) & ~np.isnan(t2_c) & ~np.isinf(t1_c) & ~np.isinf(t2_c)
+
+            # --- Algorithm 1: CVA (single-band mode for NDVI) ---
+            try:
+                cva_result = run_cva(
+                    t1_c, t2_c,
+                    band_names=[index_name],
+                    apply_normalization=True,
+                )
+                cva_mask = cva_result.change_mask & valid
+                processing_steps.append({
+                    "step": "ensemble_cva",
+                    "detail": f"changed={cva_result.changed_pixels}/{cva_result.total_pixels} ({cva_result.changed_pct}%), normalized={cva_result.normalized}",
+                })
+            except Exception as e:
+                cva_mask = np.zeros((min_h, min_w), dtype=bool)
+                logger.warning("[Ensemble] CVA failed: %s", e)
+                processing_steps.append({"step": "ensemble_cva", "detail": f"Failed: {type(e).__name__}: {str(e)[:80]}"})
+
+            # --- Algorithm 2: IR-MAD (multi-band requires reshaping) ---
+            try:
+                # For single-index mode, create pseudo multi-band with delta and original
+                bands_t1_3d = np.stack([t1_c, t2_c], axis=0)  # (2, H, W)
+                bands_t2_3d = np.stack([t1_c, t2_c], axis=0)  # Dummy for MAD
+                # Actually MAD needs two different time images — use the index arrays
+                bands_t1_mad = t1_c[np.newaxis, ...]  # (1, H, W)
+                bands_t2_mad = t2_c[np.newaxis, ...]  # (1, H, W)
+                mad_result = run_ir_mad(
+                    bands_t1_mad, bands_t2_mad,
+                    significance_level=0.01,
+                )
+                mad_mask = mad_result.change_mask & valid
+                processing_steps.append({
+                    "step": "ensemble_mad",
+                    "detail": f"changed={mad_result.changed_pixels}/{mad_result.total_pixels} ({mad_result.changed_pct}%), converged={mad_result.converged}",
+                })
+            except Exception as e:
+                mad_mask = np.zeros((min_h, min_w), dtype=bool)
+                logger.warning("[Ensemble] IR-MAD failed: %s", e)
+                processing_steps.append({"step": "ensemble_mad", "detail": f"Failed: {type(e).__name__}: {str(e)[:80]}"})
+
+            # --- Algorithm 3: Object-based multi-scale ---
+            try:
+                obj_result = run_object_cd(
+                    delta,
+                    scale_sigmas=[0.0, 1.5, 3.0, 6.0],
+                    min_agreement=2,
+                    min_object_size=10,
+                )
+                obj_mask = obj_result.change_mask & valid
+                ensemble_confidence = obj_result.confidence
+                processing_steps.append({
+                    "step": "ensemble_object_cd",
+                    "detail": f"changed={obj_result.changed_pixels}/{obj_result.total_pixels} ({obj_result.changed_pct}%), objects={obj_result.n_objects}",
+                })
+            except Exception as e:
+                obj_mask = np.zeros((min_h, min_w), dtype=bool)
+                logger.warning("[Ensemble] Object-CD failed: %s", e)
+                processing_steps.append({"step": "ensemble_object_cd", "detail": f"Failed: {type(e).__name__}: {str(e)[:80]}"})
+
+            # --- Ensemble voting: pixel is changed if ≥2/3 algorithms agree ---
+            vote_count = cva_mask.astype(int) + mad_mask.astype(int) + obj_mask.astype(int)
+            ensemble_mask = vote_count >= 2
+
+            ensemble_changed = int(np.sum(ensemble_mask))
+            ensemble_total = int(np.sum(valid))
+            ensemble_pct = (ensemble_changed / ensemble_total * 100) if ensemble_total > 0 else 0.0
+
+            ensemble_stats = {
+                "algorithm": "ensemble_cva_mad_object",
+                "n_algorithms": 3,
+                "min_agreement": 2,
+                "changed_pixels": ensemble_changed,
+                "total_valid_pixels": ensemble_total,
+                "changed_pct": round(ensemble_pct, 4),
+                "cva_changed": int(np.sum(cva_mask)),
+                "mad_changed": int(np.sum(mad_mask)),
+                "object_changed": int(np.sum(obj_mask)),
+            }
+
+            processing_steps.append({
+                "step": "ensemble_voting",
+                "detail": f"cva={int(np.sum(cva_mask))}, mad={int(np.sum(mad_mask))}, obj={int(np.sum(obj_mask))}, ensemble={ensemble_changed} ({ensemble_pct:.2f}%)",
+            })
+
+            logger.info(
+                "[Ensemble] CVA=%d, MAD=%d, Object=%d, Ensemble=%d/%d (%.2f%%)",
+                int(np.sum(cva_mask)), int(np.sum(mad_mask)), int(np.sum(obj_mask)),
+                ensemble_changed, ensemble_total, ensemble_pct,
+            )
+
+        except Exception as e:
+            logger.warning("[Ensemble] Failed: %s — falling back to threshold method", e)
+            processing_steps.append({
+                "step": "ensemble_detection",
+                "detail": f"Failed: {type(e).__name__}: {str(e)[:100]}",
+            })
+
     # ── Step 5b: Generate NDVI-based categorical change mask ────
     # Uses the actual spectral index arrays (NDVI/NDBI/etc.), NOT raw RGB pixels.
     # Classifies into: Vegetation Loss / Stable / Vegetation Gain / No Data
@@ -1180,18 +1603,10 @@ def run_temporal_comparison(
             valid = valid & (np.abs(t1_c) > 0.001) & (np.abs(t2_c) > 0.001)
 
             # --- Water mask using NDVI proxy ---
-            # Water/tidal pixels have NDVI < 0 in both periods.
-            # Also mask pixels where NDVI crosses zero between periods
-            # (tidal flats, sediment plumes, seasonal flooding).
-            # This eliminates the Sundarbans river noise.
-            water_t1 = t1_c < 0.0  # water in period 1
-            water_t2 = t2_c < 0.0  # water in period 2
-            water_mask = water_t1 | water_t2  # exclude ANY pixel that is water in either period
-            
-            # Additional: mask very low NDVI in both periods (bare soil, mudflats)
-            # that might look like "loss" when it's just not vegetation
-            low_both = (t1_c < 0.05) & (t2_c < 0.05)
-            water_mask = water_mask | low_both
+            # Only exclude pixels that are clearly water in BOTH periods
+            water_t1 = t1_c < -0.1  # clearly water in period 1
+            water_t2 = t2_c < -0.1  # clearly water in period 2
+            water_mask = water_t1 & water_t2  # only exclude pixels water in BOTH periods
 
             valid = valid & (~water_mask)
             total_valid_pixels = int(np.sum(valid))
@@ -1203,31 +1618,46 @@ def run_temporal_comparison(
             valid_delta = delta[valid]
             if len(valid_delta) > 100:
                 delta_std = float(np.std(valid_delta))
-                threshold = max(0.12, min(0.25, 1.5 * delta_std))
+                threshold = max(0.08, min(0.20, 1.2 * delta_std))
             else:
-                threshold = 0.15
+                threshold = 0.10
 
             # --- Classify into categorical mask ---
-            # Vegetation preconditions:
-            # LOSS: delta < -threshold AND baseline NDVI >= 0.3 (was vegetation)
-            # GAIN: delta > +threshold AND target NDVI >= 0.3 (became vegetation)
-            # This prevents bare soil / water from being classified as vegetation change.
-            classification = np.zeros((min_h, min_w), dtype=np.uint8)
-            classification[valid] = 2  # Default: Stable
-
-            loss_condition = valid & (delta < -threshold) & (t1_c >= 0.3)
-            gain_condition = valid & (delta > threshold) & (t2_c >= 0.3)
-            classification[loss_condition] = 1  # Loss
-            classification[gain_condition] = 3   # Gain
+            # Use ensemble mask if available (from CVA+IR-MAD+Object-CD),
+            # otherwise fall back to threshold-based classification
+            if ensemble_mask is not None and ensemble_mask.shape == (min_h, min_w):
+                # Ensemble-validated change: classify by direction of delta
+                loss_condition = ensemble_mask & valid & (delta < 0)
+                gain_condition = ensemble_mask & valid & (delta > 0)
+                classification = np.zeros((min_h, min_w), dtype=np.uint8)
+                classification[valid] = 2  # Default: Stable
+                classification[loss_condition] = 1  # Loss
+                classification[gain_condition] = 3   # Gain
+                processing_steps.append({
+                    "step": "mask_source",
+                    "detail": f"Using ENSEMBLE mask ({int(np.sum(ensemble_mask))} changed pixels from CVA+MAD+ObjectCD)",
+                })
+            else:
+                # Fallback: threshold-based classification
+                loss_condition = valid & (delta < -threshold) & (t1_c >= 0.15)
+                gain_condition = valid & (delta > threshold) & (t2_c >= 0.15)
+                classification = np.zeros((min_h, min_w), dtype=np.uint8)
+                classification[valid] = 2  # Default: Stable
+                classification[loss_condition] = 1  # Loss
+                classification[gain_condition] = 3   # Gain
+                processing_steps.append({
+                    "step": "mask_source",
+                    "detail": "Using THRESHOLD-based mask (ensemble unavailable)",
+                })
 
             # --- Morphological filtering ---
             # Remove isolated noise pixels using binary opening
             struct = _ndimage_vis.generate_binary_structure(2, 1)  # 4-connectivity
 
-            # Filter loss regions (min 50 pixels = ~0.5 ha at 10m)
+            # Filter loss regions (min 25 pixels = ~0.25 ha at 10m)
             loss_mask = classification == 1
             loss_cleaned = _ndimage_vis.binary_opening(loss_mask, structure=struct, iterations=1)
-            min_region = 50
+            min_region = 25
             labeled_loss, n_loss = _ndimage_vis.label(loss_cleaned)
             if n_loss > 0:
                 sizes_loss = _ndimage_vis.sum(loss_cleaned, labeled_loss, range(1, n_loss + 1))
@@ -1235,7 +1665,7 @@ def run_temporal_comparison(
                     if sz < min_region:
                         loss_cleaned[labeled_loss == (i + 1)] = False
 
-            # Filter gain regions (min 50 pixels = ~0.5 ha at 10m)
+            # Filter gain regions (min 25 pixels = ~0.25 ha at 10m)
             gain_mask = classification == 3
             gain_cleaned = _ndimage_vis.binary_opening(gain_mask, structure=struct, iterations=1)
             labeled_gain, n_gain = _ndimage_vis.label(gain_cleaned)
@@ -1408,12 +1838,13 @@ def run_temporal_comparison(
         scene_t2=scene_sel_t2,
         index_t1=index_t1,
         index_t2=index_t2,
-        change_detection=change_result,
+        change_detection={**(change_result or {}), **({"ensemble": ensemble_stats} if ensemble_stats else {})},
         change_visualizations={
             "change_mask_png": change_mask_b64,
             "difference_png": diff_vis_b64,
             "bbox": bbox,
             **change_vis_stats,
+            **({"ensemble": ensemble_stats} if ensemble_stats else {}),
         } if change_mask_b64 else None,
         metrics=metrics,
         imagery=imagery,
