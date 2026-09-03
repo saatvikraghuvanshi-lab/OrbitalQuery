@@ -7,37 +7,79 @@ on:
     branches: [main]
 
 jobs:
-  build:
+  backend:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
 
     steps:
     - uses: actions/checkout@v4
 
-    # ── Node.js (backend) ────────────────────────────────────
     - name: Set up Node.js
       uses: actions/setup-node@v4
       with:
         node-version: '20'
+        cache: 'npm'
+        cache-dependency-path: backend/package-lock.json
 
-    - name: Install backend dependencies
-      run: cd backend && npm install
+    - name: Install dependencies
+      run: npm ci
 
-    - name: Compile TypeScript
-      run: cd backend && npx tsc
+    - name: TypeScript check
+      run: npx tsc --noEmit
 
-    # ── Python (analysis service) ────────────────────────────
+    - name: Build
+      run: npm run build
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: TypeScript check
+      run: npx tsc --noEmit
+
+    - name: Build
+      run: npx next build
+
+  analysis:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: analysis-service
+
+    steps:
+    - uses: actions/checkout@v4
+
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.11'
+        cache: 'pip'
+        cache-dependency-path: analysis-service/requirements.txt
 
-    - name: Install Python dependencies
+    - name: Install dependencies
       run: |
-        cd analysis-service
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
-    - name: Run Python unit tests
-      run: |
-        cd analysis-service
-        python -m pytest tests/ --ignore=tests/test_timeseries_integration.py -q 2>&1 | tail -20
+    - name: Syntax check
+      run: python -m py_compile app/main.py
+
+    - name: Run unit tests
+      run: python -m pytest tests/ --ignore=tests/test_timeseries_integration.py -q 2>&1 | tail -20
