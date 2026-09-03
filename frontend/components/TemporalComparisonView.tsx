@@ -197,6 +197,7 @@ function SynchronizedDualMap({
 function DifferenceView({
   bbox, changeDetection, config, metrics,
   sceneT1, sceneT2, thumbnailT1, thumbnailT2, signedTileUrl1, signedTileUrl2, sceneBboxT1, sceneBboxT2,
+  changeVisualizations, tilejsonUrl1, tilejsonUrl2,
 }: {
   bbox: number[];
   changeDetection: Record<string, any> | null;
@@ -210,11 +211,27 @@ function DifferenceView({
   signedTileUrl2?: string;
   sceneBboxT1?: any;
   sceneBboxT2?: any;
+  changeVisualizations?: Record<string, any> | null;
+  tilejsonUrl1?: string;
+  tilejsonUrl2?: string;
 }) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
+  const [viewMode, setViewMode] = useState<'blend' | 'diff'>('blend');
   const [overlayOpacity, setOverlayOpacity] = useState(0.5);
   const overlayLayerRef = useRef<any>(null);
+  const diffLayerRef = useRef<any>(null);
+
+  // Decode the backend difference PNG
+  const decodeVis = (hex: string | null): string | null => {
+    if (!hex) return null;
+    try {
+      const bytes = new Uint8Array(hex.match(/.{1,2}/g)!.map(b => parseInt(b, 16)));
+      return URL.createObjectURL(new Blob([bytes], { type: 'image/png' }));
+    } catch { return null; }
+  };
+
+  const diffPngUrl = decodeVis(changeVisualizations?.difference_png || null);
 
   useEffect(() => {
     if (!mapRef.current || mapInstanceRef.current) return;
@@ -223,14 +240,34 @@ function DifferenceView({
     import('leaflet').then(async (L) => {
       if (cancelled || !mapRef.current) return;
 
-      const [west, south, east, north] = bbox;
+      // Fetch TileJSON for correct bounds
+      async function fetchTilejson(url: string): Promise<{ tileTemplate: string; bounds: number[] } | null> {
+        try {
+          const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
+          if (!r.ok) return null;
+          const tj = await r.json();
+          return { tileTemplate: tj.tiles?.[0] || '', bounds: tj.bounds || [] };
+        } catch { return null; }
+      }
+
+      const [tj1, tj2] = await Promise.all([
+        tilejsonUrl1 ? fetchTilejson(tilejsonUrl1) : Promise.resolve(null),
+        tilejsonUrl2 ? fetchTilejson(tilejsonUrl2) : Promise.resolve(null),
+      ]);
+
+      const initBounds = (tj1?.bounds && tj1.bounds.length === 4 ? tj1.bounds : null)
+        || parseBbox(sceneBboxT1) || parseBbox(sceneBboxT2) || bbox;
+      const [west, south, east, north] = initBounds;
       const center: [number, number] = [(south + north) / 2, (west + east) / 2];
+
+      const tileUrl1 = tj1?.tileTemplate || signedTileUrl1;
+      const tileUrl2 = tj2?.tileTemplate || signedTileUrl2;
 
       const map = L.map(mapRef.current, { center, zoom: 10, zoomControl: false, attributionControl: false });
       L.tileLayer(GOOGLE_TILE, { maxZoom: 22, subdomains: ['0', '1', '2', '3'] }).addTo(map);
 
-      const baseResult = await loadSatelliteTiles(map, { L, signedTileUrl: signedTileUrl1, sceneCollection: sceneT1?.collection, sceneItemId: sceneT1?.item_id, thumbnailUrl: thumbnailT1, sceneBbox: sceneBboxT1, aoiBbox: bbox, opacity: 0.9, zIndex: 400 });
-      const overlayResult = await loadSatelliteTiles(map, { L, signedTileUrl: signedTileUrl2, sceneCollection: sceneT2?.collection, sceneItemId: sceneT2?.item_id, thumbnailUrl: thumbnailT2, sceneBbox: sceneBboxT2, aoiBbox: bbox, opacity: overlayOpacity, zIndex: 500 });
+      const baseResult = await loadSatelliteTiles(map, { L, signedTileUrl: tileUrl1, tilejsonUrl: tilejsonUrl1, sceneCollection: sceneT1?.collection, sceneItemId: sceneT1?.item_id, thumbnailUrl: thumbnailT1, sceneBbox: tj1?.bounds?.length === 4 ? tj1.bounds : sceneBboxT1, aoiBbox: bbox, opacity: 0.9, zIndex: 400 });
+      const overlayResult = await loadSatelliteTiles(map, { L, signedTileUrl: tileUrl2, tilejsonUrl: tilejsonUrl2, sceneCollection: sceneT2?.collection, sceneItemId: sceneT2?.item_id, thumbnailUrl: thumbnailT2, sceneBbox: tj2?.bounds?.length === 4 ? tj2.bounds : sceneBboxT2, aoiBbox: bbox, opacity: overlayOpacity, zIndex: 500 });
 
       if (cancelled) return;
 
@@ -245,27 +282,66 @@ function DifferenceView({
       mapInstanceRef.current = map;
     });
 
-    return () => { cancelled = true; mapInstanceRef.current?.remove(); mapInstanceRef.current = null; overlayLayerRef.current = null; };
-  }, [bbox, signedTileUrl1, signedTileUrl2, sceneT1?.item_id, sceneT2?.item_id]);
+    return () => { cancelled = true; mapInstanceRef.current?.remove(); mapInstanceRef.current = null; overlayLayerRef.current = null; diffLayerRef.current = null; };
+  }, [bbox, signedTileUrl1, signedTileUrl2, tilejsonUrl1, tilejsonUrl2, sceneT1?.item_id, sceneT2?.item_id]);
 
   useEffect(() => {
     if (overlayLayerRef.current?.setOpacity) overlayLayerRef.current.setOpacity(overlayOpacity);
   }, [overlayOpacity]);
 
+  // Add/remove the difference PNG overlay
+  useEffect(() => {
+    if (!mapInstanceRef.current || !diffPngUrl) return;
+    const map = mapInstanceRef.current;
+
+    if (viewMode === 'diff') {
+      if (diffLayerRef.current) { map.removeLayer(diffLayerRef.current); diffLayerRef.current = null; }
+      const visBbox = changeVisualizations?.bbox || bbox;
+      const bounds: [[number, number], [number, number]] = [[visBbox[1], visBbox[0]], [visBbox[3], visBbox[2]]];
+      import('leaflet').then((L) => {
+        const leaflet = (L as any).default || L;
+        const img = leaflet.imageOverlay(diffPngUrl, bounds as any, { opacity: 0.85, zIndex: 600 }).addTo(map);
+        diffLayerRef.current = img;
+      });
+    } else {
+      if (diffLayerRef.current) { map.removeLayer(diffLayerRef.current); diffLayerRef.current = null; }
+    }
+    return () => { if (diffLayerRef.current) { map.removeLayer(diffLayerRef.current); diffLayerRef.current = null; } };
+  }, [viewMode, diffPngUrl, bbox]);
+
   return (
     <div className="relative w-full rounded-lg overflow-hidden bg-oq-950" style={{ height: 'clamp(400px, 65vh, 700px)' }}>
       <div ref={mapRef} className="absolute inset-0" />
       <div className="absolute top-2 left-2 z-[1000] px-2 py-0.5 rounded text-[8px] font-bold uppercase tracking-widest bg-oq-950/80 text-oq-200 border border-oq-700/30 backdrop-blur-sm">
-        Difference — {config.indexLabel} Overlay
+        {viewMode === 'diff' ? 'Difference — NDVI Overlay' : `Before / After — ${config.indexLabel} Blend`}
       </div>
-      {/* Opacity slider */}
+      {/* View mode toggle */}
       <div className="absolute top-10 left-2 z-[1000] bg-oq-950/85 backdrop-blur-sm rounded border border-oq-700/30 px-2 py-1.5">
-        <div className="text-[8px] text-oq-300 uppercase tracking-wider mb-1">Blend</div>
-        <div className="flex items-center gap-1.5">
-          <span className="text-[8px] text-semantic-before w-7">Before</span>
-          <input type="range" min={0} max={100} value={overlayOpacity * 100} onChange={(e) => setOverlayOpacity(parseInt(e.target.value) / 100)} className="w-16 h-0.5 accent-lime cursor-pointer" />
-          <span className="text-[8px] text-semantic-after w-7 text-right">After</span>
+        <div className="flex gap-1 mb-1">
+          <button
+            onClick={() => setViewMode('blend')}
+            className={`px-2 py-0.5 rounded text-[8px] font-semibold uppercase ${viewMode === 'blend' ? 'bg-lime text-oq-950' : 'text-oq-300 hover:text-oq-100'}`}
+          >Blend</button>
+          {diffPngUrl && (
+            <button
+              onClick={() => setViewMode('diff')}
+              className={`px-2 py-0.5 rounded text-[8px] font-semibold uppercase ${viewMode === 'diff' ? 'bg-lime text-oq-950' : 'text-oq-300 hover:text-oq-100'}`}
+            >Diff</button>
+          )}
         </div>
+        {viewMode === 'blend' && (
+          <div className="flex items-center gap-1.5">
+            <span className="text-[8px] text-semantic-before w-7">Before</span>
+            <input type="range" min={0} max={100} value={overlayOpacity * 100} onChange={(e) => setOverlayOpacity(parseInt(e.target.value) / 100)} className="w-16 h-0.5 accent-lime cursor-pointer" />
+            <span className="text-[8px] text-semantic-after w-7 text-right">After</span>
+          </div>
+        )}
+        {viewMode === 'diff' && (
+          <div className="flex items-center gap-2">
+            <span className="flex items-center gap-1 text-[7px]"><span className="w-2 h-1 rounded-sm" style={{background:'rgba(80,50,50,0.8)'}} /> Decrease</span>
+            <span className="flex items-center gap-1 text-[7px]"><span className="w-2 h-1 rounded-sm" style={{background:'rgba(50,50,80,0.8)'}} /> Increase</span>
+          </div>
+        )}
       </div>
       {/* Zoom */}
       <div className="absolute top-2 right-2 z-[1000] flex flex-col rounded overflow-hidden border border-oq-700/30" style={{ padding: 12 }}>
@@ -353,7 +429,7 @@ function ProcessingPipeline({ steps }: { steps: Array<{ step: string; detail: st
 // ══════════════════════════════════════════════════════════════
 function ChangeMaskView({
   bbox, sceneT1, sceneT2, thumbnailT1, thumbnailT2, sceneBboxT1, sceneBboxT2,
-  changeMaskB64, changeVisBbox, changeVisStats, config,
+  changeMaskB64, changeVisBbox, changeVisStats, config, tilejsonUrl1, tilejsonUrl2,
 }: {
   bbox: number[];
   sceneT1: SceneInfo | null; sceneT2: SceneInfo | null;
@@ -363,6 +439,8 @@ function ChangeMaskView({
   changeVisBbox: number[] | null;
   changeVisStats: Record<string, any>;
   config: { color: string; label: string; indexLabel: string };
+  tilejsonUrl1?: string;
+  tilejsonUrl2?: string;
 }) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapRefInst = useRef<any>(null);
@@ -375,12 +453,29 @@ function ChangeMaskView({
     import('leaflet').then(async (L) => {
       if (cancelled || !mapRef.current) return;
 
-      const initBounds = parseBbox(sceneBboxT1) || parseBbox(sceneBboxT2) || bbox;
+      // Fetch TileJSON to get correct bounds
+      async function fetchTilejson(url: string): Promise<{ tileTemplate: string; bounds: number[] } | null> {
+        try {
+          const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
+          if (!r.ok) return null;
+          const tj = await r.json();
+          return { tileTemplate: tj.tiles?.[0] || '', bounds: tj.bounds || [] };
+        } catch { return null; }
+      }
+
+      const [tj1] = await Promise.all([
+        tilejsonUrl1 ? fetchTilejson(tilejsonUrl1) : Promise.resolve(null),
+      ]);
+
+      const initBounds = (tj1?.bounds && tj1.bounds.length === 4 ? tj1.bounds : null)
+        || parseBbox(sceneBboxT1) || parseBbox(sceneBboxT2) || bbox;
       const [west, south, east, north] = initBounds;
       const center: [number, number] = [(south + north) / 2, (west + east) / 2];
       const latDiff = north - south;
       const lngDiff = east - west;
       const initZoom = Math.min(12, Math.max(6, Math.floor(Math.log2(360 / Math.max(latDiff, lngDiff)))));
+
+      const tileUrl1 = tj1?.tileTemplate;
 
       const map = L.map(mapRef.current, { center, zoom: initZoom, zoomControl: false, attributionControl: false });
       L.tileLayer(GOOGLE_TILE, { maxZoom: 22, subdomains: ['0', '1', '2', '3'] }).addTo(map);
@@ -388,10 +483,12 @@ function ChangeMaskView({
       // Load satellite tiles for context
       const result = await loadSatelliteTiles(map, {
         L,
+        signedTileUrl: tileUrl1,
+        tilejsonUrl: tilejsonUrl1,
         sceneCollection: sceneT1?.collection,
         sceneItemId: sceneT1?.item_id,
         thumbnailUrl: thumbnailT1,
-        sceneBbox: sceneBboxT1,
+        sceneBbox: tj1?.bounds?.length === 4 ? tj1.bounds : sceneBboxT1,
         aoiBbox: bbox,
         opacity: 0.4,  // dimmed — the change mask is the focus
         zIndex: 300,
@@ -435,23 +532,72 @@ function ChangeMaskView({
       overlayRef.current = null;
     }
     const bounds: [[number, number], [number, number]] = [[visBbox[1], visBbox[0]], [visBbox[3], visBbox[2]]];
-    import('leaflet').then(({ default: L }) => {
-      const img = L.imageOverlay(changeMaskUrl, bounds as any, { opacity: 0.85, zIndex: 500 }).addTo(map);
+    import('leaflet').then((L) => {
+      const leaflet = (L as any).default || L;
+      const img = leaflet.imageOverlay(changeMaskUrl, bounds as any, { opacity: 0.85, zIndex: 500 }).addTo(map);
       overlayRef.current = img;
     });
     return () => { if (overlayRef.current) { map.removeLayer(overlayRef.current); overlayRef.current = null; } };
   }, [changeMaskUrl, visBoundsStr]);
 
-  // Stats from backend
-  const lossKm2 = changeVisStats.loss_area_km2 ?? 0;
-  const gainKm2 = changeVisStats.gain_area_km2 ?? 0;
-  const lossPixels = changeVisStats.loss_pixels ?? 0;
-  const gainPixels = changeVisStats.gain_pixels ?? 0;
-  const dominantTrend = changeVisStats.dominant_trend ?? 'stable_mixed';
+  // Stats from backend — with client-side fallback when backend stats are 0
+  const backendLossPixels = changeVisStats.loss_pixels ?? 0;
+  const backendGainPixels = changeVisStats.gain_pixels ?? 0;
+  const backendHasStats = backendLossPixels > 0 || backendGainPixels > 0;
+  const [clientStatsLoading, setClientStatsLoading] = useState(false);
+
+  // Client-side stat computation from the mask PNG (fallback)
+  const [clientStats, setClientStats] = useState<{ lossPixels: number; gainPixels: number } | null>(null);
+  useEffect(() => {
+    if (backendHasStats || !changeMaskB64) { setClientStats(null); setClientStatsLoading(false); return; }
+    setClientStatsLoading(true);
+    try {
+      const bytes = new Uint8Array(changeMaskB64.match(/.{1,2}/g)!.map(b => parseInt(b, 16)));
+      createImageBitmap(new Blob([bytes], { type: 'image/png' })).then(bitmap => {
+        const canvas = document.createElement('canvas');
+        canvas.width = bitmap.width;
+        canvas.height = bitmap.height;
+        const ctx = canvas.getContext('2d')!;
+        ctx.drawImage(bitmap, 0, 0);
+        const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const d = imgData.data;
+        let loss = 0, gain = 0;
+        // Detect loss/gain pixels with wide thresholds to handle PNG compression artifacts
+        // Loss: warm tones (red/orange/brown) — R dominant, G low-ish
+        // Gain: green tones — G dominant, R low-ish
+        for (let i = 0; i < d.length; i += 4) {
+          const [r, g, b, a] = [d[i], d[i+1], d[i+2], d[i+3]];
+          if (a < 50) continue; // skip fully transparent
+          // Loss: R > 140, R > G + 40, R > B + 40 (covers red, orange, brown)
+          if (r > 140 && r > g + 40 && r > b + 40) { loss++; continue; }
+          // Gain: G > 100, G > R + 30, G > B + 20 (covers green, teal)
+          if (g > 100 && g > r + 30 && g > b + 20) { gain++; }
+        }
+        setClientStats({ lossPixels: loss, gainPixels: gain });
+        setClientStatsLoading(false);
+        bitmap.close();
+      }).catch(() => { setClientStatsLoading(false); });
+    } catch { setClientStatsLoading(false); }
+  }, [changeMaskB64, backendHasStats]);
+
+  // Use backend stats if available AND non-zero, otherwise fall back to client-side counts
+  const resolutionM = changeVisStats.resolution_m ?? 10;
+  const pixelAreaKm2 = (resolutionM * resolutionM) / 1e6;
+
+  const lossPixels = backendHasStats ? backendLossPixels : (clientStats?.lossPixels ?? 0);
+  const gainPixels = backendHasStats ? backendGainPixels : (clientStats?.gainPixels ?? 0);
+
+  // Always compute area from actual pixel counts — never trust backend area when pixels are 0
+  const lossKm2 = parseFloat((lossPixels * pixelAreaKm2).toFixed(2));
+  const gainKm2 = parseFloat((gainPixels * pixelAreaKm2).toFixed(2));
+
+  const dominantTrend = changeVisStats.dominant_trend ??
+    (lossPixels > gainPixels * 1.5 ? 'vegetation_loss' : gainPixels > lossPixels * 1.5 ? 'vegetation_gain' : 'stable_mixed');
   const threshold = changeVisStats.threshold ?? 0.15;
   const numLossRegions = changeVisStats.num_loss_regions ?? 0;
   const numGainRegions = changeVisStats.num_gain_regions ?? 0;
-  const totalAnalyzed = changeVisStats.total_analyzed_km2 ?? 0;
+  const stablePixels = changeVisStats.stable_pixels ?? 0;
+  const totalAnalyzed = changeVisStats.total_analyzed_km2 ?? parseFloat(((lossPixels + gainPixels + stablePixels) * pixelAreaKm2).toFixed(2));
 
   const trendLabel = dominantTrend === 'vegetation_loss' ? 'VEGETATION LOSS'
     : dominantTrend === 'vegetation_gain' ? 'VEGETATION GAIN'
@@ -698,6 +844,9 @@ export default function TemporalComparisonView({ result }: Props) {
               signedTileUrl2={result.imagery?.period2?.tile_url as string}
               sceneBboxT1={result.imagery?.period1?.bbox || result.scene_t1?.bbox}
               sceneBboxT2={result.imagery?.period2?.bbox || result.scene_t2?.bbox}
+              changeVisualizations={result.change_visualizations || null}
+              tilejsonUrl1={result.imagery?.period1?.tilejson as string}
+              tilejsonUrl2={result.imagery?.period2?.tilejson as string}
             />
           )}
           {viewMode === 'change-mask' && (
@@ -711,6 +860,8 @@ export default function TemporalComparisonView({ result }: Props) {
               changeVisBbox={result.change_visualizations?.bbox || null}
               changeVisStats={result.change_visualizations || {}}
               config={config}
+              tilejsonUrl1={result.imagery?.period1?.tilejson as string}
+              tilejsonUrl2={result.imagery?.period2?.tilejson as string}
             />
           )}
 

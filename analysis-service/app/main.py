@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import HOST, PORT, STAC_API_URL
-from app.routes import analysis, change, decision, evidence, explain, flood, health, index, preprocess, providers, provenance, query, sensor, stac, timeseries, temporal_compare
+from app.routes import analysis, change, decision, evidence, explain, flood, health, index, preprocess, providers, provenance, query, semantic, sensor, stac, timeseries, temporal_compare
 from app.services.eo_provider import init_default_provider, register_provider, CopernicusProvider, BhoonidhiProvider, AWSEarthSearchProvider, NASACMRProvider
 from app.security import RateLimitMiddleware, SecurityHeadersMiddleware, AuditMiddleware, get_cors_origins
 
@@ -113,6 +113,7 @@ app.include_router(providers.router)
 app.include_router(decision.router)
 app.include_router(provenance.router)
 app.include_router(temporal_compare.router)
+app.include_router(semantic.router)
 
 
 import os as _os
