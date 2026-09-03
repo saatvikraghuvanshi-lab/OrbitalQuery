@@ -723,6 +723,7 @@ See [DEPLOY.md](DEPLOY.md) for complete deployment instructions.
 ## Research and Documentation
 
 Research Document: [ORBITALQUERY_RESEARCH_REPORT.docx](https://github.com/user-attachments/files/31349935/ORBITALQUERY_RESEARCH_REPORT.docx)
+v2.0 Research Doc:[ORBITALQUERY_RESEARCH_REPORT (3).docx](https://github.com/user-attachments/files/31772745/ORBITALQUERY_RESEARCH_REPORT.3.docx)
 ---
 SEMANTIC QUERYING IN EARTH OBSERVATION DATA CUBES:  [isprs-archives-XLVIII-4-W1-2022-503-2022.pdf](https://github.com/user-attachments/files/31767213/isprs-archives-XLVIII-4-W1-2022-503-2022.pdf)
 ---
