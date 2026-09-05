@@ -34,6 +34,14 @@ from app.services.capability_registry import (
     validate_analysis_plan,
     get_analysis_config,
 )
+from app.services.semantic_concepts import (
+    SEMANTIC_CONCEPTS,
+    get_concept_for_phenomenon,
+    detect_semantic_concept,
+    get_concept,
+)
+from app.models.analysis_plan import AnalysisPlan, generate_plan_id
+from app.services.spectral_indices import INDEX_DEFINITIONS, INDEX_BAND_MAP
 
 logger = logging.getLogger(__name__)
 
@@ -709,6 +717,58 @@ def build_analysis_plan(query: str, overrides: Optional[dict[str, Any]] = None) 
         f"{phenomenon}:{analysis_type}:{location_name}:{start_date}:{end_date}".encode()
     ).hexdigest()[:12]
 
+    # ── Build semantic analysis plan ────────────────────────
+    semantic_concept = get_concept_for_phenomenon(phenomenon)
+    concept_id = semantic_concept.concept_id if semantic_concept else phenomenon.upper()
+
+    # Determine all indicators (primary + supporting)
+    all_indicators = [semantic_concept.primary_indicator] if semantic_concept else (
+        at_config.required_indices if at_config else ["NDVI"]
+    )
+    if semantic_concept:
+        all_indicators = list(semantic_concept.available_indicators)
+
+    # Build indicator formulas
+    indicator_formulas = {}
+    for ind_name in all_indicators:
+        ind_def = INDEX_DEFINITIONS.get(ind_name)
+        if ind_def:
+            indicator_formulas[ind_name] = ind_def.formula
+
+    # Build signal rules for multi-signal analysis
+    signal_rules = []
+    if semantic_concept and semantic_concept.signal_rules:
+        for rule in semantic_concept.signal_rules:
+            signal_rules.append({
+                "index_name": rule.index_name,
+                "direction": rule.direction,
+                "threshold": rule.threshold,
+                "is_primary": rule.is_primary,
+                "label": rule.label,
+            })
+
+    # Build evidence requirements
+    evidence_reqs = []
+    if semantic_concept and semantic_concept.evidence_requirements:
+        for ev in semantic_concept.evidence_requirements:
+            evidence_reqs.append({
+                "name": ev.name,
+                "description": ev.description,
+                "indicators": ev.indicators,
+                "interpretation": ev.interpretation,
+            })
+
+    # ── Semantic trace ──────────────────────────────────────
+    trace = []
+    trace.append({"step": "user_query", "detail": f"'{query}'"})
+    trace.append({"step": "semantic_concept", "detail": f"{concept_id} (via keyword matching)"})
+    trace.append({"step": "data_requirements", "detail": f"Sensor: {sensor}, Bands: {bands}"})
+    trace.append({"step": "indicators", "detail": f"Primary: {semantic_concept.primary_indicator if semantic_concept else 'NDVI'}, All: {all_indicators}"})
+    if semantic_concept and semantic_concept.multi_signal_recommended:
+        trace.append({"step": "multi_signal", "detail": f"{len(signal_rules)} signal rules, min {semantic_concept.min_agreeing_signals} agreeing"})
+    trace.append({"step": "analysis", "detail": f"Type: {analysis_type}, Strategy: {comparison_strategy}"})
+    trace.append({"step": "evidence", "detail": f"{len(evidence_reqs)} evidence requirements"})
+
     plan = {
         "plan_id": plan_id,
         "query": query,
@@ -727,6 +787,26 @@ def build_analysis_plan(query: str, overrides: Optional[dict[str, Any]] = None) 
         "max_scenes": at_config.max_scenes if at_config else 10,
         "output_requirements": output_requirements,
         "required_indices": at_config.required_indices if at_config else [],
+        # ── Semantic layer fields ─────────────────────────────
+        "semantic": {
+            "concept": concept_id,
+            "description": semantic_concept.description if semantic_concept else pheno_config["description"],
+            "registry_phenomenon": phenomenon,
+            "layer": semantic_concept.layer if semantic_concept else phenomenon,
+        },
+        "indicators": {
+            "primary": semantic_concept.primary_indicator if semantic_concept else (at_config.required_indices[0] if at_config and at_config.required_indices else "NDVI"),
+            "all": all_indicators,
+            "formulas": indicator_formulas,
+        },
+        "multi_signal": {
+            "enabled": semantic_concept.multi_signal_recommended if semantic_concept else False,
+            "rules": signal_rules,
+            "min_agreeing_signals": semantic_concept.min_agreeing_signals if semantic_concept else 1,
+        },
+        "evidence_requirements": evidence_reqs,
+        "trace": trace,
+        # ── Validation ────────────────────────────────────────
         "validation": {
             "status": "valid",
             "phenomenon": phenomenon,

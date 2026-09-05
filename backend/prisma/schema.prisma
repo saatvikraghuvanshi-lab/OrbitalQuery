@@ -51,6 +51,36 @@ model EODataset {
   @@map("eo_datasets")
 }
 
+model CachedSTACItem {
+  id          String   @id @default(uuid())
+  stacId      String   @unique @map("stac_id")
+  provider    String
+  collection  String
+  title       String?
+  description String?
+  datetime    String?
+  geometry    String?  // GeoJSON
+  bbox        String?  // JSON array
+  cloudCover  Float?   @map("cloud_cover")
+  resolutionM Float?   @map("resolution_m")
+  platform    String?
+  instrument  String?
+  assets      String?  // JSON
+  previewUrl  String?  @map("preview_url")
+  stacLink    String?  @map("stac_link")
+  tilejsonUrl String?  @map("tilejson_url")
+  centroidLat Float?   @map("centroid_lat")
+  centroidLng Float?   @map("centroid_lng")
+  cachedAt    DateTime @default(now()) @map("cached_at")
+  expiresAt   DateTime @map("expires_at")
+
+  @@index([provider])
+  @@index([collection])
+  @@index([centroidLat, centroidLng])
+  @@index([cachedAt])
+  @@map("cached_stac_items")
+}
+
 model SearchLog {
   id          String   @id @default(uuid())
   query       String

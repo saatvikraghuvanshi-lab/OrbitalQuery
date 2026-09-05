@@ -689,25 +689,6 @@ OrbitalQuery/
 
 ---
 
-## Screenshots
-
-<table>
-<tr>
-<td align="center"><b>Ask — Natural Language Search</b><br/><img src="docs/screenshots/OQ2.png" width="400"/></td>
-<td align="center"><b>Explore — Phenomenon Browser</b><br/><img src="docs/screenshots/OQ3.png" width="400"/></td>
-</tr>
-<tr>
-<td align="center"><b>Analysis Pipeline — Processing Steps</b><br/><img src="docs/screenshots/OQ5.png" width="400"/></td>
-<td align="center"><b>Before / After — Satellite Comparison</b><br/><img src="docs/screenshots/OQ6.png" width="400"/></td>
-</tr>
-<tr>
-<td align="center"><b>Change Detection — Results</b><br/><img src="docs/screenshots/OQ7.png" width="400"/></td>
-<td align="center"><b>Full Analysis — Complete</b><br/><img src="docs/screenshots/OQ8.png" width="400"/></td>
-</tr>
-</table>
-
----
-
 ## Deployment
 
 ### Backend (Render)
@@ -739,10 +720,54 @@ See [DEPLOY.md](DEPLOY.md) for complete deployment instructions.
 
 ---
 
+## Change Detection Research
+
+The v3.0 change detection engine is informed by peer-reviewed remote sensing research:
+
+### Core Methods
+
+| # | Paper | Year | Key Contribution |
+|---|-------|------|------------------|
+| 1 | Bovolo & Bruzzone, "A Theoretical Framework for Unsupervised CD Based on CVA in the Polar Domain," *IEEE TGRS* 45(1):218–236 | 2007 | Multi-band change vector analysis with magnitude + direction |
+| 2 | Nielsen et al., "Multivariate Alteration Detection (MAD) and MAF Postprocessing," *RSE* 64:1–19 | 1998 | Canonical correlation for statistically rigorous threshold selection |
+| 3 | Nielsen, "The Regularized Iteratively Reweighted MAD Method," *IEEE TIP* 16(2):463–478 | 2007 | Robust outlier handling in multivariate change detection |
+| 4 | Chen et al., "Land-Use/Land-Cover CD Using Improved CVA," *IEEE TGRS* | 2003 | Directional change classification in spectral space |
+
+### Object-Based & Multi-Scale
+
+| # | Paper | Year | Key Contribution |
+|---|-------|------|------------------|
+| 5 | Blaschke et al., "Object Based Image Analysis," *ISPRS J. Photogramm. Remote Sens.* | 2010 | Foundational framework for object-based RS analysis |
+| 6 | Chen et al., "CD in RS Images: Object-Based IA Approaches," *ISPRS Int. J. Geo-Inf.* | 2021 | Modern survey of object-based CD methods |
+
+### Foundation Models (planned)
+
+| # | Paper | Year | Key Contribution |
+|---|-------|------|------------------|
+| 7 | Zhang et al., "Segment Any Change," *NeurIPS* 2024 | 2024 | Zero-shot change detection using SAM — no training data |
+| 8 | Chen & Shi, "Remote Sensing CD with Transformers," *IEEE TGRS* 59(7) | 2021 | BIT — transformer-based CD, state-of-the-art accuracy |
+| 9 | Zheng et al., "Single-Temporal Supervised Learning for Universal RS CD," *IJCV* | 2024 | ChangeStar — universal CD from single-temporal labels |
+
+### Tools & Benchmarks
+
+| Tool | URL | Description |
+|------|-----|-------------|
+| torchange | https://github.com/ChangeDet/torchange | Python library: ChangeStar, Changen, AnyChange |
+| Open-CD | https://github.com/ChangeDet/Open-CD | Comprehensive CD toolbox with benchmarks |
+| ChangeDetectionRepository | https://github.com/ChenHongruixuan/ChangeDetectionRepository | Python impl. of CVA, SFA, MAD, DL methods |
+| awesome-rs-cd | https://github.com/wenhwu/awesome-remote-sensing-change-detection | Comprehensive survey of datasets, methods, tools |
+
+For implementation details, see [v3.0_updates.md](v3.0_updates.md).
+
+---
+
 ## Research and Documentation
 
 Research Document: [ORBITALQUERY_RESEARCH_REPORT.docx](https://github.com/user-attachments/files/31349935/ORBITALQUERY_RESEARCH_REPORT.docx)
-
+v2.0 Research Doc:[ORBITALQUERY_RESEARCH_REPORT (3).docx](https://github.com/user-attachments/files/31772745/ORBITALQUERY_RESEARCH_REPORT.3.docx)
+---
+SEMANTIC QUERYING IN EARTH OBSERVATION DATA CUBES:  [isprs-archives-XLVIII-4-W1-2022-503-2022.pdf](https://github.com/user-attachments/files/31767213/isprs-archives-XLVIII-4-W1-2022-503-2022.pdf)
+---
 | Document | Description |
 |----------|-------------|
 | [Research Report](/docs/research) | Technical research covering EO data sources, analysis methods, and system architecture |

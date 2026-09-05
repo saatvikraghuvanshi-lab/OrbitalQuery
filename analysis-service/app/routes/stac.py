@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 
 from fastapi import APIRouter, HTTPException
 
@@ -83,6 +84,13 @@ async def stac_search(request: STACSearchRequest):
             detail=f"Provider '{provider_name}' not registered",
         )
 
+    search_start = time.time()
+    logger.info(
+        "[stac/search] collection=%s bbox=%s datetime=%s cloud≤%d limit=%d provider=%s",
+        request.collection, bbox, datetime_str, request.max_cloud_cover,
+        validated_limit, provider.get_name(),
+    )
+
     try:
         result = provider.search(
             collection=request.collection,
@@ -92,12 +100,22 @@ async def stac_search(request: STACSearchRequest):
             limit=validated_limit,
         )
     except Exception as e:
+        elapsed = round((time.time() - search_start) * 1000)
         from app.security import sanitize_error_message
-        logger.error("STAC search failed via %s: %s", provider.get_name(), sanitize_error_message(e))
+        logger.error(
+            "[stac/search] FAILED after %dms via %s: %s",
+            elapsed, provider.get_name(), sanitize_error_message(e),
+        )
         raise HTTPException(
             status_code=502,
             detail="STAC API search failed",
         )
+
+    elapsed = round((time.time() - search_start) * 1000)
+    logger.info(
+        "[stac/search] %d items (%d total) in %dms via %s",
+        len(result.items), result.total, elapsed, provider.get_name(),
+    )
 
     return STACSearchResponse(
         collection=request.collection,
