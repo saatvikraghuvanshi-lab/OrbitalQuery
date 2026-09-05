@@ -222,6 +222,8 @@ Redeploy the backend service.
 ### 5a. Configure Keep-Alive Secrets (GitHub Actions)
 The keep-alive workflow needs your actual Render/Railway service URLs to ping them every 10 minutes and prevent cold starts.
 
+> ⚠️ **Forked this repo?** GitHub does **not** copy repository secrets to forks — this is a GitHub security restriction, not a bug in this project. If you don't add these secrets yourself, the `Keep-Alive` workflow fails silently on every run (`PYTHON_SERVICE_URL secret is not set`), your services get no pings, and the free-tier instance spins down after ~15 minutes of inactivity. The next visitor then hits a sleeping container and sees a **502** while it cold-starts. This is the most common cause of "it works for me but gives 502 for others" on a fresh fork — always do this step after forking, even if the upstream repo already has it configured.
+
 1. Go to your GitHub repo → **Settings** → **Secrets and variables** → **Actions**
 2. Click **New repository secret**
 3. Add:
@@ -230,6 +232,7 @@ The keep-alive workflow needs your actual Render/Railway service URLs to ping th
    - Name: `BACKEND_SERVICE_URL`
      Value: `https://<your-backend-service-url>` (without trailing slash)
 4. Save both secrets
+5. Go to the **Actions** tab → **Keep-Alive (prevent Render cold starts)** → **Run workflow** to trigger it manually, and confirm the `ping-services` job logs `HTTP 200` for both services instead of the missing-secret error.
 
 The workflow will now ping the correct services instead of hardcoded placeholder URLs.
 
@@ -276,6 +279,7 @@ curl -X POST https://orbitalquery-frontend.vercel.app/api/analysis/temporal-comp
 | Frontend shows "Backend is unreachable" | Check `NEXT_PUBLIC_BACKEND_URL` matches Railway URL |
 | CORS error in browser | Update `CORS_ORIGIN` in Railway to match Vercel URL exactly |
 | Python service timeout / 503 | Ensure `PYTHON_SERVICE_URL` and `BACKEND_SERVICE_URL` GitHub secrets are set for keep-alive workflow |
+| 502 on a forked repo, especially after the site sat idle | GitHub doesn't copy Actions secrets to forks. Add `PYTHON_SERVICE_URL` and `BACKEND_SERVICE_URL` in **your fork's** Settings → Secrets and variables → Actions (see Step 5a), then manually re-run the Keep-Alive workflow to confirm it pings `200` |
 | Auth "Network error" | Check Railway backend logs: Railway → Service → Deployments → Logs |
 | Build fails on Railway | Check Node version — add `NODE_VERSION=18` to env vars |
 | Prisma error | Ensure `npx prisma generate` is in the build command |
