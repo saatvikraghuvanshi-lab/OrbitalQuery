@@ -251,16 +251,29 @@ def _select_best_scene(
 
 
 def _scene_to_selection(item: dict[str, Any], provider_name: str) -> SceneSelection:
-    """Convert a STAC item to a SceneSelection."""
+    """Convert a scene dict to a SceneSelection.
+
+    Accepts two shapes, since callers pass both:
+      - a raw STAC item: top-level id/bbox/assets, with datetime/cloud_cover/
+        platform nested under "properties"
+      - a SelectedScene.to_dict() (see scene_selector.py): already flat, with
+        item_id/datetime/cloud_cover/platform/provider at the top level
+
+    Every current call site passes the flat SelectedScene shape, but this
+    silently produced "unknown"/empty item_id, datetime, cloud_cover, and
+    platform (since item.get("properties", {}) is always {} for that shape)
+    instead of raising — which is why scene evidence would come back empty
+    without an obvious error. See issue #24.
+    """
     props = item.get("properties", {})
     return SceneSelection(
-        item_id=item.get("id", "unknown"),
+        item_id=item.get("id") or item.get("item_id", "unknown"),
         collection=item.get("collection", "unknown"),
-        datetime=props.get("datetime", ""),
-        cloud_cover=props.get("eo:cloud_cover"),
+        datetime=props.get("datetime") or item.get("datetime", ""),
+        cloud_cover=props.get("eo:cloud_cover", item.get("cloud_cover")),
         bbox=item.get("bbox", []),
-        provider=provider_name,
-        platform=props.get("platform", "unknown"),
+        provider=item.get("provider") or provider_name,
+        platform=props.get("platform") or item.get("platform", "unknown"),
         score=0.0,
         assets=item.get("assets", {}),
     )
@@ -417,21 +430,15 @@ def _compute_index_from_mosaic_scenes(
         period_label, len(first_hrefs), first_physical,
     )
 
-    # For single scene, use the existing read_raster_window per band
+    # For single scene, use the existing read_raster_window per band.
+    # `scenes[0]` is a SelectedScene.to_dict() (flat — no "properties" key),
+    # so build the SceneSelection through _scene_to_selection() rather than
+    # duplicating the field mapping here; see its docstring for why the old
+    # inline construction here always resolved to "unknown"/empty fields.
     if len(first_hrefs) == 1:
         return _compute_index_stats(
             index_name, sensor,
-            SceneSelection(
-                item_id=scenes[0].get("id", "unknown"),
-                collection=scenes[0].get("collection", "unknown"),
-                datetime=scenes[0].get("properties", {}).get("datetime", ""),
-                cloud_cover=scenes[0].get("properties", {}).get("eo:cloud_cover"),
-                bbox=scenes[0].get("bbox", []),
-                provider=scenes[0].get("provider", "unknown"),
-                platform=scenes[0].get("properties", {}).get("platform", "unknown"),
-                score=0.0,
-                assets=scenes[0].get("assets", {}),
-            ),
+            _scene_to_selection(scenes[0], scenes[0].get("provider", "unknown")),
             bbox,
         )
 
